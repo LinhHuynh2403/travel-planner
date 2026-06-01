@@ -13,11 +13,16 @@ function buildPrompt(plan) {
     Math.floor((new Date(plan.leaveDate) - new Date(plan.arrivalDate)) / (1000 * 60 * 60 * 24)) + 1;
 
   return `
-You are a travel planner. Create a ${durationDays}-day itinerary.
+You are an expert travel agent. Create a ${durationDays}-day itinerary.
 
 Return ONLY valid JSON (no markdown, no extra text) that matches EXACTLY:
 
 {
+  "hotelRecommendation": {
+    "name": "string",
+    "neighborhood": "string",
+    "reasoning": "string"
+  },
   "plan": {
     "region": string,
     "arrivalDate": "YYYY-MM-DD",
@@ -36,8 +41,9 @@ Return ONLY valid JSON (no markdown, no extra text) that matches EXACTLY:
           "time": "h:mm AM/PM",
           "title": string,
           "description": string,
-          "category": "food|museum|exhibition|nature|activity|rest",
-          "location": string
+          "category": "food|museum|exhibition|nature|activity|shopping|rest",
+          "location": string,
+          "deepDiveRationale": "string (Explain why based on user's hobbies/food)"
         }
       ]
     }
@@ -101,7 +107,7 @@ app.post("/api/itinerary", async (req, res) => {
     }
 
     // ✅ Sanitize categories (prevents UI crash)
-    const allowed = new Set(["food", "museum", "exhibition", "nature", "activity", "rest"]);
+    const allowed = new Set(["food", "museum", "exhibition", "nature", "activity", "shopping", "rest"]);
     for (const day of itinerary.days || []) {
       for (const a of day.activities || []) {
         const c = String(a.category || "").toLowerCase();
@@ -125,31 +131,50 @@ app.post("/api/itinerary", async (req, res) => {
   }
 });
 
-app.listen(8000, () => console.log("API running at http://localhost:8000"));
+app.listen(8888, () => console.log("API running at http://localhost:8888"));
 
 async function lookupPlace(query, regionHint) {
   const key = process.env.GOOGLE_MAPS_KEY;
   if (!key) return null;
 
-  const url =
+  // 1. Text Search to get the Place ID
+  const searchUrl =
     "https://maps.googleapis.com/maps/api/place/textsearch/json" +
     `?query=${encodeURIComponent(query + " " + regionHint)}` +
     `&key=${key}`;
 
-  const resp = await fetch(url);
-  const data = await resp.json();
+  const searchResp = await fetch(searchUrl);
+  const searchData = await searchResp.json();
 
-  const top = data.results?.[0];
+  const top = searchData.results?.[0];
   if (!top) return null;
 
   const placeId = top.place_id;
-  const address = top.formatted_address;
-  const lat = top.geometry?.location?.lat;
-  const lng = top.geometry?.location?.lng;
+
+  // 2. Place Details to get Real-Time Opening Hours
+  const detailsUrl =
+    "https://maps.googleapis.com/maps/api/place/details/json" +
+    `?place_id=${placeId}&fields=name,formatted_address,geometry,opening_hours&key=${key}`;
+
+  const detailsResp = await fetch(detailsUrl);
+  const detailsData = await detailsResp.json();
+  const details = detailsData.result || {};
+
+  const address = details.formatted_address || top.formatted_address;
+  const lat = details.geometry?.location?.lat || top.geometry?.location?.lat;
+  const lng = details.geometry?.location?.lng || top.geometry?.location?.lng;
 
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
     query + " " + address
   )}&query_place_id=${placeId}`;
 
-  return { placeId, address, lat, lng, mapsUrl };
+  return {
+    placeId,
+    address,
+    lat,
+    lng,
+    mapsUrl,
+    isOpenNow: details.opening_hours?.open_now,
+    weekdayText: details.opening_hours?.weekday_text
+  };
 }
