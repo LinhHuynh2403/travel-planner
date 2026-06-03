@@ -1,10 +1,10 @@
 import type { TravelPlan, GeneratedItinerary } from "../types/travel";
 
-export async function generateItinerary(plan: TravelPlan): Promise<GeneratedItinerary> {
+export async function generateItinerary(plan: TravelPlan, chatHistory?: any[]): Promise<GeneratedItinerary> {
   const resp = await fetch("/api/itinerary", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(plan),
+    body: JSON.stringify({ plan, chatHistory }),
   });
 
   if (!resp.ok) {

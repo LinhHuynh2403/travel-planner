@@ -1,164 +1,231 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { TravelPlan, GeneratedItinerary } from '../types/travel';
+import { TravelPlan, GeneratedItinerary, ItineraryActivity } from '../types/travel';
 import { generateItinerary } from '../utils/generate-itinerary';
 import { ItineraryTimeline } from '../components/itinerary-timeline';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
-import { Button } from '../components/ui/button';
-import { Badge } from '../components/ui/badge';
-import { ArrowLeft, MapPin, Calendar, Users, Download, Share2 } from 'lucide-react';
-import { format, differenceInDays } from 'date-fns';
+import { MapTab } from '../components/map-tab';
+import { FlightsTab } from '../components/flights-tab';
+import { PackingTab } from '../components/packing-tab';
+import { WeatherTab } from '../components/weather-tab';
+import { TipsTab } from '../components/tips-tab';
+import { Calendar, Map, Plane, MessageSquare, Briefcase, CloudSun, Sparkles, HelpCircle } from 'lucide-react';
 
 export default function Itinerary() {
   const navigate = useNavigate();
   const [itinerary, setItinerary] = useState<GeneratedItinerary | null>(null);
+  const [activeTab, setActiveTab] = useState<'schedule' | 'map' | 'flights' | 'packing' | 'weather' | 'tips'>('schedule');
+  const [selectedActivity, setSelectedActivity] = useState<ItineraryActivity | null>(null);
 
   useEffect(() => {
     const planData = sessionStorage.getItem("travelPlan");
-    if (!planData) {
+    const itineraryData = sessionStorage.getItem("generatedItinerary");
+
+    if (!planData && !itineraryData) {
       navigate("/");
       return;
     }
 
-    const plan: TravelPlan = JSON.parse(planData);
-    plan.arrivalDate = new Date(plan.arrivalDate);
-    plan.leaveDate = new Date(plan.leaveDate);
-
-    (async () => {
-      try {
-        const generated = await generateItinerary(plan);
-        setItinerary(generated); // ✅ if backend returns {plan, days}
-      } catch (e) {
-        console.error(e);
-        // optional: show an error UI state
+    const parseItinerary = (parsed: any): GeneratedItinerary => {
+      if (parsed.plan) {
+        parsed.plan.arrivalDate = new Date(parsed.plan.arrivalDate);
+        parsed.plan.leaveDate = new Date(parsed.plan.leaveDate);
       }
-    })();
+      if (parsed.days) {
+        parsed.days = parsed.days.map((day: any) => ({
+          ...day,
+          date: new Date(day.date)
+        }));
+      }
+      return parsed;
+    };
+
+    if (itineraryData) {
+      try {
+        const parsed = JSON.parse(itineraryData);
+        setItinerary(parseItinerary(parsed));
+        return;
+      } catch (e) {
+        console.error("Failed to parse itineraryData from sessionStorage", e);
+      }
+    }
+
+    // Fallback if accessed without pre-generation
+    try {
+      const plan: TravelPlan = JSON.parse(planData!);
+      plan.arrivalDate = new Date(plan.arrivalDate);
+      plan.leaveDate = new Date(plan.leaveDate);
+
+      (async () => {
+        try {
+          const generated = await generateItinerary(plan);
+          setItinerary(parseItinerary(generated));
+        } catch (e) {
+          console.error(e);
+        }
+      })();
+    } catch (e) {
+      console.error("Failed to parse planData from sessionStorage", e);
+      navigate("/");
+    }
   }, [navigate]);
 
   if (!itinerary) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Generating your personalized itinerary...</p>
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
+        <div className="text-center text-zinc-400">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p>Generating your personalized itinerary...</p>
         </div>
       </div>
     );
   }
 
-  const { plan, days } = itinerary;
-  const duration = differenceInDays(plan.leaveDate, plan.arrivalDate) + 1;
+  const handleViewOnMap = (activity: ItineraryActivity) => {
+    setSelectedActivity(activity);
+    setActiveTab('map');
+  };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 via-white to-purple-50">
-      <div className="container mx-auto px-4 py-8">
-        <Button
-          variant="ghost"
-          onClick={() => navigate('/')}
-          className="mb-6"
-        >
-          <ArrowLeft className="mr-2 size-4" />
-          Back to Planning
-        </Button>
-
-        {/* Trip Summary */}
-        <Card className="mb-8 overflow-hidden">
-          <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-6 text-white">
-            <h1 className="text-3xl font-bold mb-2">Your AI-Generated Itinerary</h1>
-            <div className="flex items-center gap-2 text-blue-50">
-              <MapPin className="size-5" />
-              <span className="text-xl">{plan.region}</span>
-            </div>
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex">
+      {/* Sidebar */}
+      <aside className="w-64 bg-zinc-900 border-r border-zinc-800 flex flex-col fixed inset-y-0 z-10">
+        <div className="p-6 border-b border-zinc-800">
+          <div className="flex items-center gap-2 font-bold text-xl mb-1 text-white">
+            <Sparkles className="size-5" />
+            wandr
           </div>
-          
-          <CardContent className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-              <div className="flex items-start gap-3">
-                <Calendar className="size-5 text-blue-600 mt-1" />
-                <div>
-                  <div className="text-sm text-gray-600 mb-1">Travel Dates</div>
-                  <div className="font-semibold">
-                    {format(plan.arrivalDate, 'MMM d')} - {format(plan.leaveDate, 'MMM d, yyyy')}
-                  </div>
-                  <div className="text-sm text-gray-600">{duration} days trip</div>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3">
-                <Users className="size-5 text-purple-600 mt-1" />
-                <div>
-                  <div className="text-sm text-gray-600 mb-1">Your Interests</div>
-                  <div className="flex flex-wrap gap-1">
-                    {plan.hobbies.length > 0 ? (
-                      plan.hobbies.slice(0, 3).map((hobby, idx) => (
-                        <Badge key={idx} variant="secondary" className="text-xs">
-                          {hobby}
-                        </Badge>
-                      ))
-                    ) : (
-                      <span className="text-sm text-gray-500">General exploration</span>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3">
-                <MapPin className="size-5 text-green-600 mt-1" />
-                <div>
-                  <div className="text-sm text-gray-600 mb-1">Places</div>
-                  <div className="flex flex-wrap gap-1">
-                    {plan.placePreferences.length > 0 ? (
-                      plan.placePreferences.slice(0, 3).map((place, idx) => (
-                        <Badge key={idx} variant="outline" className="text-xs capitalize">
-                          {place}
-                        </Badge>
-                      ))
-                    ) : (
-                      <span className="text-sm text-gray-500">All attractions</span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex gap-3">
-              <Button variant="outline" className="flex-1">
-                <Download className="mr-2 size-4" />
-                Download PDF
-              </Button>
-              <Button variant="outline" className="flex-1">
-                <Share2 className="mr-2 size-4" />
-                Share Itinerary
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Daily Itinerary */}
-        <div className="mb-8">
-          <h2 className="text-2xl font-bold mb-4">Day-by-Day Schedule</h2>
-          <p className="text-gray-600 mb-6">
-            Your personalized itinerary with activities tailored to your preferences
-          </p>
-          <ItineraryTimeline days={days} />
+          <div className="text-zinc-500 text-sm">Your AI travel assistant</div>
         </div>
 
-        {/* Bottom Actions */}
-        <Card className="bg-gradient-to-r from-blue-50 to-purple-50 border-blue-200">
-          <CardHeader>
-            <CardTitle>Ready to adjust your plan?</CardTitle>
-            <CardDescription>
-              You can go back and modify your preferences to regenerate a new itinerary
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button onClick={() => navigate('/')} size="lg">
-              <ArrowLeft className="mr-2 size-4" />
-              Create New Itinerary
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
+        <nav className="flex-1 p-4 space-y-8 overflow-y-auto">
+          <div>
+            <div className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-4 px-2">Plan</div>
+            <ul className="space-y-1">
+              <li>
+                <button
+                  onClick={() => setActiveTab('schedule')}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${activeTab === 'schedule' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
+                    }`}
+                >
+                  <Calendar className="size-4" /> My schedule
+                </button>
+              </li>
+              <li>
+                <button
+                  onClick={() => setActiveTab('map')}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${activeTab === 'map' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
+                    }`}
+                >
+                  <Map className="size-4" /> Map view
+                </button>
+              </li>
+              <li>
+                <button
+                  onClick={() => setActiveTab('flights')}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${activeTab === 'flights' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
+                    }`}
+                >
+                  <Plane className="size-4" /> Flights
+                </button>
+              </li>
+            </ul>
+          </div>
+
+          <div>
+            <div className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3 px-2 mt-6">More</div>
+            <ul className="space-y-1">
+              <li>
+                <button
+                  onClick={() => navigate('/')}
+                  className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 transition-colors"
+                >
+                  <MessageSquare className="size-4" /> Plan with AI
+                </button>
+              </li>
+              <li>
+                <button
+                  onClick={() => setActiveTab('packing')}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${activeTab === 'packing' ? 'bg-zinc-800 text-white border-l-2 border-emerald-500 -ml-[2px]' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
+                    }`}
+                >
+                  <Briefcase className="size-4" /> Packing list
+                </button>
+              </li>
+              <li>
+                <button
+                  onClick={() => setActiveTab('weather')}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${activeTab === 'weather' ? 'bg-zinc-800 text-white border-l-2 border-emerald-500 -ml-[2px]' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
+                    }`}
+                >
+                  <CloudSun className="size-4" /> Weather
+                </button>
+              </li>
+              <li>
+                <button
+                  onClick={() => setActiveTab('tips')}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${activeTab === 'tips' ? 'bg-zinc-800 text-white border-l-2 border-emerald-500 -ml-[2px]' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
+                    }`}
+                >
+                  <HelpCircle className="size-4" /> Local Tips
+                </button>
+              </li>
+            </ul>
+          </div>
+        </nav>
+
+        <div className="p-4 border-t border-zinc-800">
+          <div className="bg-zinc-800/50 rounded-lg p-3">
+            <div className="text-sm font-semibold text-white truncate">
+              {itinerary.plan.region}
+            </div>
+            <div className="text-xs text-zinc-500 mt-1">
+              {itinerary.plan.arrivalDate.toLocaleDateString()} - {itinerary.plan.leaveDate.toLocaleDateString()}
+            </div>
+            <div className="mt-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-500/10 text-emerald-400">
+              In progress
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      {/* Main Content */}
+      <main className="ml-64 flex-1 p-8">
+        {activeTab === 'schedule' && (
+          <div className="max-w-4xl mx-auto">
+            <div className="mb-8">
+              <h1 className="text-3xl font-bold text-white mb-2">{itinerary.plan.region} itinerary</h1>
+              <p className="text-zinc-400">
+                {itinerary.plan.arrivalDate.toLocaleDateString()} - {itinerary.plan.leaveDate.toLocaleDateString()} · Click any activity to see its location and route
+              </p>
+            </div>
+            <ItineraryTimeline days={itinerary.days} onViewOnMap={handleViewOnMap} />
+          </div>
+        )}
+
+        {activeTab === 'map' && (
+          <MapTab
+            days={itinerary.days}
+            selectedActivity={selectedActivity}
+            onActivitySelect={(act) => setSelectedActivity(act)}
+          />
+        )}
+
+        {activeTab === 'flights' && (
+          <FlightsTab itinerary={itinerary} />
+        )}
+
+        {activeTab === 'packing' && (
+          <PackingTab packingList={itinerary.packingList} region={itinerary.plan.region} />
+        )}
+
+        {activeTab === 'weather' && (
+          <WeatherTab insights={itinerary.insights} region={itinerary.plan.region} />
+        )}
+
+        {activeTab === 'tips' && (
+          <TipsTab insights={itinerary.insights} region={itinerary.plan.region} />
+        )}
+      </main>
     </div>
   );
 }
