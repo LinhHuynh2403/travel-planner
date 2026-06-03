@@ -69,7 +69,7 @@ CRITICAL: Return ONLY valid JSON (no markdown, no extra text) that matches EXACT
           "title": "string",
           "description": "string",
           "category": "food|museum|exhibition|nature|activity|shopping|rest",
-          "location": "string",
+          "location": "string (The exact, specific name of a real restaurant, landmark, shop, or venue in that city, e.g. 'Original Joe's San Jose' or 'San Jose Museum of Art'. NEVER use generic descriptions like 'local cafe' or 'nice restaurant')",
           "deepDiveRationale": "string (Explain why based on user's hobbies/food)"
         }
       ]

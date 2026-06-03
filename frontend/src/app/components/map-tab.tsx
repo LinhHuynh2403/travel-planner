@@ -26,7 +26,7 @@ export function MapTab({ days, selectedActivity, onActivitySelect }: MapTabProps
   const hasPrevCoords = previousActivity?.place?.lat && previousActivity?.place?.lng;
 
   const mapQuery = hasSelectedCoords
-    ? `${selectedActivity.place!.lat},${selectedActivity.place!.lng}`
+    ? `${selectedActivity.place!.lat},${selectedActivity.place!.lng}(${encodeURIComponent(selectedActivity.title)})`
     : encodeURIComponent(selectedActivity?.location || selectedActivity?.title || days[0]?.activities[0]?.location || 'Paris, France');
 
   // Only attempt routing if both have valid coordinates to prevent geocoding failures from resetting zoom
@@ -83,7 +83,7 @@ export function MapTab({ days, selectedActivity, onActivitySelect }: MapTabProps
 
                 <Button
                   className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
-                  onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${mapQuery}`, '_blank')}
+                  onClick={() => window.open(selectedActivity.place?.mapsUrl || `https://www.google.com/maps/search/?api=1&query=${mapQuery}`, '_blank')}
                 >
                   Open in Google Maps
                   <ExternalLink className="ml-2 size-4" />
