@@ -1,6 +1,6 @@
-# Wandr: AI Travel Itinerary Planner & Agent 🗺️✨
+# JourZy: AI Travel Itinerary Planner & Agent 🗺️✨
 
-Wandr is a modern, premium travel assistant and itinerary planner. It helps you design highly customized, detail-rich travel schedules, map routes, live weather analyses, and personalized packing lists.
+JourZy is a modern, premium travel assistant and itinerary planner. It helps you design highly customized, detail-rich travel schedules, map routes, live weather analyses, and personalized packing lists.
 
 Built with **React (Vite) + TypeScript** on the frontend, and a **Node.js Express** server in the backend, it utilizes **Gemini 2.5 Flash** for LLM orchestration and **Google Places & OpenWeather** APIs for real-time location/environment integration.
 
@@ -9,7 +9,7 @@ Built with **React (Vite) + TypeScript** on the frontend, and a **Node.js Expres
 ## 🌟 Key Features
 
 1. **Interactive Conversational Onboarding**:
-   - Speak directly with **Wandr**, your AI travel concierge, to discuss your interests, hobbies, culinary tastes, and pace preference.
+   - Speak directly with **JourZy**, your AI travel concierge, to discuss your interests, hobbies, culinary tastes, and pace preference.
    - The onboarding assistant will dynamically explore your profile until you are satisfied and ready to generate.
 
 2. **Weather styled Live Forecast**:

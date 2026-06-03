@@ -509,7 +509,7 @@ export function WeatherTab({ region, insights }: WeatherTabProps) {
 
               {/* Apple style detail summary */}
               <div className="mt-4 bg-zinc-950/30 p-3.5 rounded-2xl border border-zinc-800/50 text-xs text-zinc-400 leading-relaxed">
-                💡 <span className="font-semibold text-zinc-300">Wandr Advisory:</span> {
+                💡 <span className="font-semibold text-zinc-300">JourZy Advisory:</span> {
                   forecast[selectedDayIdx].temp > 25
                     ? "A warm day is ahead. Stay hydrated, wear light clothing, and don't forget your sunscreen!"
                     : forecast[selectedDayIdx].temp < 15

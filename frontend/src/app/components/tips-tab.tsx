@@ -17,7 +17,7 @@ export function TipsTab({ region, insights }: TipsTabProps) {
           <Sparkles className="size-12 mx-auto mb-4 text-emerald-400" />
           <h2 className="text-xl font-semibold text-white mb-2">No custom local tips available</h2>
           <p className="text-zinc-400 text-sm">
-            To view custom AI-generated local etiquette and safety rules for {region}, plan a new itinerary using Wandr!
+            To view custom AI-generated local etiquette and safety rules for {region}, plan a new itinerary using JourZy!
           </p>
         </div>
       </div>

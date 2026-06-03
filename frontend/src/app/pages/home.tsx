@@ -134,7 +134,7 @@ export default function Home() {
       console.error("Chat error:", e);
       setMessages(prev => [
         ...prev,
-        { id: Date.now().toString(), role: 'ai', text: "Sorry, I couldn't connect to Wandr. Try saying 'good to go' to force generation or check your connection." }
+        { id: Date.now().toString(), role: 'ai', text: "Sorry, I couldn't connect to JourZy. Try saying 'good to go' to force generation or check your connection." }
       ]);
     }
   };
@@ -161,7 +161,7 @@ export default function Home() {
         <div className="p-6 border-b border-zinc-800">
           <div className="flex items-center gap-2 font-bold text-xl mb-1 text-white">
             <Sparkles className="size-5" />
-            wandr
+            JourZy
           </div>
           <div className="text-zinc-500 text-sm">Your AI travel assistant</div>
         </div>

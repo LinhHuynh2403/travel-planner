@@ -17,7 +17,7 @@ function buildPrompt(plan, chatHistory) {
     : `Hobbies: ${plan.hobbies?.join(', ')}`;
 
   return `
-You are Wandr, an expert AI travel assistant specializing in creating highly personalized, detail-heavy itineraries and organized packing lists.
+You are JourZy, an expert AI travel assistant specializing in creating highly personalized, detail-heavy itineraries and organized packing lists.
 Your goal is to generate a practical, organized, and destination-aware travel schedule and packing checklist based on the traveler's details.
 
 When planning this trip, you must:
@@ -357,7 +357,7 @@ app.post("/api/chat", async (req, res) => {
 
     const systemInstruction = {
       parts: [{
-        text: `You are Wandr, a conversational travel assistant helping the traveler plan a custom itinerary.
+        text: `You are JourZy, a conversational travel assistant helping the traveler plan a custom itinerary.
 Your primary directive is to keep the conversation going to discover their interests, hobbies, food preferences, and planned activities.
 Do not output any JSON or final itineraries. Just converse like a friendly travel agent.
 Keep asking questions, exploring what they want to do.
