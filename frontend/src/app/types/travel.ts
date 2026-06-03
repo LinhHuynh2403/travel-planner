@@ -3,9 +3,15 @@ export interface TravelPlan {
   arrivalDate: Date;
   leaveDate: Date;
   hobbies: string[];
-  favoriteFood: string[]; // ✅ list
+  favoriteFood: string[];
   restaurantPreferences: string[];
   placePreferences: string[];
+}
+
+export interface ActivityAlternative {
+  title: string;
+  location: string;
+  description: string;
 }
 
 export interface ItineraryActivity {
@@ -15,7 +21,7 @@ export interface ItineraryActivity {
   category: "food" | "museum" | "exhibition" | "nature" | "activity" | "rest";
   location: string;
 
-  // ✅ optional info returned from backend (Google Places lookup)
+  // optional info returned from backend (Google Places lookup)
   place?: {
     placeId: string;
     address: string;
@@ -23,6 +29,7 @@ export interface ItineraryActivity {
     lng: number;
     mapsUrl: string;
   };
+  alternatives?: ActivityAlternative[];
 }
 
 export interface DayItinerary {
@@ -48,6 +55,19 @@ export interface FlightOption {
   aiReasoning: string;
 }
 
+export interface HotelAlternative {
+  name: string;
+  neighborhood: string;
+  reasoning: string;
+}
+
+export interface HotelRecommendation {
+  name: string;
+  neighborhood: string;
+  reasoning: string;
+  alternatives?: HotelAlternative[];
+}
+
 export interface GeneratedItinerary {
   plan: TravelPlan;
   days: DayItinerary[];
@@ -58,4 +78,5 @@ export interface GeneratedItinerary {
     culturalTips: string[];
     safetyTips: string[];
   };
+  hotelRecommendation?: HotelRecommendation;
 }

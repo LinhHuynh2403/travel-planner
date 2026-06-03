@@ -1,13 +1,17 @@
 import { format } from "date-fns";
-import { DayItinerary, ItineraryActivity } from "../types/travel";
-import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
+import { DayItinerary, ItineraryActivity, HotelRecommendation } from "../types/travel";
+import { Card, CardContent } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Clock, Utensils, Building2, Image, Trees, Activity as ActivityIcon, Coffee, MapPin } from "lucide-react";
 
 interface ItineraryTimelineProps {
   days: DayItinerary[];
+  region: string;
   onViewOnMap: (activity: ItineraryActivity) => void;
+  onSwapActivity: (dayNumber: number, activityIdx: number, altIdx: number) => void;
+  hotelRecommendation?: HotelRecommendation;
+  onSwapHotel?: (altIdx: number) => void;
 }
 
 const categoryIcons = {
@@ -39,10 +43,16 @@ const categoryIconColors: Record<string, string> = {
 
 function ActivityCard({
   activity,
-  onClick
+  activityIdx,
+  dayNumber,
+  onClick,
+  onSwapActivity
 }: {
   activity: ItineraryActivity;
+  activityIdx: number;
+  dayNumber: number;
   onClick: () => void;
+  onSwapActivity: (dayNumber: number, activityIdx: number, altIdx: number) => void;
 }) {
   const cat = String(activity.category || "activity").toLowerCase();
   const Icon = (categoryIcons as any)[cat] ?? ActivityIcon;
@@ -86,9 +96,9 @@ function ActivityCard({
 
           <p className="text-sm text-zinc-400 mb-4">{activity.description}</p>
 
-          <div className="flex items-center justify-between mt-4 pt-4 border-t border-zinc-800">
-            <p className="text-xs text-zinc-500 flex items-center gap-1.5">
-              <span className="inline-block size-1.5 rounded-full bg-zinc-600" />
+          <div className="flex items-center justify-between pt-4 border-t border-zinc-800">
+            <p className="text-xs text-zinc-500 flex items-center gap-1.5 truncate max-w-[70%]">
+              <span className="inline-block size-1.5 rounded-full bg-zinc-600 shrink-0" />
               {activity.location}
             </p>
             <Button
@@ -104,24 +114,116 @@ function ActivityCard({
               View on map
             </Button>
           </div>
+
+          {/* Alternatives Subsection */}
+          {activity.alternatives && activity.alternatives.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-zinc-800/80">
+              <div className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest mb-3">Alternative Recommendations</div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {activity.alternatives.map((alt, altIdx) => (
+                  <div
+                    key={altIdx}
+                    className="bg-zinc-950/40 p-3.5 rounded-xl border border-zinc-800/60 hover:border-zinc-700/80 transition-colors flex flex-col justify-between"
+                    onClick={(e) => e.stopPropagation()} // Prevent card selection when clicking alternative info
+                  >
+                    <div>
+                      <h5 className="font-semibold text-xs text-white">{alt.title}</h5>
+                      <p className="text-[9px] text-zinc-500 mt-0.5 truncate">{alt.location}</p>
+                      <p className="text-[11px] text-zinc-400 mt-2 leading-relaxed">{alt.description}</p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="mt-3 text-[10px] h-7 bg-zinc-900 hover:bg-zinc-800 hover:text-emerald-400 border-zinc-800 w-full"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSwapActivity(dayNumber, activityIdx, altIdx);
+                      }}
+                    >
+                      Swap with Main Option
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
   );
 }
 
-export function ItineraryTimeline({ days, onViewOnMap }: ItineraryTimelineProps) {
+export function ItineraryTimeline({
+  days,
+  region,
+  onViewOnMap,
+  onSwapActivity,
+  hotelRecommendation,
+  onSwapHotel
+}: ItineraryTimelineProps) {
   return (
     <div className="space-y-8">
+      {/* Hotel Recommendation block at top */}
+      {hotelRecommendation && (
+        <Card className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 text-zinc-300">
+          <div className="flex items-start justify-between gap-4 mb-4">
+            <div className="flex-1">
+              <div className="text-[10px] font-bold text-emerald-400 tracking-wider uppercase mb-1.5 flex items-center gap-1.5">
+                <Building2 className="size-3.5" />
+                Recommended Accommodation Base
+              </div>
+              <h3 className="text-xl font-bold text-white">{hotelRecommendation.name}</h3>
+              <p className="text-xs text-zinc-500 mt-1 flex items-center gap-1.5">
+                <span className="inline-block size-1.5 rounded-full bg-emerald-500" />
+                {hotelRecommendation.neighborhood}
+              </p>
+              <p className="text-sm text-zinc-400 mt-3 leading-relaxed">{hotelRecommendation.reasoning}</p>
+            </div>
+          </div>
+
+          {/* Alternatives Accommodation Subsection */}
+          {hotelRecommendation.alternatives && hotelRecommendation.alternatives.length > 0 && (
+            <div className="mt-5 pt-4 border-t border-zinc-800/80">
+              <div className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest mb-3">Alternative Stays</div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {hotelRecommendation.alternatives.map((alt, altIdx) => (
+                  <div key={altIdx} className="bg-zinc-950/40 p-4 rounded-xl border border-zinc-805 hover:border-zinc-800 transition-colors flex flex-col justify-between">
+                    <div>
+                      <h5 className="font-semibold text-xs text-white">{alt.name}</h5>
+                      <p className="text-[9px] text-zinc-500 mt-0.5">{alt.neighborhood}</p>
+                      <p className="text-[11px] text-zinc-400 mt-2.5 leading-relaxed">{alt.reasoning}</p>
+                    </div>
+                    {onSwapHotel && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="mt-3.5 text-[10px] h-7 bg-zinc-900 hover:bg-zinc-800 hover:text-emerald-400 border-zinc-800 w-full"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onSwapHotel(altIdx);
+                        }}
+                      >
+                        Swap with Main Option
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* Daily Schedule Timeline */}
       {days.map((day) => (
-        <Card key={day.dayNumber} className="overflow-hidden bg-zinc-950 border-0">
+        <Card key={day.dayNumber} className="overflow-hidden bg-zinc-950 border-0 shadow-none">
           <div className="mb-6">
-            <div className="text-sm font-semibold text-zinc-500 tracking-wider uppercase mb-1">
+            <div className="text-xs font-semibold text-zinc-500 tracking-wider uppercase mb-1">
               Day {day.dayNumber}
             </div>
             <div className="flex items-center justify-between">
               <h3 className="text-2xl font-bold text-white">{format(day.date, "EEEE, MMMM d, yyyy")}</h3>
-              <Badge variant="secondary" className="bg-zinc-800 text-zinc-300 border-0">
+              <Badge variant="secondary" className="bg-zinc-900 border border-zinc-800 text-zinc-300">
                 {day.activities.length} activities
               </Badge>
             </div>
@@ -132,7 +234,10 @@ export function ItineraryTimeline({ days, onViewOnMap }: ItineraryTimelineProps)
               <ActivityCard
                 key={idx}
                 activity={activity}
+                activityIdx={idx}
+                dayNumber={day.dayNumber}
                 onClick={() => onViewOnMap(activity)}
+                onSwapActivity={onSwapActivity}
               />
             ))}
           </div>

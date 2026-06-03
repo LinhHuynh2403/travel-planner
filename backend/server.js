@@ -41,14 +41,23 @@ When planning this trip, you must:
    - "Optional Items"
 4. Explain why unusual or destination-specific items are recommended within their item descriptions (e.g., "Modest clothing (covering knees/shoulders) for temples", "Umbrella for sudden July rain").
 5. Avoid recommending unnecessary items. Keep the list concise and relevant.
+6. For each activity in the daily schedule (especially dining, museums, and outdoor landmarks), always include 2 alternative places under the 'alternatives' array. For each alternative, provide the exact real business name, address, and a short description.
+7. For the hotel recommendation, always include 2 alternative accommodations under the 'alternatives' array.
 
 CRITICAL: Return ONLY valid JSON (no markdown, no extra text) that matches EXACTLY:
 
 {
   "hotelRecommendation": {
-    "name": "string",
-    "neighborhood": "string",
-    "reasoning": "string"
+    "name": "string (name of the primary suggested hotel, e.g. 'Hotel De Anza')",
+    "neighborhood": "string (neighborhood name, e.g. 'Downtown San Jose')",
+    "reasoning": "string (why it fits the traveler's hobbies/vibe)",
+    "alternatives": [
+      {
+        "name": "string (alternative hotel name)",
+        "neighborhood": "string (neighborhood name)",
+        "reasoning": "string (why it is a good backup)"
+      }
+    ]
   },
   "plan": {
     "region": "${plan.region}",
@@ -66,11 +75,18 @@ CRITICAL: Return ONLY valid JSON (no markdown, no extra text) that matches EXACT
       "activities": [
         {
           "time": "h:mm AM/PM",
-          "title": "string",
+          "title": "string (activity name, e.g. 'San Jose Museum of Art')",
           "description": "string",
           "category": "food|museum|exhibition|nature|activity|shopping|rest",
           "location": "string (The exact, specific name of a real restaurant, landmark, shop, or venue in that city, e.g. 'Original Joe's San Jose' or 'San Jose Museum of Art'. NEVER use generic descriptions like 'local cafe' or 'nice restaurant')",
-          "deepDiveRationale": "string (Explain why based on user's hobbies/food)"
+          "deepDiveRationale": "string (Explain why based on user's hobbies/food)",
+          "alternatives": [
+            {
+              "title": "string (alternative activity title)",
+              "location": "string (The exact, specific name of a real restaurant, landmark, shop, or venue in that city)",
+              "description": "string (why it's a great alternative option)"
+            }
+          ]
         }
       ]
     }
@@ -432,6 +448,16 @@ app.get("/api/nearby", async (req, res) => {
         : null
     }));
     return res.json({ places });
+  } catch (e) {
+    return res.status(500).json({ error: String(e) });
+  }
+});
+
+app.get("/api/place-lookup", async (req, res) => {
+  const { query, region } = req.query;
+  try {
+    const place = await lookupPlace(query, region || "");
+    return res.json({ place });
   } catch (e) {
     return res.status(500).json({ error: String(e) });
   }

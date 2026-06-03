@@ -85,6 +85,108 @@ export default function Itinerary() {
     setActiveTab('map');
   };
 
+  const handleSwapActivity = async (dayNumber: number, activityIdx: number, altIdx: number) => {
+    if (!itinerary) return;
+
+    const updatedDays = itinerary.days.map(d => {
+      if (d.dayNumber !== dayNumber) return d;
+      const activities = d.activities.map((act, idx) => {
+        if (idx !== activityIdx) return act;
+
+        const alternatives = act.alternatives ? [...act.alternatives] : [];
+        const alt = alternatives[altIdx];
+        if (!alt) return act;
+
+        const newMain: ItineraryActivity = {
+          ...act,
+          title: alt.title,
+          location: alt.location,
+          description: alt.description,
+          place: undefined // Reset place coordinates until fetched
+        };
+
+        const newAlt = {
+          title: act.title,
+          location: act.location,
+          description: act.description
+        };
+        alternatives[altIdx] = newAlt;
+        newMain.alternatives = alternatives;
+
+        return newMain;
+      });
+      return { ...d, activities };
+    });
+
+    const newItinerary = {
+      ...itinerary,
+      days: updatedDays
+    };
+
+    setItinerary(newItinerary);
+    sessionStorage.setItem("generatedItinerary", JSON.stringify(newItinerary));
+
+    const targetActivity = updatedDays.find(d => d.dayNumber === dayNumber)?.activities[activityIdx];
+    if (!targetActivity) return;
+
+    try {
+      const resp = await fetch(`/api/place-lookup?query=${encodeURIComponent(targetActivity.location)}&region=${encodeURIComponent(itinerary.plan.region)}`);
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.place) {
+          const finalizedDays = newItinerary.days.map(d => {
+            if (d.dayNumber !== dayNumber) return d;
+            const activities = d.activities.map((act, idx) => {
+              if (idx !== activityIdx) return act;
+              return {
+                ...act,
+                place: data.place
+              };
+            });
+            return { ...d, activities };
+          });
+          const finalizedItinerary = { ...newItinerary, days: finalizedDays };
+          setItinerary(finalizedItinerary);
+          sessionStorage.setItem("generatedItinerary", JSON.stringify(finalizedItinerary));
+        }
+      }
+    } catch (e) {
+      console.error("Failed to lookup swapped place details", e);
+    }
+  };
+
+  const handleSwapHotel = (altIdx: number) => {
+    if (!itinerary || !itinerary.hotelRecommendation) return;
+    const hotel = itinerary.hotelRecommendation;
+    const alternatives = hotel.alternatives ? [...hotel.alternatives] : [];
+    const alt = alternatives[altIdx];
+    if (!alt) return;
+
+    const newHotel = {
+      name: alt.name,
+      neighborhood: alt.neighborhood,
+      reasoning: alt.reasoning,
+      alternatives: alternatives.map((item, idx) => {
+        if (idx === altIdx) {
+          return {
+            name: hotel.name,
+            neighborhood: hotel.neighborhood,
+            reasoning: hotel.reasoning
+          };
+        }
+        return item;
+      })
+    };
+
+    const newItinerary = {
+      ...itinerary,
+      hotelRecommendation: newHotel
+    };
+
+    setItinerary(newItinerary);
+    sessionStorage.setItem("generatedItinerary", JSON.stringify(newItinerary));
+  };
+
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex">
       {/* Sidebar */}
@@ -198,7 +300,14 @@ export default function Itinerary() {
                 {itinerary.plan.arrivalDate.toLocaleDateString()} - {itinerary.plan.leaveDate.toLocaleDateString()} · Click any activity to see its location and route
               </p>
             </div>
-            <ItineraryTimeline days={itinerary.days} onViewOnMap={handleViewOnMap} />
+            <ItineraryTimeline
+              days={itinerary.days}
+              region={itinerary.plan.region}
+              onViewOnMap={handleViewOnMap}
+              onSwapActivity={handleSwapActivity}
+              hotelRecommendation={itinerary.hotelRecommendation}
+              onSwapHotel={handleSwapHotel}
+            />
           </div>
         )}
 
