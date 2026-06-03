@@ -12,9 +12,9 @@ Built with **React (Vite) + TypeScript** on the frontend, and a **Node.js Expres
    - Speak directly with **Wandr**, your AI travel concierge, to discuss your interests, hobbies, culinary tastes, and pace preference.
    - The onboarding assistant will dynamically explore your profile until you are satisfied and ready to generate.
 
-2. **Apple Weather styled Live Forecast**:
+2. **Weather styled Live Forecast**:
    - Access live 5-day weather forecast information for your destination.
-   - Click on any day card to slide open an **Apple Weather styled overlay dialog** detailing feels-like temperatures, cloud cover percentage, barometric air pressure, wind speeds, humidity metrics, and a dynamic safety/packing advisory.
+   - Click on any day card to slide open an **Weather styled overlay dialog** detailing feels-like temperatures, cloud cover percentage, barometric air pressure, wind speeds, humidity metrics, and a dynamic safety/packing advisory.
    - Includes a smooth **hourly temperature trend curve** with linear SVG gradient styling.
 
 3. **Google Maps Interactive Routing**:
