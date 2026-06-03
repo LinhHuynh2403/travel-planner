@@ -316,6 +316,7 @@ export default function Itinerary() {
             days={itinerary.days}
             selectedActivity={selectedActivity}
             onActivitySelect={(act) => setSelectedActivity(act)}
+            onBack={() => setActiveTab('schedule')}
           />
         )}
 

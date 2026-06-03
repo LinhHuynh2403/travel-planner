@@ -1,17 +1,32 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { DayItinerary, ItineraryActivity } from '../types/travel';
 import { Card, CardContent } from './ui/card';
 import { Button } from './ui/button';
-import { MapPin, Navigation, ArrowRight, ExternalLink } from 'lucide-react';
+import { MapPin, ExternalLink, ArrowLeft, Utensils } from 'lucide-react';
+
+interface NearbyPlace {
+  placeId: string;
+  name: string;
+  rating?: number;
+  userRatingsTotal?: number;
+  priceLevel?: number;
+  isOpenNow?: boolean;
+  vicinity: string;
+  photoUrl?: string | null;
+}
 
 interface MapTabProps {
   days: DayItinerary[];
   selectedActivity: ItineraryActivity | null;
   onActivitySelect: (activity: ItineraryActivity) => void;
+  onBack: () => void;
 }
 
-export function MapTab({ days, selectedActivity, onActivitySelect }: MapTabProps) {
+export function MapTab({ days, selectedActivity, onActivitySelect, onBack }: MapTabProps) {
   const allActivities = days.flatMap(d => d.activities);
+  
+  const [nearbyPlaces, setNearbyPlaces] = useState<NearbyPlace[]>([]);
+  const [isLoadingNearby, setIsLoadingNearby] = useState(false);
 
   // Find previous activity to show route
   let previousActivity: ItineraryActivity | null = null;
@@ -36,6 +51,26 @@ export function MapTab({ days, selectedActivity, onActivitySelect }: MapTabProps
 
   const mapUrl = `https://maps.google.com/maps?${routeQuery}&t=&z=15&ie=UTF8&iwloc=&output=embed`;
 
+  // Fetch nearby places when selected activity changes
+  useEffect(() => {
+    if (!selectedActivity?.place?.lat || !selectedActivity?.place?.lng) {
+      setNearbyPlaces([]);
+      return;
+    }
+
+    setIsLoadingNearby(true);
+    fetch(`/api/nearby?lat=${selectedActivity.place.lat}&lng=${selectedActivity.place.lng}&keyword=restaurant`)
+      .then(res => res.json())
+      .then(data => {
+        setNearbyPlaces(data.places || []);
+        setIsLoadingNearby(false);
+      })
+      .catch(err => {
+        console.error("Error fetching nearby places:", err);
+        setIsLoadingNearby(false);
+      });
+  }, [selectedActivity]);
+
   return (
     <div className="flex h-[calc(100vh-2rem)] gap-4">
       {/* Map Area */}
@@ -51,6 +86,17 @@ export function MapTab({ days, selectedActivity, onActivitySelect }: MapTabProps
 
       {/* Sidebar with details */}
       <div className="w-80 flex flex-col gap-4 overflow-y-auto pr-2">
+        {/* Back Button */}
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          className="text-zinc-400 hover:text-white hover:bg-zinc-800/50 justify-start w-fit pl-2 pr-4 h-9 rounded-lg"
+          onClick={onBack}
+        >
+          <ArrowLeft className="mr-2 size-4" />
+          Back to Timeline
+        </Button>
+
         {selectedActivity ? (
           <>
             <Card className="bg-zinc-900 border-zinc-800 text-white">
@@ -92,36 +138,106 @@ export function MapTab({ days, selectedActivity, onActivitySelect }: MapTabProps
             </Card>
           </>
         ) : (
-          <div className="bg-zinc-900 border-zinc-800 border rounded-xl p-6 text-center text-zinc-400 flex flex-col items-center justify-center h-40">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 text-center text-zinc-400 flex flex-col items-center justify-center h-40">
             <MapPin className="size-8 mb-3 opacity-50" />
-            <p>Select an activity on the map or schedule to view details</p>
+            <p className="text-sm">Select an activity on the map or schedule to view details</p>
           </div>
         )}
 
-        {/* List of all pins for quick selection */}
-        <div className="mt-4">
-          <h4 className="text-sm font-medium text-zinc-500 uppercase tracking-wider mb-3">All Stops</h4>
-          <div className="flex flex-col gap-2">
-            {allActivities.map((act, idx) => (
-              <button
-                key={idx}
-                onClick={() => onActivitySelect(act)}
-                className={`flex items-center gap-3 p-3 rounded-lg text-left transition-colors ${selectedActivity === act
-                  ? 'bg-zinc-800 text-white border border-zinc-700'
-                  : 'bg-zinc-900/50 text-zinc-400 hover:bg-zinc-800/80 border border-transparent'
-                  }`}
-              >
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${selectedActivity === act ? 'bg-emerald-500/20 text-emerald-400' : 'bg-zinc-800'
-                  }`}>
-                  {idx + 1}
+        {/* List of elements (Nearby suggestions if selected, else All Stops) */}
+        <div className="mt-2">
+          {selectedActivity ? (
+            <>
+              <h4 className="text-xs font-bold text-zinc-550 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                <Utensils className="size-3.5 text-emerald-400" />
+                Suggested Near Stop
+              </h4>
+              
+              {isLoadingNearby ? (
+                <div className="space-y-3">
+                  {[1, 2, 3].map(i => (
+                    <div key={i} className="h-20 bg-zinc-900/50 border border-zinc-800/40 rounded-xl animate-pulse" />
+                  ))}
                 </div>
-                <div className="truncate flex-1">
-                  <div className="text-sm font-medium truncate">{act.title}</div>
-                  <div className="text-xs opacity-70 truncate">{act.time}</div>
+              ) : nearbyPlaces.length > 0 ? (
+                <div className="flex flex-col gap-3">
+                  {nearbyPlaces.map((place) => (
+                    <a
+                      key={place.placeId}
+                      href={`https://www.google.com/maps/place/?q=place_id:${place.placeId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex gap-3 p-3.5 bg-zinc-900 hover:bg-zinc-850 border border-zinc-800/80 rounded-xl hover:border-zinc-700/80 transition-all group/item text-left"
+                    >
+                      {place.photoUrl ? (
+                        <img 
+                          src={place.photoUrl} 
+                          alt={place.name} 
+                          className="w-16 h-16 object-cover rounded-lg shrink-0 border border-zinc-800" 
+                        />
+                      ) : (
+                        <div className="w-16 h-16 bg-zinc-950 rounded-lg shrink-0 flex items-center justify-center border border-zinc-800/50">
+                          <Utensils className="size-5 text-zinc-650" />
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
+                        <div>
+                          <div className="flex items-start justify-between gap-1.5">
+                            <h5 className="text-xs font-semibold text-white truncate group-hover/item:text-emerald-400 transition-colors">
+                              {place.name}
+                            </h5>
+                            <ExternalLink className="size-3 text-zinc-600 shrink-0 opacity-0 group-hover/item:opacity-100 transition-opacity" />
+                          </div>
+                          <p className="text-[10px] text-zinc-500 truncate mt-0.5">{place.vicinity}</p>
+                        </div>
+                        <div className="flex items-center gap-2 mt-1.5">
+                          {place.rating && (
+                            <span className="text-[10px] text-amber-400 font-semibold flex items-center gap-0.5">
+                              ★ {place.rating.toFixed(1)}
+                            </span>
+                          )}
+                          {place.isOpenNow !== undefined && (
+                            <span className={`text-[9px] px-1.5 py-0.5 rounded font-semibold ${place.isOpenNow ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
+                              {place.isOpenNow ? 'Open' : 'Closed'}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </a>
+                  ))}
                 </div>
-              </button>
-            ))}
-          </div>
+              ) : (
+                <div className="text-center py-8 text-zinc-500 text-xs border border-dashed border-zinc-800 rounded-xl">
+                  No nearby restaurant recommendations found.
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <h4 className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-3">All Stops</h4>
+              <div className="flex flex-col gap-2">
+                {allActivities.map((act, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => onActivitySelect(act)}
+                    className={`flex items-center gap-3 p-3 rounded-lg text-left transition-colors ${selectedActivity === act
+                      ? 'bg-zinc-800 text-white border border-zinc-700'
+                      : 'bg-zinc-900/50 text-zinc-400 hover:bg-zinc-800/80 border border-transparent'
+                      }`}
+                  >
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${selectedActivity === act ? 'bg-emerald-500/20 text-emerald-400' : 'bg-zinc-800'
+                      }`}>
+                      {idx + 1}
+                    </div>
+                    <div className="truncate flex-1">
+                      <div className="text-sm font-medium truncate">{act.title}</div>
+                      <div className="text-xs opacity-70 truncate">{act.time}</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>
