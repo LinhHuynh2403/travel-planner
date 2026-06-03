@@ -1,94 +1,107 @@
-# AI Travel Itinerary Planner (Ollama + Google Map)
+# Wandr: AI Travel Itinerary Planner & Agent 🗺️✨
 
-A lightweight travel itinerary generator with a modern React UI.  
-You enter a destination, dates, and preferences (hobbies, food, places). The backend calls **Ollama (gemma3:latest)** to generate a day-by-day itinerary and (optionally) uses **Google Places** to attach map-ready location details (lat/lng + Google Maps link) for each activity.
+Wandr is a modern, premium travel assistant and itinerary planner. It helps you design highly customized, detail-rich travel schedules, map routes, live weather analyses, and personalized packing lists.
 
-## Features
-
-- ✅ Clean React + Vite UI (Tailwind + UI components)
-- ✅ Generates a multi-day itinerary based on your preferences
-- ✅ Clickable activities → popup with Google Maps link
-- ✅ Backend integrates:
-  - **Ollama** for local LLM generation (`gemma3:latest`)
-  - **Google Places Text Search** to enrich locations (optional)
+Built with **React (Vite) + TypeScript** on the frontend, and a **Node.js Express** server in the backend, it utilizes **Gemini 2.5 Flash** for LLM orchestration and **Google Places & OpenWeather** APIs for real-time location/environment integration.
 
 ---
 
-## Project Structure
+## 🌟 Key Features
 
-Typical layout (yours may vary slightly):
+1. **Interactive Conversational Onboarding**:
+   - Speak directly with **Wandr**, your AI travel concierge, to discuss your interests, hobbies, culinary tastes, and pace preference.
+   - The onboarding assistant will dynamically explore your profile until you are satisfied and ready to generate.
 
+2. **Apple Weather styled Live Forecast**:
+   - Access live 5-day weather forecast information for your destination.
+   - Click on any day card to slide open an **Apple Weather styled overlay dialog** detailing feels-like temperatures, cloud cover percentage, barometric air pressure, wind speeds, humidity metrics, and a dynamic safety/packing advisory.
+   - Includes a smooth **hourly temperature trend curve** with linear SVG gradient styling.
+
+3. **Google Maps Interactive Routing**:
+   - Embedded Google Maps showing geocoded pins for all schedule events.
+   - Live route tracing between stops for easy day navigation.
+   - One-click redirects to the official Google Maps Place panel (for hours, reviews, and photos).
+
+4. **AI Packing Checklist**:
+   - Automatically compiles destination-aware, weather-appropriate checklist groups (Clothing, Footwear, Toiletries, Tech, Health, and Cultural considerations).
+
+5. **Local Tips & Flight Discovery**:
+   - **Tips Tab**: Dynamically renders AI-curated safety alerts, greeting etiquettes, and cultural taboos.
+   - **Flights Tab**: Live deep-link booking card searching flight portals like Google Flights, Skyscanner, and Expedia.
 
 ---
 
-## Prerequisites
+## 🛠️ Prerequisites
 
-- Node.js (recommended **v18+**)
-- npm
-- Ollama installed
+* **Node.js** (v18+ recommended)
+* **npm** or **yarn**
+* External API Keys:
+  * [Google Gemini API Key](https://ai.google.dev/) (For AI generation & conversational chat)
+  * [Google Maps API Key](https://console.cloud.google.com/) (For Geocoding, Place details, and Maps embed)
+  * [OpenWeather API Key](https://openweathermap.org/api) (For live 5-day weather data)
 
 ---
 
-## 1. Run Ollama (LLM)
+## 🚀 Getting Started
 
-If you have not had the model: Pull it
+### 1. Backend Setup
 
-```bash 
-ollama pull llama3 
-```
+1. Navigate to the backend directory:
+   ```bash
+   cd backend
+   ```
+2. Install server dependencies:
+   ```bash
+   npm install
+   ```
+3. Create a `.env` configuration file inside `/backend`:
+   ```env
+   PORT=8888
+   GEMINI_API_KEY=your_gemini_api_key
+   GOOGLE_MAPS_KEY=your_google_maps_key
+   OPENWEATHER_API_KEY=your_openweather_api_key
+   ```
+4. Fire up the API server:
+   ```bash
+   node server.js
+   ```
+   *The server runs locally at: `http://localhost:8888`*
 
-Start Ollama:
+---
 
-```bash
-ollama serve
-``` 
+### 2. Frontend Setup
 
-Ollama should be available at: http://localhost:11434 
+1. Navigate to the frontend directory:
+   ```bash
+   cd frontend
+   ```
+2. Install frontend dependencies:
+   ```bash
+   npm install
+   ```
+3. Start the Vite hot-reloading development server:
+   ```bash
+   npm run dev
+   ```
+   *The client dashboard loads locally at: `http://localhost:5173`*
 
-## 2. Backend Setup
+---
 
-Install dependencies
+## 🧠 Optional Local Fallback (Ollama)
 
-```bash 
-cd backend
-npm install 
-``` 
+If no `GEMINI_API_KEY` environment variable is defined in your `.env` file, the server automatically attempts to fall back to a local Ollama instance running the `gemma3` model:
 
-### Environment variables
+1. Serve Ollama locally:
+   ```bash
+   ollama serve
+   ```
+2. Pull the latest model:
+   ```bash
+   ollama pull gemma3
+   ```
 
-Create a file backend/.env, and store your google map API key 
+---
 
-```bash
-GOOGLE_MAPS_KEY=YOUR_GOOGLE_MAPS_API_KEY
-```
+## 📄 License
 
-Run backend
-```bash
-node server.js
-```
-
-Backend runs at:
-http://localhost:8000
-
-API endpoint:
-
-```
-POST http://localhost:8000/api/itinerary 
-``` 
-
-## 3. Frontend Setup (Vite + React) 
-
-From the project root:
-
-```bash 
-npm install 
-npm run dev
-``` 
-
-Frontend runs at:
-http://localhost:5173
-
-
-
-## License 
-MIT
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
