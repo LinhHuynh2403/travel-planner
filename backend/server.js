@@ -3,7 +3,7 @@ import cors from "cors";
 import "dotenv/config";
 // Only needed if Node < 18. If Node 18+, remove this import and uninstall node-fetch.
 import fetch from "node-fetch";
-import { SYSTEM_CHAT_INSTRUCTION, getGeneratorPrompt } from "./prompts.js";
+import { SYSTEM_CHAT_INSTRUCTION, getGeneratorPrompt, getDeterministicGeneratorPrompt } from "./prompts.js";
 
 const app = express();
 app.use(cors());
@@ -210,6 +210,176 @@ async function runAgent(plan, chatHistory) {
   }
 }
 
+async function getBestOllamaModel(preferredModel) {
+  try {
+    const res = await fetch("http://localhost:11434/api/tags");
+    if (res.ok) {
+      const data = await res.json();
+      const installedModels = (data.models || []).map(m => m.name);
+
+      if (installedModels.includes(preferredModel)) return preferredModel;
+
+      const preferredBase = preferredModel.split(":")[0];
+      const match = installedModels.find(m => m.startsWith(preferredBase) || m.includes(preferredBase));
+      if (match) return match;
+
+      const fallbacks = ["llama3.1:latest", "gemma3:latest", "llama3.2:latest", "llama3:latest"];
+      for (const f of fallbacks) {
+        if (installedModels.includes(f)) return f;
+      }
+      if (installedModels.length > 0) return installedModels[0];
+    }
+  } catch (e) {
+    console.warn("Could not query Ollama models list:", e.message);
+  }
+  return preferredModel;
+}
+
+async function fetchRealPlaces(plan) {
+  const key = process.env.GOOGLE_MAPS_KEY;
+  if (!key) {
+    console.warn("Google Maps key is missing. Places API pre-fetching skipped.");
+    return { hotels: [], restaurants: [], attractions: [] };
+  }
+
+  const region = plan.region;
+
+  // 1. Hotel Query
+  const hotelQuery = `best hotels in ${region}`;
+
+  // 2. Restaurant Queries
+  const restaurantQueries = [];
+  if (plan.favoriteFood && plan.favoriteFood.length > 0) {
+    plan.favoriteFood.slice(0, 2).forEach(food => {
+      restaurantQueries.push(`${food} in ${region}`);
+    });
+  }
+  if (plan.restaurantPreferences && plan.restaurantPreferences.length > 0) {
+    plan.restaurantPreferences.slice(0, 2).forEach(pref => {
+      restaurantQueries.push(`${pref} dining in ${region}`);
+    });
+  }
+  if (restaurantQueries.length === 0) {
+    restaurantQueries.push(`best restaurants in ${region}`);
+  }
+
+  // 3. Attraction Queries
+  const attractionQueries = [];
+  if (plan.hobbies && plan.hobbies.length > 0) {
+    plan.hobbies.slice(0, 2).forEach(hobby => {
+      attractionQueries.push(`${hobby} in ${region}`);
+    });
+  }
+  if (plan.placePreferences && plan.placePreferences.length > 0) {
+    plan.placePreferences.slice(0, 2).forEach(pref => {
+      attractionQueries.push(`${pref} in ${region}`);
+    });
+  }
+  if (attractionQueries.length === 0) {
+    attractionQueries.push(`top attractions in ${region}`);
+  }
+
+  const uniqueQueries = {
+    hotels: [hotelQuery],
+    restaurants: Array.from(new Set(restaurantQueries)).slice(0, 3),
+    attractions: Array.from(new Set(attractionQueries)).slice(0, 3),
+  };
+
+  const results = {
+    hotels: [],
+    restaurants: [],
+    attractions: [],
+  };
+
+  const fetchAndFormat = async (query) => {
+    const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query)}&key=${key}`;
+    try {
+      const resp = await fetch(url);
+      const data = await resp.json();
+      if (!data.results) return [];
+      return data.results.slice(0, 8).map(p => ({
+        placeId: p.place_id,
+        name: p.name,
+        address: p.formatted_address || "",
+        rating: p.rating || 0,
+        userRatingsTotal: p.user_ratings_total || 0,
+        priceLevel: p.price_level !== undefined ? p.price_level : -1,
+        lat: p.geometry?.location?.lat,
+        lng: p.geometry?.location?.lng,
+      }));
+    } catch (e) {
+      console.error(`Error fetching query "${query}":`, e);
+      return [];
+    }
+  };
+
+  try {
+    const hotelList = await fetchAndFormat(uniqueQueries.hotels[0]);
+    results.hotels = hotelList;
+
+    const restaurantLists = await Promise.all(uniqueQueries.restaurants.map(q => fetchAndFormat(q)));
+    const rawRestaurants = restaurantLists.flat();
+    const seenRestIds = new Set();
+    results.restaurants = rawRestaurants.filter(r => {
+      if (seenRestIds.has(r.placeId)) return false;
+      seenRestIds.add(r.placeId);
+      return true;
+    }).slice(0, 15);
+
+    const attractionLists = await Promise.all(uniqueQueries.attractions.map(q => fetchAndFormat(q)));
+    const rawAttractions = attractionLists.flat();
+    const seenAttrIds = new Set();
+    results.attractions = rawAttractions.filter(a => {
+      if (seenAttrIds.has(a.placeId)) return false;
+      seenAttrIds.add(a.placeId);
+      return true;
+    }).slice(0, 15);
+  } catch (err) {
+    console.error("Failed to pre-fetch places details:", err);
+  }
+
+  return results;
+}
+
+async function calculateTravelTime(origin, destination, key) {
+  if (!origin || !origin.lat || !origin.lng || !destination || !destination.lat || !destination.lng) return null;
+
+  const distEst = Math.sqrt(Math.pow(origin.lat - destination.lat, 2) + Math.pow(origin.lng - destination.lng, 2));
+  const mode = distEst < 0.015 ? "walking" : "driving"; // roughly ~1.5km threshold
+
+  const url = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${origin.lat},${origin.lng}&destinations=${destination.lat},${destination.lng}&mode=${mode}&key=${key}`;
+  try {
+    const resp = await fetch(url);
+    const data = await resp.json();
+    const element = data.rows?.[0]?.elements?.[0];
+    if (element && element.status === "OK") {
+      const durationText = element.duration?.text || "";
+      return `${durationText} ${mode === "walking" ? "walk" : "drive"}`;
+    }
+  } catch (e) {
+    console.warn("Distance Matrix API call failed:", e.message);
+  }
+  return null;
+}
+
+async function fetchTimezone(lat, lng, key) {
+  const timestamp = Math.floor(Date.now() / 1000);
+  const url = `https://maps.googleapis.com/maps/api/timezone/json?location=${lat},${lng}&timestamp=${timestamp}&key=${key}`;
+  try {
+    const resp = await fetch(url);
+    const data = await resp.json();
+    if (data && data.status === "OK") {
+      return {
+        timezoneId: data.timeZoneId,
+        timezoneName: data.timeZoneName,
+      };
+    }
+  } catch (e) {
+    console.warn("Time Zone API call failed:", e.message);
+  }
+  return null;
+}
+
 app.post("/api/itinerary", async (req, res) => {
   const payload = req.body;
   const plan = payload.plan || payload;
@@ -222,46 +392,52 @@ app.post("/api/itinerary", async (req, res) => {
   plan.region = capitalizeRegion(plan.region);
 
   try {
+    const durationDays =
+      Math.floor((new Date(plan.leaveDate) - new Date(plan.arrivalDate)) / (1000 * 60 * 60 * 24)) + 1;
+
+    const chatContext = chatHistory && chatHistory.length > 0
+      ? `Here is the conversation history where the traveler discussed their preferences:\n${chatHistory.map(m => `${m.role.toUpperCase()}: ${m.text}`).join('\n')}`
+      : `Hobbies: ${plan.hobbies?.join(', ')}`;
+
+    // 1. Fetch real Places details based on query constraints and user selections
+    console.log(`Pre-fetching real locations in ${plan.region} from Places API...`);
+    const realPlaces = await fetchRealPlaces(plan);
+
+    // 2. Generate the deterministic model prompt
+    const prompt = getDeterministicGeneratorPrompt(plan, durationDays, chatContext, realPlaces);
+
     let raw = "";
     let success = false;
 
-    if (process.env.GEMINI_API_KEY) {
-      try {
-        raw = await runAgent(plan, chatHistory);
+    // 3. Prioritize local Ollama using model: qwen3:8b (no Gemini fallback for itinerary as requested)
+    try {
+      const bestModel = await getBestOllamaModel("qwen3:8b");
+      console.log(`Sending deterministic prompt to Ollama using model: ${bestModel}...`);
+      const ollamaRes = await fetch("http://localhost:11434/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: bestModel,
+          prompt,
+          stream: false,
+          options: { temperature: 0.4 },
+        }),
+      });
+
+      if (ollamaRes.ok) {
+        const data = await ollamaRes.json();
+        raw = (data.response || "").trim();
         success = true;
-      } catch (geminiError) {
-        console.warn("Gemini agent failed/quota exceeded, trying Ollama...", geminiError.message);
+        console.log(`Successfully generated itinerary via Ollama (${bestModel})!`);
+      } else {
+        console.warn(`Ollama responded with status ${ollamaRes.status}. Fallback to mock itinerary...`);
       }
+    } catch (ollamaError) {
+      console.warn("Local Ollama failed or not running. Fallback to mock itinerary...", ollamaError.message);
     }
 
+    // 4. Ultimate fallback if Ollama fails
     if (!success) {
-      try {
-        const prompt = buildPrompt(plan, chatHistory);
-        const ollamaRes = await fetch("http://localhost:11434/api/generate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            model: "gemma3:latest",
-            prompt,
-            stream: false,
-            options: { temperature: 0.4 },
-          }),
-        });
-
-        if (ollamaRes.ok) {
-          const data = await ollamaRes.json();
-          raw = (data.response || "").trim();
-          success = true;
-        } else {
-          console.warn("Ollama API failed to respond successfully.");
-        }
-      } catch (ollamaError) {
-        console.warn("Local Ollama fallback failed or not running:", ollamaError.message);
-      }
-    }
-
-    if (!success) {
-      // Ultimate mock fallback so the application never breaks
       console.warn("Using ultimate mock fallback itinerary generator.");
       const start = new Date(plan.arrivalDate);
       const end = new Date(plan.leaveDate);
@@ -276,6 +452,24 @@ app.post("/api/itinerary", async (req, res) => {
         { time: "05:00 PM", category: "shopping", title: "Downtown Shopping District", desc: "Stroll through vibrant local boutiques, souvenir shops, and street markets." },
         { time: "07:30 PM", category: "food", title: "Chef's Table Dinner", desc: "Experience a highly-rated dining spot known for its amazing hospitality and gourmet dishes." }
       ];
+
+      const mockHotels = {
+        name: `The Grand Palace Hotel ${plan.region}`,
+        neighborhood: `Downtown ${plan.region}`,
+        reasoning: `Highly rated hotel with clean rooms, friendly staff, and convenient access to local attractions and restaurants in ${plan.region}.`,
+        alternatives: [
+          {
+            name: `Boutique Stay ${plan.region}`,
+            neighborhood: `Old Quarter ${plan.region}`,
+            reasoning: "Charming rooms with vintage local design and excellent breakfast included."
+          },
+          {
+            name: `Ocean View Resort ${plan.region}`,
+            neighborhood: `Coastal Area ${plan.region}`,
+            reasoning: "Fabulous beach side view with an infinity pool and premium wellness spa."
+          }
+        ]
+      };
 
       for (let i = 0; i < Math.min(diffDays, 14); i++) {
         const currentDate = new Date(start);
@@ -296,6 +490,7 @@ app.post("/api/itinerary", async (req, res) => {
       }
 
       const mockItinerary = {
+        hotelRecommendation: mockHotels,
         plan: {
           region: plan.region,
           arrivalDate: plan.arrivalDate,
@@ -308,12 +503,32 @@ app.post("/api/itinerary", async (req, res) => {
     }
 
     const jsonText = extractJson(raw);
-
     let itinerary;
     try {
       itinerary = JSON.parse(jsonText);
     } catch {
-      return res.status(500).json({ error: "Failed to parse JSON from model", raw });
+      return res.status(500).json({ error: "Failed to parse JSON from model output", raw });
+    }
+
+    // Fallback hotel recommendation if missing
+    if (!itinerary.hotelRecommendation) {
+      itinerary.hotelRecommendation = {
+        name: `The Grand Palace Hotel ${itinerary.plan?.region || plan.region}`,
+        neighborhood: `Downtown ${itinerary.plan?.region || plan.region}`,
+        reasoning: `Highly rated hotel with clean rooms, friendly staff, and convenient access to local attractions and restaurants.`,
+        alternatives: [
+          {
+            name: `Boutique Stay ${itinerary.plan?.region || plan.region}`,
+            neighborhood: `Old Quarter ${itinerary.plan?.region || plan.region}`,
+            reasoning: "Charming rooms with vintage local design and excellent breakfast included."
+          },
+          {
+            name: `Ocean View Resort ${itinerary.plan?.region || plan.region}`,
+            neighborhood: `Coastal Area ${itinerary.plan?.region || plan.region}`,
+            reasoning: "Fabulous beach side view with an infinity pool and premium wellness spa."
+          }
+        ]
+      };
     }
 
     // Sanitize categories
@@ -325,18 +540,85 @@ app.post("/api/itinerary", async (req, res) => {
       }
     }
 
-    // Attach lat/lng for Google Maps pins
+    // 5. Match recommended locations back to their actual Place details and coordinates
+    const allPlaces = [
+      ...(realPlaces.hotels || []),
+      ...(realPlaces.restaurants || []),
+      ...(realPlaces.attractions || [])
+    ];
+
+    // Find hotel place coordinates to use as daily starting origin
+    let hotelPlace = null;
+    if (itinerary.hotelRecommendation?.name) {
+      const hMatch = allPlaces.find(p => p.name.toLowerCase().trim() === itinerary.hotelRecommendation.name.toLowerCase().trim());
+      if (hMatch) {
+        hotelPlace = { lat: hMatch.lat, lng: hMatch.lng };
+      }
+    }
+
+    const distanceMatrixKey = process.env.DISTANCE_MATRIX_KEY || process.env.GOOGLE_MAPS_KEY;
+
     for (const day of itinerary.days || []) {
+      let prevPlace = hotelPlace; // start each day from the hotel
+
       for (const a of day.activities || []) {
         if (!a.location) continue;
-        const place = await lookupPlace(a.location, itinerary.plan?.region || plan.region);
-        if (place) a.place = place;
+
+        // Try exact match or substring match
+        const match = allPlaces.find(p => p.name.toLowerCase().trim() === a.location.toLowerCase().trim())
+          || allPlaces.find(p => p.name.toLowerCase().includes(a.location.toLowerCase()) || a.location.toLowerCase().includes(p.name.toLowerCase()));
+
+        if (match) {
+          a.place = {
+            placeId: match.placeId,
+            address: match.address,
+            lat: match.lat,
+            lng: match.lng,
+            mapsUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(match.name + " " + match.address)}&query_place_id=${match.placeId}`
+          };
+        } else {
+          // If no pre-fetched match, do a fallback live lookup
+          const place = await lookupPlace(a.location, itinerary.plan?.region || plan.region);
+          if (place) a.place = place;
+        }
+
+        // 6. Query Google Distance Matrix API for precise travel times
+        if (prevPlace && a.place && distanceMatrixKey) {
+          const preciseTime = await calculateTravelTime(prevPlace, a.place, distanceMatrixKey);
+          if (preciseTime) {
+            a.travelTimeFromPrevious = preciseTime;
+          }
+        }
+
+        prevPlace = a.place || prevPlace; // update previous location for next activity
+      }
+    }
+
+    // 7. Query Google Time Zone API to attach timezone details
+    let referencePlace = hotelPlace;
+    if (!referencePlace) {
+      for (const day of itinerary.days || []) {
+        if (day.activities && day.activities[0]?.place) {
+          referencePlace = day.activities[0].place;
+          break;
+        }
+      }
+    }
+
+    const timezoneKey = process.env.TIMEZONE_API_KEY || process.env.GOOGLE_MAPS_KEY;
+    if (referencePlace && timezoneKey) {
+      console.log(`Resolving destination timezone using coordinates (${referencePlace.lat}, ${referencePlace.lng})...`);
+      const tz = await fetchTimezone(referencePlace.lat, referencePlace.lng, timezoneKey);
+      if (tz) {
+        itinerary.plan.timezone = tz.timezoneId;
+        itinerary.plan.timezoneName = tz.timezoneName;
+        console.log(`Timezone set to: ${tz.timezoneId} (${tz.timezoneName})`);
       }
     }
 
     return res.json(itinerary);
   } catch (e) {
-    console.error(e);
+    console.error("Critical failure in itinerary route:", e);
     return res.status(500).json({ error: "Server failed", details: String(e) });
   }
 });
@@ -348,47 +630,13 @@ app.post("/api/chat", async (req, res) => {
   }
 
   try {
-    const key = process.env.GEMINI_API_KEY;
     const currentDateTime = new Date().toLocaleString("en-US", { timeZone: "America/Los_Angeles" });
+    let replyText = "";
+    let success = false;
 
-    if (key) {
-      try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`;
-        const contents = messages
-          .filter(m => m && typeof m.text === 'string' && m.text.trim())
-          .map(m => ({
-            role: m.role === 'ai' ? 'model' : 'user',
-            parts: [{ text: m.text }]
-          }));
-
-        const systemInstruction = {
-          parts: [{
-            text: `${SYSTEM_CHAT_INSTRUCTION}\n\n[Current Date and Time: ${currentDateTime}]`
-          }]
-        };
-
-        const response = await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ contents, systemInstruction })
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          const replyText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (replyText) {
-            return res.json({ text: replyText });
-          }
-        } else {
-          console.warn(`Gemini API quota or call failed: ${await response.text()}. Attempting fallback...`);
-        }
-      } catch (geminiError) {
-        console.error("Gemini API call failed:", geminiError);
-      }
-    }
-
-    // Fallback 1: Local Ollama
+    // 1. Try Local Ollama first (prioritizing qwen3:8b)
     try {
+      const bestModel = await getBestOllamaModel("qwen3:8b");
       const prompt = `${SYSTEM_CHAT_INSTRUCTION}
 
 [Current Date and Time: ${currentDateTime}]
@@ -398,11 +646,12 @@ ${messages.map(m => `${m.role === 'ai' ? 'model' : 'user'}: ${m.text}`).join('\n
 
 Model reply:`;
 
+      console.log(`Sending chat prompt to Ollama using model: ${bestModel}...`);
       const ollamaRes = await fetch("http://localhost:11434/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "gemma3:latest",
+          model: bestModel,
           prompt,
           stream: false,
           options: { temperature: 0.7 },
@@ -411,23 +660,27 @@ Model reply:`;
 
       if (ollamaRes.ok) {
         const data = await ollamaRes.json();
-        const replyText = (data.response || "").trim();
+        replyText = (data.response || "").trim();
         if (replyText) {
-          return res.json({ text: replyText });
+          success = true;
+          console.log("Successfully generated chat response via Ollama!");
         }
       }
     } catch (ollamaError) {
-      console.warn("Local Ollama fallback failed or not running:", ollamaError.message);
+      console.warn("Local Ollama chat failed or not running:", ollamaError.message);
     }
 
-    // Fallback 2: Canned response matching
-    const lastUserText = (messages[messages.length - 1]?.text || "").toLowerCase();
-    let replyText = "Got it! What other activities, hobbies, or food preferences do you have? Or just type 'good to go' when you're ready to generate the schedule!";
+    // 2. Fallback: Canned response matching
+    if (!success) {
+      console.warn("Using canned response fallback for chat.");
+      const lastUserText = (messages[messages.length - 1]?.text || "").toLowerCase();
+      replyText = "Got it! What other activities, hobbies, or food preferences do you have? Or just type 'good to go' when you're ready to generate the schedule!";
 
-    if (lastUserText.includes("yes") || lastUserText.includes("flight") || lastUserText.includes("arrive") || lastUserText.includes("leave") || /\b\d{1,2}(:\d{2})?\s*(am|pm)?\b/i.test(lastUserText)) {
-      replyText = "Awesome, noted! Let me know if there are any specific activities, restaurants, or sights you'd like to include, or say 'good to go' to build your schedule!";
-    } else if (lastUserText.includes("no") || lastUserText.includes("haven't") || lastUserText.includes("not yet")) {
-      replyText = "No problem! You can check the flights page using the menu on the left. Once you're ready to plan your activities, what other hobbies or preferences do you have? Or say 'good to go' to build the itinerary!";
+      if (lastUserText.includes("yes") || lastUserText.includes("flight") || lastUserText.includes("arrive") || lastUserText.includes("leave") || /\b\d{1,2}(:\d{2})?\s*(am|pm)?\b/i.test(lastUserText)) {
+        replyText = "Awesome, noted! Let me know if there are any specific activities, restaurants, or sights you'd like to include, or say 'good to go' to build your schedule!";
+      } else if (lastUserText.includes("no") || lastUserText.includes("haven't") || lastUserText.includes("not yet")) {
+        replyText = "No problem! You can check the flights page using the menu on the left. Once you're ready to plan your activities, what other hobbies or preferences do you have? Or say 'good to go' to build the itinerary!";
+      }
     }
 
     return res.json({ text: replyText });
