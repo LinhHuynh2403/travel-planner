@@ -3,10 +3,42 @@ import cors from "cors";
 import "dotenv/config";
 // Only needed if Node < 18. If Node 18+, remove this import and uninstall node-fetch.
 import fetch from "node-fetch";
+import { SYSTEM_CHAT_INSTRUCTION, getGeneratorPrompt } from "./prompts.js";
 
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: "1mb" }));
+
+async function getUserLocation() {
+  try {
+    const res = await fetch("http://ip-api.com/json");
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.status === "success") {
+        return {
+          city: data.city || "San Jose",
+          country: data.country || "United States",
+          timezone: data.timezone || "America/Los_Angeles"
+        };
+      }
+    }
+  } catch (err) {
+    console.warn("Could not geolocate user via IP:", err.message);
+  }
+  return {
+    city: "San Jose",
+    country: "United States",
+    timezone: "America/Los_Angeles"
+  };
+}
+
+function capitalizeRegion(region) {
+  if (!region) return "";
+  return region
+    .split(" ")
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ");
+}
 
 function buildPrompt(plan, chatHistory) {
   const durationDays =
@@ -16,110 +48,7 @@ function buildPrompt(plan, chatHistory) {
     ? `Here is the conversation history where the traveler discussed their preferences:\n${chatHistory.map(m => `${m.role.toUpperCase()}: ${m.text}`).join('\n')}`
     : `Hobbies: ${plan.hobbies?.join(', ')}`;
 
-  return `
-You are JourZy, an expert AI travel assistant specializing in creating highly personalized, detail-heavy itineraries and organized packing lists.
-Your goal is to generate a practical, organized, and destination-aware travel schedule and packing checklist based on the traveler's details.
-
-When planning this trip, you must:
-1. Build a detailed day-by-day schedule with exact times (e.g., 09:00–11:00) that aligns with their hobbies and interests.
-2. Formulate a personalized packing list (under the "packingList" key) considering:
-   - Destination country and city (${plan.region})
-   - Dates of travel (${plan.arrivalDate} to ${plan.leaveDate}, total ${durationDays} days)
-   - Expected weather and season (Analyze the forecast to suggest clothing layers, rain gear, sun protection, or winter gear)
-   - Planned activities (Suggest items needed for specific outings like hiking, swimming, dining, etc.)
-   - Local culture, customs, and religious expectations (Temples, mosques, churches, or sacred sites requiring modest clothing)
-   - Traveler Preferences & Conversation Context:
-     ${chatContext}
-3. Organize the packing items into distinct categories under the "packingList" JSON array:
-   - "Clothing"
-   - "Footwear"
-   - "Toiletries"
-   - "Electronics"
-   - "Health & Medication"
-   - "Activity-Specific Items"
-   - "Cultural Considerations"
-   - "Optional Items"
-4. Explain why unusual or destination-specific items are recommended within their item descriptions (e.g., "Modest clothing (covering knees/shoulders) for temples", "Umbrella for sudden July rain").
-5. Avoid recommending unnecessary items. Keep the list concise and relevant.
-6. For each activity in the daily schedule (especially dining, museums, and outdoor landmarks), always include 2 alternative places under the 'alternatives' array. For each alternative, provide the exact real business name, address, and a short description.
-7. For the hotel recommendation, always include 2 alternative accommodations under the 'alternatives' array.
-
-CRITICAL: Return ONLY valid JSON (no markdown, no extra text) that matches EXACTLY:
-
-{
-  "hotelRecommendation": {
-    "name": "string (name of the primary suggested hotel, e.g. 'Hotel De Anza')",
-    "neighborhood": "string (neighborhood name, e.g. 'Downtown San Jose')",
-    "reasoning": "string (why it fits the traveler's hobbies/vibe)",
-    "alternatives": [
-      {
-        "name": "string (alternative hotel name)",
-        "neighborhood": "string (neighborhood name)",
-        "reasoning": "string (why it is a good backup)"
-      }
-    ]
-  },
-  "plan": {
-    "region": "${plan.region}",
-    "arrivalDate": "${plan.arrivalDate}",
-    "leaveDate": "${plan.leaveDate}",
-    "hobbies": [],
-    "favoriteFood": [],
-    "restaurantPreferences": [],
-    "placePreferences": []
-  },
-  "days": [
-    {
-      "date": "YYYY-MM-DD",
-      "dayNumber": 1,
-      "activities": [
-        {
-          "time": "h:mm AM/PM",
-          "title": "string (activity name, e.g. 'San Jose Museum of Art')",
-          "description": "string",
-          "category": "food|museum|exhibition|nature|activity|shopping|rest",
-          "location": "string (The exact, specific name of a real restaurant, landmark, shop, or venue in that city, e.g. 'Original Joe's San Jose' or 'San Jose Museum of Art'. NEVER use generic descriptions like 'local cafe' or 'nice restaurant')",
-          "deepDiveRationale": "string (Explain why based on user's hobbies/food)",
-          "alternatives": [
-            {
-              "title": "string (alternative activity title)",
-              "location": "string (The exact, specific name of a real restaurant, landmark, shop, or venue in that city)",
-              "description": "string (why it's a great alternative option)"
-            }
-          ]
-        }
-      ]
-    }
-  ],
-  "packingList": [
-    {
-      "category": "string (e.g. Clothing, Tech, Health)",
-      "items": ["string"]
-    }
-  ],
-  "flights": [
-    {
-      "id": 1,
-      "airline": "string (name of airline operating this route, e.g. Air France, ANA)",
-      "price": 100,
-      "departureTime": "h:mm AM/PM",
-      "arrivalTime": "h:mm AM/PM",
-      "duration": "e.g. 10h 30m",
-      "stops": "e.g. Non-stop or 1 stop",
-      "tags": ["string (e.g. budget, comfort, morning departure)"],
-      "aiReasoning": "string (why this flight fits the user's travel schedule/dates)"
-    }
-  ],
-  "insights": {
-    "weatherOverview": "string (brief summary of what weather to expect in this region during these dates)",
-    "culturalTips": ["string (etiquette, tipping customs, greetings, dress codes, etc.)"],
-    "safetyTips": ["string (safety warnings, scan avoidance, local emergency info)"]
-  }
-}
-
-User input:
-${JSON.stringify(plan, null, 2)}
-  `.trim();
+  return getGeneratorPrompt(plan, durationDays, chatContext);
 }
 
 function extractJson(text) {
@@ -290,31 +219,92 @@ app.post("/api/itinerary", async (req, res) => {
     return res.status(400).json({ error: "Missing required fields: region, arrivalDate, leaveDate" });
   }
 
+  plan.region = capitalizeRegion(plan.region);
+
   try {
     let raw = "";
-    if (process.env.GEMINI_API_KEY) {
-      raw = await runAgent(plan, chatHistory);
-    } else {
-      // Fallback to local Ollama if no Gemini key
-      const prompt = buildPrompt(plan, chatHistory);
-      const ollamaRes = await fetch("http://localhost:11434/api/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "gemma3:latest",
-          prompt,
-          stream: false,
-          options: { temperature: 0.4 },
-        }),
-      });
+    let success = false;
 
-      if (!ollamaRes.ok) {
-        const t = await ollamaRes.text();
-        return res.status(500).json({ error: "Ollama error", details: t });
+    if (process.env.GEMINI_API_KEY) {
+      try {
+        raw = await runAgent(plan, chatHistory);
+        success = true;
+      } catch (geminiError) {
+        console.warn("Gemini agent failed/quota exceeded, trying Ollama...", geminiError.message);
+      }
+    }
+
+    if (!success) {
+      try {
+        const prompt = buildPrompt(plan, chatHistory);
+        const ollamaRes = await fetch("http://localhost:11434/api/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: "gemma3:latest",
+            prompt,
+            stream: false,
+            options: { temperature: 0.4 },
+          }),
+        });
+
+        if (ollamaRes.ok) {
+          const data = await ollamaRes.json();
+          raw = (data.response || "").trim();
+          success = true;
+        } else {
+          console.warn("Ollama API failed to respond successfully.");
+        }
+      } catch (ollamaError) {
+        console.warn("Local Ollama fallback failed or not running:", ollamaError.message);
+      }
+    }
+
+    if (!success) {
+      // Ultimate mock fallback so the application never breaks
+      console.warn("Using ultimate mock fallback itinerary generator.");
+      const start = new Date(plan.arrivalDate);
+      const end = new Date(plan.leaveDate);
+      const diffTime = Math.abs(end.getTime() - start.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
+
+      const mockDays = [];
+      const activitiesPool = [
+        { time: "09:00 AM", category: "nature", title: "Local Park & Morning Stroll", desc: "Enjoy a peaceful walk around the most scenic local park and experience the morning breeze." },
+        { time: "11:30 AM", category: "food", title: "Famous Local Bistro", desc: "Savor a delicious lunch featuring regional specialties and fresh ingredients." },
+        { time: "02:00 PM", category: "museum", title: "City Cultural Museum", desc: "Explore local heritage, arts, and historic artifacts highlighting the region's rich culture." },
+        { time: "05:00 PM", category: "shopping", title: "Downtown Shopping District", desc: "Stroll through vibrant local boutiques, souvenir shops, and street markets." },
+        { time: "07:30 PM", category: "food", title: "Chef's Table Dinner", desc: "Experience a highly-rated dining spot known for its amazing hospitality and gourmet dishes." }
+      ];
+
+      for (let i = 0; i < Math.min(diffDays, 14); i++) {
+        const currentDate = new Date(start);
+        currentDate.setDate(start.getDate() + i);
+
+        mockDays.push({
+          dayNumber: i + 1,
+          date: currentDate.toISOString(),
+          activities: activitiesPool.map(act => ({
+            time: act.time,
+            location: `${act.title} in ${plan.region}`,
+            description: act.desc,
+            category: act.category,
+            cost: "$10 - $45",
+            duration: "2 hours"
+          }))
+        });
       }
 
-      const data = await ollamaRes.json();
-      raw = (data.response || "").trim();
+      const mockItinerary = {
+        plan: {
+          region: plan.region,
+          arrivalDate: plan.arrivalDate,
+          leaveDate: plan.leaveDate
+        },
+        days: mockDays
+      };
+
+      raw = JSON.stringify(mockItinerary);
     }
 
     const jsonText = extractJson(raw);
@@ -359,45 +349,90 @@ app.post("/api/chat", async (req, res) => {
 
   try {
     const key = process.env.GEMINI_API_KEY;
-    if (!key) {
-      return res.json({ text: "Got it! Are you ready to generate the itinerary? Type 'good to go' to start." });
+    const currentDateTime = new Date().toLocaleString("en-US", { timeZone: "America/Los_Angeles" });
+
+    if (key) {
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`;
+        const contents = messages
+          .filter(m => m && typeof m.text === 'string' && m.text.trim())
+          .map(m => ({
+            role: m.role === 'ai' ? 'model' : 'user',
+            parts: [{ text: m.text }]
+          }));
+
+        const systemInstruction = {
+          parts: [{
+            text: `${SYSTEM_CHAT_INSTRUCTION}\n\n[Current Date and Time: ${currentDateTime}]`
+          }]
+        };
+
+        const response = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ contents, systemInstruction })
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const replyText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (replyText) {
+            return res.json({ text: replyText });
+          }
+        } else {
+          console.warn(`Gemini API quota or call failed: ${await response.text()}. Attempting fallback...`);
+        }
+      } catch (geminiError) {
+        console.error("Gemini API call failed:", geminiError);
+      }
     }
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`;
-    const contents = messages
-      .filter(m => m && typeof m.text === 'string' && m.text.trim())
-      .map(m => ({
-        role: m.role === 'ai' ? 'model' : 'user',
-        parts: [{ text: m.text }]
-      }));
+    // Fallback 1: Local Ollama
+    try {
+      const prompt = `${SYSTEM_CHAT_INSTRUCTION}
 
-    const systemInstruction = {
-      parts: [{
-        text: `You are JourZy, a conversational travel assistant helping the traveler plan a custom itinerary.
-Your primary directive is to keep the conversation going to discover their interests, hobbies, food preferences, and planned activities.
-Do not output any JSON or final itineraries. Just converse like a friendly travel agent.
-Keep asking questions, exploring what they want to do.
-Ask if they are finished with their plan or if they are ready to generate the schedule.
-Tell them: "Let me know when you are finished or type 'good to go' when you're ready to generate your schedule!"
-Keep your replies brief, engaging, and clear (no more than 2-3 sentences).`
-      }]
-    };
+[Current Date and Time: ${currentDateTime}]
 
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ contents, systemInstruction })
-    });
+Conversation history:
+${messages.map(m => `${m.role === 'ai' ? 'model' : 'user'}: ${m.text}`).join('\n')}
 
-    if (!response.ok) {
-      throw new Error(`Gemini API error: ${await response.text()}`);
+Model reply:`;
+
+      const ollamaRes = await fetch("http://localhost:11434/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "gemma3:latest",
+          prompt,
+          stream: false,
+          options: { temperature: 0.7 },
+        }),
+      });
+
+      if (ollamaRes.ok) {
+        const data = await ollamaRes.json();
+        const replyText = (data.response || "").trim();
+        if (replyText) {
+          return res.json({ text: replyText });
+        }
+      }
+    } catch (ollamaError) {
+      console.warn("Local Ollama fallback failed or not running:", ollamaError.message);
     }
 
-    const data = await response.json();
-    const replyText = data.candidates?.[0]?.content?.parts?.[0]?.text || "Excellent details! Are you ready to generate the plan? Type 'good to go' when you are!";
+    // Fallback 2: Canned response matching
+    const lastUserText = (messages[messages.length - 1]?.text || "").toLowerCase();
+    let replyText = "Got it! What other activities, hobbies, or food preferences do you have? Or just type 'good to go' when you're ready to generate the schedule!";
+
+    if (lastUserText.includes("yes") || lastUserText.includes("flight") || lastUserText.includes("arrive") || lastUserText.includes("leave") || /\b\d{1,2}(:\d{2})?\s*(am|pm)?\b/i.test(lastUserText)) {
+      replyText = "Awesome, noted! Let me know if there are any specific activities, restaurants, or sights you'd like to include, or say 'good to go' to build your schedule!";
+    } else if (lastUserText.includes("no") || lastUserText.includes("haven't") || lastUserText.includes("not yet")) {
+      replyText = "No problem! You can check the flights page using the menu on the left. Once you're ready to plan your activities, what other hobbies or preferences do you have? Or say 'good to go' to build the itinerary!";
+    }
+
     return res.json({ text: replyText });
   } catch (e) {
-    console.error("Chat error:", e);
+    console.error("Chat route critical failure:", e);
     return res.status(500).json({ error: String(e) });
   }
 });
@@ -444,12 +479,31 @@ app.get("/api/nearby", async (req, res) => {
       isOpenNow: p.opening_hours?.open_now,
       vicinity: p.vicinity,
       photoUrl: p.photos?.[0]?.photo_reference
-        ? `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=${p.photos[0].photo_reference}&key=${key}`
+        ? `/api/photo?reference=${p.photos[0].photo_reference}`
         : null
     }));
     return res.json({ places });
   } catch (e) {
     return res.status(500).json({ error: String(e) });
+  }
+});
+
+app.get("/api/photo", async (req, res) => {
+  const { reference } = req.query;
+  const key = process.env.GOOGLE_MAPS_KEY;
+  if (!key || !reference) return res.status(400).send("Missing parameters");
+
+  const url = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=${reference}&key=${key}`;
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) return res.status(resp.status).send("Failed to fetch photo");
+
+    const contentType = resp.headers.get("content-type");
+    if (contentType) res.setHeader("Content-Type", contentType);
+    const buffer = await resp.arrayBuffer();
+    return res.send(Buffer.from(buffer));
+  } catch (e) {
+    return res.status(500).send(String(e));
   }
 });
 
