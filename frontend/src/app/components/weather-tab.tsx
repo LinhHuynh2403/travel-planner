@@ -97,7 +97,7 @@ export function WeatherTab({ region, insights }: WeatherTabProps) {
               dailyData[dateStr].humidities.push(item.main.humidity);
               dailyData[dateStr].windSpeeds.push(item.wind?.speed || 0);
               dailyData[dateStr].pressures.push(item.main.pressure);
-              dailyData[dateStr].cloudiness.push(item.clouds?.all || 0);
+              dailyData[dateStr].cloudinesses.push(item.clouds?.all || 0);
               dailyData[dateStr].descriptions.push(item.weather[0].description);
               dailyData[dateStr].icons.push(item.weather[0].icon);
               dailyData[dateStr].hourly.push(hourForecast);
