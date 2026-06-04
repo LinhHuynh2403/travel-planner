@@ -6,6 +6,13 @@ Built with **React (Vite) + TypeScript** on the frontend, and a **Node.js Expres
 
 ---
 
+## 🌐 Live Demo
+
+Check out the live deployment of the app here:
+**[JourZy Travel Planner on Vercel](https://travel-planner-theta-teal.vercel.app/)**
+
+---
+
 ## 🌟 Key Features
 
 1. **Interactive Conversational Onboarding**:
