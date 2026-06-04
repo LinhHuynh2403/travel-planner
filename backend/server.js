@@ -496,7 +496,18 @@ app.post("/api/itinerary", async (req, res) => {
           arrivalDate: plan.arrivalDate,
           leaveDate: plan.leaveDate
         },
-        days: mockDays
+        days: mockDays,
+        insights: {
+          weatherOverview: `The weather in ${plan.region} is generally pleasant. Dress comfortably in light layers and check local forecasts daily.`,
+          culturalTips: [
+            "Greet locals with a warm smile and respect cultural sites.",
+            "Dress modestly when visiting temples or religious shrines."
+          ],
+          safetyTips: [
+            "Keep your valuables secure in crowded areas.",
+            "Use licensed taxis or standard ride-hailing apps for transportation."
+          ]
+        }
       };
 
       raw = JSON.stringify(mockItinerary);

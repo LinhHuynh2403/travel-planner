@@ -50,6 +50,7 @@ When planning this trip, you must:
 8. For each activity in the daily schedule, suggest the estimated travel time from the previous location (or the accommodation hotel if it's the first activity of the day) in the 'travelTimeFromPrevious' field (e.g. '15 mins drive', '10 mins walk', or '30 mins transit').
 9. For the destination, always check the current immigrant requirements and tourist requirements and include them in the packing list. For example, if the destination requires a visa or a passport, include it in the packing list. If the destination requires a vaccination or a health certificate, include it in the packing list.
 10. Always include a list of places to avoid in the packing list. For example, if the destination has any restricted areas or activities, include them in the packing list.
+11. Generate an "insights" object under the main JSON payload, detailing local cultural etiquette, safety recommendations, and a seasonal weather/packing overview.
 
 CRITICAL: Return ONLY valid JSON (no markdown, no extra text) that matches EXACTLY:
 
@@ -106,7 +107,12 @@ CRITICAL: Return ONLY valid JSON (no markdown, no extra text) that matches EXACT
       "quantity": 1,
       "description": "string (e.g. 'For potential afternoon showers in London')"
     }
-  ]
+  ],
+  "insights": {
+    "weatherOverview": "string (A detailed overview of the expected weather and season in the region during the travel dates)",
+    "culturalTips": ["string (cultural etiquette tips for this destination)"],
+    "safetyTips": ["string (safety precautions and tips for tourists in this region)"]
+  }
 }`;
 }
 
@@ -163,6 +169,7 @@ When planning this trip, you must follow these rules:
    - "Optional Items"
 9. Ensure you check and list immigration, visa, and vaccine requirements for ${plan.region}.
 10. Include areas to avoid or restricted zones if applicable.
+11. Generate an "insights" object under the main JSON payload, detailing local cultural etiquette, safety recommendations, and a seasonal weather/packing overview.
 
 Traveler Preferences & Conversation Context:
 ${chatContext}
@@ -222,6 +229,11 @@ CRITICAL: Return ONLY valid JSON matching this schema. Do not include any markdo
       "quantity": 1,
       "description": "string"
     }
-  ]
+  ],
+  "insights": {
+    "weatherOverview": "string (A detailed overview of the expected weather and season in the region during the travel dates)",
+    "culturalTips": ["string (cultural etiquette tips for this destination)"],
+    "safetyTips": ["string (safety precautions and tips for tourists in this region)"]
+  }
 }`;
 }
