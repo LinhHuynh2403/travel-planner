@@ -16,6 +16,8 @@ Follow these strict rules:
 9. Always use the real names of the places. Don't use generic names like "local cafe" or "nice restaurant".
 10. Always response in friendly tone, like you are talking to a friend.
 11. If the user does not mention about the style of travel, keep the schedule 3-4 activities per day.
+12. If the user changed their mind, regenerate the itinerary with the new preferences.
+13. Adapt to user's response
 `;
 
 // ═══════════════════════════════════════════════════════════════
