@@ -436,34 +436,39 @@ app.post("/api/itinerary", async (req, res) => {
       console.warn("Local Ollama failed or not running. Fallback to Gemini API...", ollamaError.message);
     }
 
-    if (!success && process.env.GEMINI_API_KEY) {
+    if (!success && process.env.OPENROUTER_API_KEY) {
       try {
-        console.log("Sending deterministic prompt to Gemini API...");
-        const geminiKey = process.env.GEMINI_API_KEY;
-        const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`;
-        const geminiRes = await fetch(GEMINI_URL, {
+        console.log("Sending prompt to OpenRouter API (Qwen)...");
+        const openRouterKey = process.env.OPENROUTER_API_KEY;
+        const OR_URL = "https://openrouter.ai/api/v1/chat/completions";
+
+        const orRes = await fetch(OR_URL, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Authorization": `Bearer ${openRouterKey}`,
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://jourzy-travel.vercel.app",
+            "X-Title": "JourZy Travel"
+          },
           body: JSON.stringify({
-            contents: [{ role: 'user', parts: [{ text: prompt }] }],
-            generationConfig: {
-              temperature: 0.4
-            }
+            model: "qwen/qwen-2.5-72b-instruct",
+            messages: [{ role: "user", content: prompt }],
+            temperature: 0.4
           })
         });
 
-        if (geminiRes.ok) {
-          const geminiData = await geminiRes.json();
-          if (geminiData.candidates && geminiData.candidates[0].content.parts[0].text) {
-            raw = geminiData.candidates[0].content.parts[0].text.trim();
+        if (orRes.ok) {
+          const orData = await orRes.json();
+          if (orData.choices && orData.choices[0].message.content) {
+            raw = orData.choices[0].message.content.trim();
             success = true;
-            console.log("Successfully generated itinerary via Gemini API!");
+            console.log("Successfully generated itinerary via OpenRouter API!");
           }
         } else {
-          console.warn(`Gemini API responded with status ${geminiRes.status}.`);
+          console.warn(`OpenRouter API responded with status ${orRes.status}.`);
         }
-      } catch (geminiError) {
-        console.warn("Gemini API failed.", geminiError.message);
+      } catch (orError) {
+        console.warn("OpenRouter API failed.", orError.message);
       }
     }
 
@@ -782,52 +787,49 @@ Model reply:`;
       console.warn("Local Ollama chat failed or not running:", ollamaError.message);
     }
 
-    // 1.5 Try Gemini API if Ollama fails
-    if (!success && process.env.GEMINI_API_KEY) {
+    // 1.5 Try OpenRouter API if Ollama fails
+    if (!success && process.env.OPENROUTER_API_KEY) {
       try {
-        console.log("Sending chat prompt to Gemini API...");
-        const geminiKey = process.env.GEMINI_API_KEY;
-        const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`;
+        console.log("Sending chat prompt to OpenRouter API (Qwen)...");
+        const openRouterKey = process.env.OPENROUTER_API_KEY;
+        const OR_URL = "https://openrouter.ai/api/v1/chat/completions";
 
-        const geminiContents = messages.map(m => ({
-          role: m.role === 'ai' ? 'model' : 'user',
-          parts: [{ text: m.text }]
-        }));
+        const orMessages = [
+          { role: 'system', content: `${SYSTEM_CHAT_INSTRUCTION}\nCurrent Date: ${currentDateTime}` },
+          ...messages.map(m => ({
+            role: m.role === 'ai' ? 'assistant' : 'user',
+            content: m.text
+          }))
+        ];
 
-        // Add system instruction to the first message or prepend it
-        geminiContents.unshift({
-          role: 'user',
-          parts: [{ text: `System Instruction: ${SYSTEM_CHAT_INSTRUCTION}\nCurrent Date: ${currentDateTime}` }]
-        });
-        geminiContents.push({
-          role: 'model',
-          parts: [{ text: 'Understood.' }]
-        });
-
-        const geminiRes = await fetch(GEMINI_URL, {
+        const orRes = await fetch(OR_URL, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Authorization": `Bearer ${openRouterKey}`,
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://jourzy-travel.vercel.app",
+            "X-Title": "JourZy Travel"
+          },
           body: JSON.stringify({
-            contents: geminiContents,
-            generationConfig: {
-              temperature: 0.7,
-              maxOutputTokens: 150 // Forces chat to stay short and conversational
-            }
+            model: "qwen/qwen-2.5-72b-instruct",
+            messages: orMessages,
+            temperature: 0.7,
+            max_tokens: 150
           })
         });
 
-        if (geminiRes.ok) {
-          const geminiData = await geminiRes.json();
-          if (geminiData.candidates && geminiData.candidates[0].content.parts[0].text) {
-            replyText = geminiData.candidates[0].content.parts[0].text.trim();
+        if (orRes.ok) {
+          const orData = await orRes.json();
+          if (orData.choices && orData.choices[0].message.content) {
+            replyText = orData.choices[0].message.content.trim();
             success = true;
-            console.log("Successfully generated chat response via Gemini API!");
+            console.log("Successfully generated chat response via OpenRouter API!");
           }
         } else {
-          console.warn(`Gemini API responded with status ${geminiRes.status}.`);
+          console.warn(`OpenRouter API responded with status ${orRes.status}.`);
         }
-      } catch (geminiError) {
-        console.warn("Gemini API chat failed.", geminiError.message);
+      } catch (orError) {
+        console.warn("OpenRouter API chat failed.", orError.message);
       }
     }
 

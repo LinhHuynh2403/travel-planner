@@ -17,16 +17,35 @@ export default function Home() {
   const navigate = useNavigate();
   const [inputValue, setInputValue] = useState('');
   const [activeView, setActiveView] = useState<'chat' | 'flights'>('chat');
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: '1',
-      role: 'ai',
-      text: "Hi! I'm your AI travel assistant. I'll help you plan every detail of your trip — flights, hotels, activities, weather, and a full day-by-day schedule. Let's start with a few questions. 🌍\n\nWhere would you like to go?",
-      step: 'destination'
-    }
-  ]);
-  const [currentStep, setCurrentStep] = useState<'destination' | 'dates' | 'chatting' | 'generating'>('destination');
-  const [plan, setPlan] = useState<Partial<TravelPlan>>({});
+  const [messages, setMessages] = useState<Message[]>(() => {
+    const saved = sessionStorage.getItem('chatMessages');
+    return saved ? JSON.parse(saved) : [
+      {
+        id: '1',
+        role: 'ai',
+        text: "Hi! I'm your AI travel assistant. I'll help you plan every detail of your trip — flights, hotels, activities, weather, and a full day-by-day schedule. Let's start with a few questions. 🌍\n\nWhere would you like to go?",
+        step: 'destination'
+      }
+    ];
+  });
+
+  const [currentStep, setCurrentStep] = useState<'destination' | 'dates' | 'chatting' | 'generating'>(() => {
+    const saved = sessionStorage.getItem('chatStep');
+    const step = saved ? JSON.parse(saved) : 'destination';
+    // If they navigated back after generating, reset to chatting so the input box works
+    return step === 'generating' ? 'chatting' : step;
+  });
+
+  const [plan, setPlan] = useState<Partial<TravelPlan>>(() => {
+    const saved = sessionStorage.getItem('chatPlan');
+    return saved ? JSON.parse(saved) : {};
+  });
+
+  useEffect(() => {
+    sessionStorage.setItem('chatMessages', JSON.stringify(messages));
+    sessionStorage.setItem('chatStep', JSON.stringify(currentStep));
+    sessionStorage.setItem('chatPlan', JSON.stringify(plan));
+  }, [messages, currentStep, plan]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -90,6 +109,9 @@ export default function Home() {
 
       sessionStorage.setItem('travelPlan', JSON.stringify(finalPlan));
       sessionStorage.setItem('generatedItinerary', JSON.stringify(generated));
+
+      // Reset generating state immediately before navigating so the 'Generating...' UI disappears
+      setCurrentStep('chatting');
       navigate('/itinerary');
     } catch (e) {
       console.error(e);
