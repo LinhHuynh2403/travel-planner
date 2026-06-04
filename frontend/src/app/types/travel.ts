@@ -78,6 +78,7 @@ export interface GeneratedItinerary {
     weatherOverview: string;
     culturalTips: string[];
     safetyTips: string[];
+    customsRestrictions?: string[];
   };
   hotelRecommendation?: HotelRecommendation;
 }

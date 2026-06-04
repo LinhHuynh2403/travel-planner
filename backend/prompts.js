@@ -15,175 +15,72 @@ Follow these strict rules:
 8. If the user's answer is vague, ask a follow-up question to get more specific details.
 9. Always use the real names of the places. Don't use generic names like "local cafe" or "nice restaurant".
 10. Always response in friendly tone, like you are talking to a friend.
+11. If the user does not mention about the style of travel, keep the schedule 3-4 activities per day.
 `;
 
+// ═══════════════════════════════════════════════════════════════
+//  SHARED CONSTANTS — used by both prompt generators
+// ═══════════════════════════════════════════════════════════════
+
+/** All packing list categories with examples — single source of truth. */
+const PACKING_CATEGORIES = `
+   - "Documents & ID" (passport, visa, boarding passes, travel insurance printout, hotel confirmations, emergency contacts)
+   - "Clothing" (weather-appropriate outfits, layers, sleepwear, etc.)
+   - "Footwear" (walking shoes, sandals, dress shoes if needed)
+   - "Toiletries" (toothbrush, shampoo, deodorant, sunscreen, skincare, etc.)
+   - "Electronics" (phone charger, power bank, adapter, headphones, camera, etc.)
+   - "Health & Medication" (prescriptions, first-aid kit, motion sickness pills, insect repellent, etc.)
+   - "Money & Finance" (credit/debit cards, local currency, money belt, etc.)
+   - "Comfort & In-Flight" (neck pillow, eye mask, earplugs, compression socks, snacks)
+   - "Activity-Specific Items" (gear relevant to planned activities like hiking, beach, skiing)
+   - "Cultural Considerations" (modest clothing for religious sites, head covering, gift items for hosts)
+   - "Safety & Security" (luggage locks, copies of documents, waterproof pouch, whistle)
+   - "Customs & Restrictions" (items that are PROHIBITED or RESTRICTED — see insights instructions for details)
+   - "Optional Items" (guidebook, journal, reusable water bottle, umbrella, laundry bag)`.trim();
+
+/** Packing category enum for the JSON schema. */
+const PACKING_CATEGORY_ENUM = "Documents & ID|Clothing|Footwear|Toiletries|Electronics|Health & Medication|Money & Finance|Comfort & In-Flight|Activity-Specific Items|Cultural Considerations|Safety & Security|Customs & Restrictions|Optional Items";
+
 /**
- * Prompt template generator for the itinerary planner.
+ * Insights instructions — defines what must be in the "insights" JSON object.
+ * Includes customs & restrictions research requirements (single definition).
  */
-export function getGeneratorPrompt(plan, durationDays, chatContext) {
-  return `You are JourZy, an expert AI travel assistant specializing in creating highly personalized, detail-heavy itineraries and organized packing lists.
-Your goal is to generate a practical, organized, and destination-aware travel schedule and packing checklist based on the traveler's details.
+function getInsightsInstructions(region) {
+  return `Generate an "insights" object with the following fields:
+    - "weatherOverview": detailed weather and season overview for the travel dates
+    - "culturalTips": array of cultural etiquette tips for the destination
+    - "safetyTips": array of safety precautions, tourist scam warnings, and areas/zones to avoid in ${region}
+    - "customsRestrictions": array of items that are PROHIBITED, RESTRICTED, or require special attention when entering ${region}. For each entry, include what is restricted and why. Cover:
+      * Items that are ILLEGAL or BANNED to bring in (e.g. certain medications like pseudoephedrine in Japan, chewing gum in Singapore, vape products in Thailand)
+      * Food and agricultural items that cannot pass through customs (fresh fruits, meats, dairy, seeds)
+      * Airline carry-on restrictions (liquids over 100ml, sharp objects, lithium battery limits)
+      * Duty-free limits (alcohol, tobacco, currency declaration thresholds)
+      * Items requiring special permits (drones, satellite phones, certain electronics)
+      * Local laws travelers must know (e.g. CBD products illegal in many Asian countries, photography restrictions at military sites)`;
+}
 
-When planning this trip, you must:
-1. Build a detailed day-by-day schedule with exact times (e.g., 09:00–11:00) that aligns with their hobbies and interests. Adjust the daily schedule density based on the traveler's preferences: if they prefer a flexible or relaxed trip, recommend 3–4 activities per day; if they prefer a busy or packed schedule, recommend 5 or more activities; if they want to be busy but still have break times, intersperse dedicated resting periods (using the "rest" category) between major activities.
-2. Formulate a personalized packing list (under the "packingList" key) considering:
-   - Destination country and city (${plan.region})
-   - Dates of travel (${plan.arrivalDate} to ${plan.leaveDate}, total ${durationDays} days)
-   - Expected weather and season (Analyze the forecast to suggest clothing layers, rain gear, sun protection, or winter gear)
-   - Planned activities (Suggest items needed for specific outings like hiking, swimming, dining, etc.)
-   - Local culture, customs, and religious expectations (Temples, mosques, churches, or sacred sites requiring modest clothing)
-   - Traveler Preferences & Conversation Context:
-     ${chatContext}
-3. Organize the packing items into distinct categories under the "packingList" JSON array:
-   - "Clothing"
-   - "Footwear"
-   - "Toiletries"
-   - "Electronics" (optional) 
-   - "Health & Medication" (optional)
-   - "Activity-Specific Items" (only include if there are specific activities)
-   - "Cultural Considerations" (optional depends on the region, only include if there are specific cultural considerations)
-   - "Optional Items" (optional)
-4. Explain why unusual or destination-specific items are recommended within their item descriptions (e.g., "Modest clothing (covering knees/shoulders) for temples", "Umbrella for sudden July rain").
-5. Avoid recommending unnecessary items. Keep the list concise and relevant.
-6. For each activity in the daily schedule (especially dining, museums, and outdoor landmarks), always include 2 alternative places under the 'alternatives' array. For each alternative, provide the exact real business name, address, and a short description.
-7. For the hotel recommendation, always include 2 alternative accommodations under the 'alternatives' array.
-8. For each activity in the daily schedule, suggest the estimated travel time from the previous location (or the accommodation hotel if it's the first activity of the day) in the 'travelTimeFromPrevious' field (e.g. '15 mins drive', '10 mins walk', or '30 mins transit').
-9. For the destination, always check the current immigrant requirements and tourist requirements and include them in the packing list. For example, if the destination requires a visa or a passport, include it in the packing list. If the destination requires a vaccination or a health certificate, include it in the packing list.
-10. Always include a list of places to avoid in the packing list. For example, if the destination has any restricted areas or activities, include them in the packing list.
-11. Generate an "insights" object under the main JSON payload, detailing local cultural etiquette, safety recommendations, and a seasonal weather/packing overview.
+/** Shared JSON schema for the response — used by both prompts. */
+function getJsonSchema(plan, isStrict) {
+  const locationHint = isStrict
+    ? "string (MUST be the exact Name of the chosen restaurant, landmark, shop, or venue from the AVAILABLE RESTAURANTS or AVAILABLE ATTRACTIONS list)"
+    : "string (The exact, specific name of a real restaurant, landmark, shop, or venue in that city, e.g. 'Original Joe\\'s San Jose'. NEVER use generic descriptions like 'local cafe')";
 
-CRITICAL: Return ONLY valid JSON (no markdown, no extra text) that matches EXACTLY:
+  const altLocationHint = isStrict
+    ? "string (MUST be the exact Name of the alternative option from the lists)"
+    : "string (The exact, specific name of a real restaurant, landmark, shop, or venue in that city)";
 
-{
+  const hotelNameHint = isStrict
+    ? "string (MUST be the exact name of a suggested hotel from the AVAILABLE HOTELS list)"
+    : "string (name of the primary suggested hotel, e.g. 'Hotel De Anza')";
+
+  return `{
   "hotelRecommendation": {
-    "name": "string (name of the primary suggested hotel, e.g. 'Hotel De Anza')",
-    "neighborhood": "string (neighborhood name, e.g. 'Downtown San Jose')",
+    "name": "${hotelNameHint}",
+    "neighborhood": "string (neighborhood/address)",
     "reasoning": "string (why it fits the traveler's hobbies/vibe)",
     "alternatives": [
       {
         "name": "string (alternative hotel name)",
-        "neighborhood": "string (neighborhood name)",
-        "reasoning": "string (why it is a good backup)"
-      }
-    ]
-  },
-  "plan": {
-    "region": "${plan.region}",
-    "arrivalDate": "${plan.arrivalDate}",
-    "leaveDate": "${plan.leaveDate}",
-    "hobbies": [],
-    "favoriteFood": [],
-    "restaurantPreferences": [],
-    "placePreferences": []
-  },
-  "days": [
-    {
-      "date": "YYYY-MM-DD",
-      "dayNumber": 1,
-      "activities": [
-        {
-          "time": "h:mm AM/PM",
-          "title": "string (activity name, e.g. 'San Jose Museum of Art')",
-          "description": "string",
-          "category": "food|museum|exhibition|nature|activity|shopping|rest",
-          "location": "string (The exact, specific name of a real restaurant, landmark, shop, or venue in that city, e.g. 'Original Joe's San Jose' or 'San Jose Museum of Art'. NEVER use generic descriptions like 'local cafe' or 'nice restaurant')",
-          "travelTimeFromPrevious": "string (estimated travel time from previous location, e.g. '15 mins drive', '10 mins walk', or '20 mins transit')",
-          "deepDiveRationale": "string (Explain why based on user's hobbies/food)",
-          "alternatives": [
-            {
-              "title": "string (alternative activity title)",
-              "location": "string (The exact, specific name of a real restaurant, landmark, shop, or venue in that city)",
-              "description": "string (why it's a great alternative option)"
-            }
-          ]
-        }
-      ]
-    }
-  ],
-  "packingList": [
-    {
-      "item": "string (e.g. 'Light raincoat')",
-      "category": "Clothing|Footwear|Toiletries|Electronics|Health & Medication|Activity-Specific Items|Cultural Considerations|Optional Items",
-      "quantity": 1,
-      "description": "string (e.g. 'For potential afternoon showers in London')"
-    }
-  ],
-  "insights": {
-    "weatherOverview": "string (A detailed overview of the expected weather and season in the region during the travel dates)",
-    "culturalTips": ["string (cultural etiquette tips for this destination)"],
-    "safetyTips": ["string (safety precautions and tips for tourists in this region)"]
-  }
-}`;
-}
-
-/**
- * Prompt template generator for the itinerary planner using pre-fetched real places.
- */
-export function getDeterministicGeneratorPrompt(plan, durationDays, chatContext, realPlaces) {
-  const hotelText = (realPlaces.hotels || []).map(h =>
-    `- Name: "${h.name}" | Neighborhood/Address: "${h.address}" | Rating: ${h.rating} (${h.userRatingsTotal} reviews)`
-  ).join("\n");
-
-  const restaurantText = (realPlaces.restaurants || []).map(r =>
-    `- Name: "${r.name}" | Address: "${r.address}" | Rating: ${r.rating} (${r.userRatingsTotal} reviews) | Price Level: ${r.priceLevel >= 0 ? "$".repeat(r.priceLevel) : "N/A"}`
-  ).join("\n");
-
-  const attractionText = (realPlaces.attractions || []).map(a =>
-    `- Name: "${a.name}" | Address: "${a.address}" | Rating: ${a.rating} (${a.userRatingsTotal} reviews)`
-  ).join("\n");
-
-  return `You are JourZy, an expert AI travel assistant specializing in creating highly personalized, detail-heavy itineraries and organized packing lists.
-Your goal is to generate a practical, organized, and destination-aware travel schedule and packing checklist based on the traveler's details.
-
-Here is the list of REAL, VERIFIED places available at the destination (${plan.region}):
-
-=== AVAILABLE HOTELS ===
-${hotelText || "None found. You may recommend standard real hotels if empty."}
-
-=== AVAILABLE RESTAURANTS ===
-${restaurantText || "None found. You may recommend standard real restaurants if empty."}
-
-=== AVAILABLE ATTRACTIONS ===
-${attractionText || "None found. You may recommend standard real attractions if empty."}
-
-When planning this trip, you must follow these rules:
-1. Build a detailed day-by-day schedule with exact times (e.g., 09:00 AM - 11:00 AM) that aligns with their hobbies and interests. Adjust the daily schedule density based on the traveler's preferences: if they prefer a flexible or relaxed trip, recommend 3–4 activities per day; if they prefer a busy or packed schedule, recommend 5 or more activities; if they want to be busy but still have break times, intersperse dedicated resting periods (using the "rest" category) between major activities.
-2. For the main daily activities (especially dining, museums, and outdoor landmarks), and the primary hotel, you MUST ONLY choose from the lists of AVAILABLE HOTELS, AVAILABLE RESTAURANTS, and AVAILABLE ATTRACTIONS provided above. 
-3. Do NOT invent any restaurant, attraction, or hotel names. You MUST copy the names exactly as written in the lists.
-4. For each activity in the daily schedule, always include 2 alternative places under the 'alternatives' array. These alternatives MUST also be selected from the lists above. For each alternative, provide the exact real business name, address, and a short description.
-5. In the 'travelTimeFromPrevious' field, suggest the estimated travel time from the previous location and specify the recommended local transportation method based on the region (e.g. '15 mins drive via Uber/Lyft - download the app to book' for California; '10 mins drive via Grab' for Southeast Asia; '12 mins transit via subway' for cities with subway systems like Tokyo/Paris).
-6. Filter the selected hotels and restaurants to match the traveler's budget preferences listed in the Traveler Preferences (e.g., if budget is budget-friendly, choose low price levels like $ or $$; if budget is luxury, choose high ratings and higher price levels like $$$ or $$$$).
-7. Formulate a personalized packing list (under the "packingList" key) considering:
-   - Destination country and city (${plan.region})
-   - Dates of travel (${plan.arrivalDate} to ${plan.leaveDate}, total ${durationDays} days)
-   - Expected weather and season
-   - Planned activities and cultural considerations of the region
-8. Organize the packing items into distinct categories under the "packingList" JSON array:
-   - "Clothing"
-   - "Footwear"
-   - "Toiletries"
-   - "Electronics"
-   - "Health & Medication"
-   - "Activity-Specific Items"
-   - "Cultural Considerations"
-   - "Optional Items"
-9. Ensure you check and list immigration, visa, and vaccine requirements for ${plan.region}.
-10. Include areas to avoid or restricted zones if applicable.
-11. Generate an "insights" object under the main JSON payload, detailing local cultural etiquette, safety recommendations, and a seasonal weather/packing overview.
-
-Traveler Preferences & Conversation Context:
-${chatContext}
-
-CRITICAL: Return ONLY valid JSON matching this schema. Do not include any markdown fences (like \`\`\`json) or extra text outside the JSON block.
-
-{
-  "hotelRecommendation": {
-    "name": "string (MUST be the exact name of a suggested hotel from the AVAILABLE HOTELS list)",
-    "neighborhood": "string (neighborhood/address from the list)",
-    "reasoning": "string (why it fits the traveler's hobbies/vibe)",
-    "alternatives": [
-      {
-        "name": "string (alternative hotel name from the list)",
         "neighborhood": "string (neighborhood/address)",
         "reasoning": "string"
       }
@@ -206,15 +103,15 @@ CRITICAL: Return ONLY valid JSON matching this schema. Do not include any markdo
         {
           "time": "h:mm AM/PM",
           "title": "string (activity name)",
-          "description": "string (what to do there)",
+          "description": "string",
           "category": "food|museum|exhibition|nature|activity|shopping|rest",
-          "location": "string (MUST be the exact Name of the chosen restaurant, landmark, shop, or venue from the AVAILABLE RESTAURANTS or AVAILABLE ATTRACTIONS list)",
+          "location": "${locationHint}",
           "travelTimeFromPrevious": "string (estimated travel time from previous location)",
           "deepDiveRationale": "string (Explain why this fits user preferences)",
           "alternatives": [
             {
               "title": "string (alternative activity title)",
-              "location": "string (MUST be the exact Name of the alternative option from the lists)",
+              "location": "${altLocationHint}",
               "description": "string (why it's a great alternative)"
             }
           ]
@@ -225,15 +122,95 @@ CRITICAL: Return ONLY valid JSON matching this schema. Do not include any markdo
   "packingList": [
     {
       "item": "string (e.g. 'Light raincoat')",
-      "category": "Clothing|Footwear|Toiletries|Electronics|Health & Medication|Activity-Specific Items|Cultural Considerations|Optional Items",
+      "category": "${PACKING_CATEGORY_ENUM}",
       "quantity": 1,
-      "description": "string"
+      "description": "string (e.g. 'For potential afternoon showers in London')"
     }
   ],
   "insights": {
     "weatherOverview": "string (A detailed overview of the expected weather and season in the region during the travel dates)",
     "culturalTips": ["string (cultural etiquette tips for this destination)"],
-    "safetyTips": ["string (safety precautions and tips for tourists in this region)"]
+    "safetyTips": ["string (safety precautions and tips for tourists in this region)"],
+    "customsRestrictions": ["string (items that are prohibited, restricted, or require permits when entering this destination — include what and why)"]
   }
 }`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  PROMPT GENERATORS
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Prompt template generator for the itinerary planner (no pre-fetched places).
+ */
+export function getGeneratorPrompt(plan, durationDays, chatContext) {
+  return `You are JourZy, an expert AI travel assistant specializing in creating highly personalized, detail-heavy itineraries and organized packing lists.
+Your goal is to generate a practical, organized, and destination-aware travel schedule and packing checklist based on the traveler's details.
+
+When planning this trip, you must:
+1. Build a detailed day-by-day schedule with exact times (e.g., 09:00–11:00) that aligns with their hobbies and interests. Adjust the daily schedule density based on the traveler's preferences: if they prefer a flexible or relaxed trip, recommend 3–4 activities per day; if they prefer a busy or packed schedule, recommend 5 or more activities; if they want to be busy but still have break times, intersperse dedicated resting periods (using the "rest" category) between major activities.
+2. For each activity, always include 2 alternative places under the 'alternatives' array with the exact real business name, address, and a short description. For the hotel recommendation, also include 2 alternatives.
+3. For each activity, suggest the estimated travel time from the previous location (or the hotel if it's the first activity of the day) in the 'travelTimeFromPrevious' field (e.g. '15 mins drive', '10 mins walk', or '30 mins transit').
+4. Formulate a personalized packing list (under the "packingList" key) considering the destination (${plan.region}), dates (${plan.arrivalDate} to ${plan.leaveDate}, ${durationDays} days), expected weather, planned activities, local culture/customs, and the traveler's conversation context below. Include immigration, visa, and vaccination requirements under "Documents & ID".
+5. Organize packing items into ALL of the following categories, generating at least 3 items per category:
+${PACKING_CATEGORIES}
+6. Be thorough with the packing list — include everything a traveler would realistically need. Explain why unusual or destination-specific items are recommended in their descriptions.
+7. ${getInsightsInstructions(plan.region)}
+
+Traveler Preferences & Conversation Context:
+${chatContext}
+
+CRITICAL: Return ONLY valid JSON (no markdown, no extra text) that matches EXACTLY:
+
+${getJsonSchema(plan, false)}`;
+}
+
+/**
+ * Prompt template generator for the itinerary planner using pre-fetched real places.
+ */
+export function getDeterministicGeneratorPrompt(plan, durationDays, chatContext, realPlaces) {
+  const hotelText = (realPlaces.hotels || []).map(h =>
+    `- Name: "${h.name}" | Neighborhood/Address: "${h.address}" | Rating: ${h.rating} (${h.userRatingsTotal} reviews)`
+  ).join("\\n");
+
+  const restaurantText = (realPlaces.restaurants || []).map(r =>
+    `- Name: "${r.name}" | Address: "${r.address}" | Rating: ${r.rating} (${r.userRatingsTotal} reviews) | Price Level: ${r.priceLevel >= 0 ? "$".repeat(r.priceLevel) : "N/A"}`
+  ).join("\\n");
+
+  const attractionText = (realPlaces.attractions || []).map(a =>
+    `- Name: "${a.name}" | Address: "${a.address}" | Rating: ${a.rating} (${a.userRatingsTotal} reviews)`
+  ).join("\\n");
+
+  return `You are JourZy, an expert AI travel assistant specializing in creating highly personalized, detail-heavy itineraries and organized packing lists.
+Your goal is to generate a practical, organized, and destination-aware travel schedule and packing checklist based on the traveler's details.
+
+Here is the list of REAL, VERIFIED places available at the destination (${plan.region}):
+
+=== AVAILABLE HOTELS ===
+${hotelText || "None found. You may recommend standard real hotels if empty."}
+
+=== AVAILABLE RESTAURANTS ===
+${restaurantText || "None found. You may recommend standard real restaurants if empty."}
+
+=== AVAILABLE ATTRACTIONS ===
+${attractionText || "None found. You may recommend standard real attractions if empty."}
+
+When planning this trip, you must follow these rules:
+1. Build a detailed day-by-day schedule with exact times (e.g., 09:00 AM - 11:00 AM) that aligns with their hobbies and interests. Adjust the daily schedule density based on the traveler's preferences: if they prefer a flexible or relaxed trip, recommend 3–4 activities per day; if they prefer a busy or packed schedule, recommend 5 or more activities; if they want to be busy but still have break times, intersperse dedicated resting periods (using the "rest" category) between major activities.
+2. For activities, hotels, and restaurants, you MUST ONLY choose from the AVAILABLE lists above. Do NOT invent names — copy them exactly as written.
+3. For each activity, always include 2 alternative places under the 'alternatives' array (also from the lists above) with the exact real business name, address, and a short description. For the hotel recommendation, also include 2 alternatives.
+4. In the 'travelTimeFromPrevious' field, suggest the estimated travel time and specify the recommended local transportation method based on the region (e.g. '15 mins drive via Uber/Lyft' for California; '10 mins drive via Grab' for Southeast Asia; '12 mins transit via subway' for cities with subway systems like Tokyo/Paris).
+5. Filter hotels and restaurants to match the traveler's budget preferences (e.g., budget-friendly → $ or $$; luxury → $$$ or $$$$).
+6. Formulate a personalized packing list (under the "packingList" key) considering the destination (${plan.region}), dates (${plan.arrivalDate} to ${plan.leaveDate}, ${durationDays} days), expected weather, planned activities, local culture/customs, and the traveler's conversation context below. Include immigration, visa, and vaccination requirements under "Documents & ID".
+7. Organize packing items into ALL of the following categories, generating at least 3 items per category:
+${PACKING_CATEGORIES}
+8. Be thorough with the packing list — include everything a traveler would realistically need. Explain why unusual or destination-specific items are recommended in their descriptions.
+9. ${getInsightsInstructions(plan.region)}
+
+Traveler Preferences & Conversation Context:
+${chatContext}
+
+CRITICAL: Return ONLY valid JSON matching this schema. Do not include any markdown fences (like \`\`\`json) or extra text outside the JSON block.
+
+${getJsonSchema(plan, true)}`;
 }

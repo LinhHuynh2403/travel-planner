@@ -8,6 +8,7 @@ interface WeatherTabProps {
     weatherOverview: string;
     culturalTips: string[];
     safetyTips: string[];
+    customsRestrictions?: string[];
   };
 }
 
@@ -360,8 +361,8 @@ export function WeatherTab({ region, insights }: WeatherTabProps) {
 
         {/* Apple Weather Style Modal Dialog Popup */}
         {isModalOpen && forecast[selectedDayIdx] && (
-          <div className="fixed inset-0 bg-black/65 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
-            <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 w-full max-w-md shadow-2xl relative animate-in zoom-in-95 duration-200 text-white overflow-y-auto max-h-[90vh]">
+          <div className="fixed inset-0 bg-black/65 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-in fade-in duration-200" onClick={() => setIsModalOpen(false)}>
+            <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 w-full max-w-md shadow-2xl relative animate-in zoom-in-95 duration-200 text-white overflow-y-auto max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
               {/* Close Button */}
               <button
                 onClick={() => setIsModalOpen(false)}

@@ -1,4 +1,4 @@
-import { HelpCircle, ShieldAlert, Sparkles } from 'lucide-react';
+import { HelpCircle, ShieldAlert, AlertTriangle, Sparkles } from 'lucide-react';
 import { Card, CardContent } from './ui/card';
 
 interface TipsTabProps {
@@ -6,6 +6,7 @@ interface TipsTabProps {
   insights?: {
     culturalTips: string[];
     safetyTips: string[];
+    customsRestrictions?: string[];
   };
 }
 
@@ -70,6 +71,27 @@ export function TipsTab({ region, insights }: TipsTabProps) {
               </ul>
             </CardContent>
           </Card>
+
+          {/* Customs & Restrictions */}
+          {insights.customsRestrictions && insights.customsRestrictions.length > 0 && (
+            <Card className="bg-zinc-900 border-zinc-800 md:col-span-2">
+              <CardContent className="p-6">
+                <h3 className="font-semibold text-lg text-white mb-4 flex items-center gap-2">
+                  <AlertTriangle className="size-5 text-amber-400" />
+                  Customs & Travel Restrictions
+                </h3>
+                <p className="text-xs text-zinc-500 mb-4">Items that are prohibited, restricted, or require special attention when entering {region.split(',')[0]}.</p>
+                <ul className="space-y-3">
+                  {insights.customsRestrictions.map((tip, i) => (
+                    <li key={i} className="flex gap-2 text-sm text-zinc-400 leading-relaxed">
+                      <span className="text-amber-500 font-bold shrink-0">⚠</span>
+                      <span>{tip}</span>
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
     </div>

@@ -27,16 +27,44 @@ export function PackingTab({ packingList, region }: PackingTabProps) {
 
   const defaultList = [
     {
+      category: "Documents & ID",
+      items: ["Passport (check expiry date)", "Visa / eVisa printout (if required)", "Travel insurance documents", "Hotel & flight confirmations", "Emergency contact list"]
+    },
+    {
       category: "Clothing",
-      items: ["Light breathable shirts (5)", "Walking shorts (3)", "Comfortable sneakers", "Light jacket", "Swimwear"]
+      items: ["Light breathable shirts (5)", "Walking shorts / pants (3)", "Light jacket or hoodie", "Sleepwear", "Underwear & socks (7 sets)", "Swimwear", "One smart-casual outfit for dining"]
     },
     {
-      category: "Tech & Accessories",
-      items: ["Portable charger / power bank", "Pocket WiFi or local eSIM details"]
+      category: "Footwear",
+      items: ["Comfortable walking shoes / sneakers", "Flip-flops or sandals", "Dress shoes (if needed)"]
     },
     {
-      category: "Health & Care",
-      items: ["Sunscreen SPF 50+", "Compact umbrella", "Hand sanitizer", "Blister plasters"]
+      category: "Toiletries",
+      items: ["Toothbrush & toothpaste", "Shampoo & conditioner (travel size)", "Deodorant", "Sunscreen SPF 50+", "Lip balm with SPF", "Skincare essentials", "Razor & shaving cream"]
+    },
+    {
+      category: "Electronics",
+      items: ["Phone charger & cable", "Portable power bank", "Universal travel adapter", "Headphones / earbuds", "Camera (optional)"]
+    },
+    {
+      category: "Health & Medication",
+      items: ["Prescription medications", "Pain relievers (ibuprofen / paracetamol)", "Antihistamines", "Band-aids & blister plasters", "Insect repellent", "Hand sanitizer", "Motion sickness pills"]
+    },
+    {
+      category: "Money & Finance",
+      items: ["Credit / debit cards (notify your bank)", "Some local currency cash", "Money belt or hidden pouch"]
+    },
+    {
+      category: "Comfort & In-Flight",
+      items: ["Neck pillow", "Eye mask & earplugs", "Compression socks (for long flights)", "Snacks & empty water bottle", "Entertainment (book, tablet, downloaded shows)"]
+    },
+    {
+      category: "Safety & Security",
+      items: ["Luggage locks (TSA-approved)", "Copies of passport & ID (separate from originals)", "Waterproof phone pouch"]
+    },
+    {
+      category: "Optional Items",
+      items: ["Compact umbrella", "Reusable water bottle", "Travel journal & pen", "Laundry bag", "Daypack / foldable backpack"]
     }
   ];
 

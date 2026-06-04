@@ -556,6 +556,13 @@ app.post("/api/itinerary", async (req, res) => {
           "Keep copies of your passport and important documents in a separate bag.",
           "Use licensed taxis or reputable ride-hailing apps for transportation.",
           "Stay aware of your surroundings in crowded tourist areas and secure your valuables."
+        ],
+        customsRestrictions: [
+          "Liquids in carry-on bags must be in containers of 100ml (3.4oz) or less, placed in a clear resealable bag.",
+          "Check if your destination requires a visa, vaccination certificate, or health declaration before departure.",
+          "Fresh fruits, vegetables, meats, and dairy products are commonly prohibited at customs in most countries.",
+          "Some common medications (e.g. pseudoephedrine, codeine) may be controlled or banned — verify with the destination's embassy.",
+          "Duty-free limits for alcohol and tobacco vary by country — exceeding them may result in confiscation or fines."
         ]
       };
     } else {
@@ -572,8 +579,36 @@ app.post("/api/itinerary", async (req, res) => {
           "Use licensed taxis or reputable ride-hailing apps for transportation."
         ];
       }
+      if (!Array.isArray(itinerary.insights.customsRestrictions) || itinerary.insights.customsRestrictions.length === 0) {
+        itinerary.insights.customsRestrictions = [
+          "Liquids in carry-on bags must be in containers of 100ml (3.4oz) or less, placed in a clear resealable bag.",
+          "Fresh fruits, vegetables, meats, and dairy products are commonly prohibited at customs.",
+          "Some common medications may be controlled or banned at your destination — verify before traveling."
+        ];
+      }
       if (!itinerary.insights.weatherOverview) {
         itinerary.insights.weatherOverview = `Check the latest forecast for ${regionName} before your trip.`;
+      }
+    }
+
+    // Transform flat packingList items into grouped format for the frontend
+    if (Array.isArray(itinerary.packingList) && itinerary.packingList.length > 0) {
+      const firstItem = itinerary.packingList[0];
+      // Check if AI returned flat items (has 'item' key) vs already grouped (has 'items' array)
+      if (firstItem.item && !firstItem.items) {
+        const grouped = {};
+        for (const entry of itinerary.packingList) {
+          const cat = entry.category || "Optional Items";
+          if (!grouped[cat]) grouped[cat] = [];
+          let label = entry.item;
+          if (entry.quantity && entry.quantity > 1) label += ` (×${entry.quantity})`;
+          if (entry.description) label += ` — ${entry.description}`;
+          grouped[cat].push(label);
+        }
+        itinerary.packingList = Object.keys(grouped).map(cat => ({
+          category: cat,
+          items: grouped[cat]
+        }));
       }
     }
 

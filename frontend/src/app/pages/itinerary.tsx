@@ -84,6 +84,12 @@ export default function Itinerary() {
             'Keep copies of your passport and important documents in a separate bag.',
             'Use licensed taxis or reputable ride-hailing apps for transportation.',
             'Stay aware of your surroundings in crowded tourist areas and secure your valuables.'
+          ],
+          customsRestrictions: [
+            'Liquids in carry-on bags must be in containers of 100ml (3.4oz) or less, placed in a clear resealable bag.',
+            'Fresh fruits, vegetables, meats, and dairy products are commonly prohibited at customs.',
+            'Some common medications may be controlled or banned at your destination — verify before traveling.',
+            'Duty-free limits for alcohol and tobacco vary by country — exceeding them may result in confiscation or fines.'
           ]
         };
       }
