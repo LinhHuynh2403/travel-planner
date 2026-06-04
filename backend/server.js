@@ -542,6 +542,41 @@ app.post("/api/itinerary", async (req, res) => {
       };
     }
 
+    // Fallback insights if missing or incomplete
+    const regionName = itinerary.plan?.region || plan.region;
+    if (!itinerary.insights) {
+      itinerary.insights = {
+        weatherOverview: `Check the latest forecast for ${regionName} before your trip. Pack layers and be prepared for seasonal changes.`,
+        culturalTips: [
+          `Learn a few basic local greetings — locals in ${regionName} appreciate the effort.`,
+          "Dress modestly when visiting temples, churches, or other religious sites.",
+          "Always ask permission before photographing people or sacred places."
+        ],
+        safetyTips: [
+          "Keep copies of your passport and important documents in a separate bag.",
+          "Use licensed taxis or reputable ride-hailing apps for transportation.",
+          "Stay aware of your surroundings in crowded tourist areas and secure your valuables."
+        ]
+      };
+    } else {
+      // Ensure sub-fields exist even if the model returned a partial insights object
+      if (!Array.isArray(itinerary.insights.culturalTips) || itinerary.insights.culturalTips.length === 0) {
+        itinerary.insights.culturalTips = [
+          `Learn a few basic local greetings — locals in ${regionName} appreciate the effort.`,
+          "Dress modestly when visiting temples, churches, or other religious sites."
+        ];
+      }
+      if (!Array.isArray(itinerary.insights.safetyTips) || itinerary.insights.safetyTips.length === 0) {
+        itinerary.insights.safetyTips = [
+          "Keep copies of your passport and important documents in a separate bag.",
+          "Use licensed taxis or reputable ride-hailing apps for transportation."
+        ];
+      }
+      if (!itinerary.insights.weatherOverview) {
+        itinerary.insights.weatherOverview = `Check the latest forecast for ${regionName} before your trip.`;
+      }
+    }
+
     // Sanitize categories
     const allowed = new Set(["food", "museum", "exhibition", "nature", "activity", "shopping", "rest"]);
     for (const day of itinerary.days || []) {

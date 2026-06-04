@@ -70,6 +70,23 @@ export default function Itinerary() {
           date: new Date(day.date)
         }));
       }
+      // Ensure insights always exists so the Local Tips tab renders
+      if (!parsed.insights) {
+        const region = parsed.plan?.region || 'your destination';
+        parsed.insights = {
+          weatherOverview: `Check the latest forecast for ${region} before your trip.`,
+          culturalTips: [
+            `Learn a few basic local greetings — locals in ${region} appreciate the effort.`,
+            'Dress modestly when visiting temples, churches, or other religious sites.',
+            'Always ask permission before photographing people or sacred places.'
+          ],
+          safetyTips: [
+            'Keep copies of your passport and important documents in a separate bag.',
+            'Use licensed taxis or reputable ride-hailing apps for transportation.',
+            'Stay aware of your surroundings in crowded tourist areas and secure your valuables.'
+          ]
+        };
+      }
       return parsed;
     };
 
