@@ -409,7 +409,7 @@ app.post("/api/itinerary", async (req, res) => {
     let raw = "";
     let success = false;
 
-    // 3. Prioritize local Ollama using model: qwen3:8b (no Gemini fallback for itinerary as requested)
+    // 3. Prioritize local Ollama using model: qwen3:8b, fallback to Gemini
     try {
       const bestModel = await getBestOllamaModel("qwen3:8b");
       console.log(`Sending deterministic prompt to Ollama using model: ${bestModel}...`);
@@ -430,10 +430,38 @@ app.post("/api/itinerary", async (req, res) => {
         success = true;
         console.log(`Successfully generated itinerary via Ollama (${bestModel})!`);
       } else {
-        console.warn(`Ollama responded with status ${ollamaRes.status}. Fallback to mock itinerary...`);
+        console.warn(`Ollama responded with status ${ollamaRes.status}. Fallback to Gemini API...`);
       }
     } catch (ollamaError) {
-      console.warn("Local Ollama failed or not running. Fallback to mock itinerary...", ollamaError.message);
+      console.warn("Local Ollama failed or not running. Fallback to Gemini API...", ollamaError.message);
+    }
+
+    if (!success && process.env.GEMINI_API_KEY) {
+      try {
+        console.log("Sending deterministic prompt to Gemini API...");
+        const geminiKey = process.env.GEMINI_API_KEY;
+        const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`;
+        const geminiRes = await fetch(GEMINI_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ role: 'user', parts: [{ text: prompt }] }]
+          })
+        });
+
+        if (geminiRes.ok) {
+          const geminiData = await geminiRes.json();
+          if (geminiData.candidates && geminiData.candidates[0].content.parts[0].text) {
+            raw = geminiData.candidates[0].content.parts[0].text.trim();
+            success = true;
+            console.log("Successfully generated itinerary via Gemini API!");
+          }
+        } else {
+          console.warn(`Gemini API responded with status ${geminiRes.status}.`);
+        }
+      } catch (geminiError) {
+        console.warn("Gemini API failed.", geminiError.message);
+      }
     }
 
     // 4. Ultimate fallback if Ollama fails
