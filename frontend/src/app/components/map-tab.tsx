@@ -112,7 +112,8 @@ export function MapTab({ days, plan, selectedActivity, onActivitySelect, onBack 
     }
 
     setIsLoadingNearby(true);
-    fetch(`/api/nearby?lat=${selectedActivity.place.lat}&lng=${selectedActivity.place.lng}&keyword=${encodeURIComponent(currentKeyword)}`)
+    const API_BASE = import.meta.env.VITE_API_URL || "";
+    fetch(`${API_BASE}/api/nearby?lat=${selectedActivity.place.lat}&lng=${selectedActivity.place.lng}&keyword=${encodeURIComponent(currentKeyword)}`)
       .then(res => res.json())
       .then(data => {
         setNearbyPlaces(data.places || []);

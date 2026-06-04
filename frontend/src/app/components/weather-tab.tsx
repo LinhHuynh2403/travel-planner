@@ -49,7 +49,8 @@ export function WeatherTab({ region, insights }: WeatherTabProps) {
       try {
         setLoading(true);
         const cleanRegion = region.split(',')[0].trim();
-        const resp = await fetch(`/api/weather?q=${encodeURIComponent(cleanRegion)}`);
+        const API_BASE = import.meta.env.VITE_API_URL || "";
+        const resp = await fetch(`${API_BASE}/api/weather?q=${encodeURIComponent(cleanRegion)}`);
         if (!resp.ok) throw new Error("Failed to fetch weather");
         const data = await resp.json();
 

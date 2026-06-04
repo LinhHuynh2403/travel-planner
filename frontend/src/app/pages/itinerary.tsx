@@ -201,7 +201,8 @@ export default function Itinerary() {
     }
 
     try {
-      const resp = await fetch(`/api/place-lookup?query=${encodeURIComponent(targetActivity!.location)}&region=${encodeURIComponent(itinerary.plan.region)}`);
+      const API_BASE = import.meta.env.VITE_API_URL || "";
+      const resp = await fetch(`${API_BASE}/api/place-lookup?query=${encodeURIComponent(targetActivity!.location)}&region=${encodeURIComponent(itinerary.plan.region)}`);
       if (resp.ok) {
         const data = await resp.json();
         if (data.place) {
