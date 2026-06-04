@@ -323,29 +323,29 @@ export function WeatherTab({ region, insights }: WeatherTabProps) {
                       : 'border-zinc-800 hover:border-zinc-700 hover:bg-zinc-900/50'
                       }`}
                   >
-                    <CardContent className="p-4 flex flex-col items-center justify-between h-32">
-                      <span className="text-xs font-semibold text-zinc-400">{day.date}</span>
+                    <CardContent className="p-4 flex flex-col items-center justify-between h-44">
+                      <span className="text-xs font-semibold text-zinc-300">{day.date}</span>
                       {getWeatherIcon(day.icon)}
-                      <div className="flex flex-col items-center leading-none">
+                      <div className="flex flex-col items-center leading-tight">
                         {day.currentTemp !== undefined ? (
                           <>
-                            <span className="text-sm font-extrabold text-white">{day.currentTemp}°C</span>
-                            <span className="text-[10px] text-zinc-450 mt-0.5">{toFahrenheit(day.currentTemp)}°F</span>
-                            <span className="text-[8px] text-zinc-500 mt-1 font-bold uppercase tracking-wide">
+                            <span className="text-lg font-extrabold text-white">{day.currentTemp}°C</span>
+                            <span className="text-xs text-zinc-400 mt-0.5">{toFahrenheit(day.currentTemp)}°F</span>
+                            <span className="text-[10px] text-zinc-400 mt-1 font-bold uppercase tracking-wide">
                               H:{day.maxTemp}° L:{day.minTemp}°
                             </span>
                           </>
                         ) : (
                           <>
-                            <span className="text-sm font-extrabold text-white">{day.maxTemp}°C</span>
-                            <span className="text-[10px] text-zinc-450 mt-0.5">{toFahrenheit(day.maxTemp)}°F</span>
-                            <span className="text-[8px] text-zinc-500 mt-1 font-bold uppercase tracking-wide">
+                            <span className="text-lg font-extrabold text-white">{day.maxTemp}°C</span>
+                            <span className="text-xs text-zinc-400 mt-0.5">{toFahrenheit(day.maxTemp)}°F</span>
+                            <span className="text-[10px] text-zinc-400 mt-1 font-bold uppercase tracking-wide">
                               Low: {day.minTemp}°C
                             </span>
                           </>
                         )}
                       </div>
-                      <span className="text-[10px] text-zinc-500 capitalize truncate w-full">{day.description}</span>
+                      <span className="text-xs text-zinc-400 capitalize truncate w-full">{day.description}</span>
                     </CardContent>
                   </Card>
                 );
@@ -417,7 +417,7 @@ export function WeatherTab({ region, insights }: WeatherTabProps) {
                   </div>
                 </div>
 
-                <span className="text-sm text-zinc-450 capitalize block mt-3 font-medium">
+                <span className="text-sm text-zinc-400 capitalize block mt-3 font-medium">
                   {forecast[selectedDayIdx].description}
                 </span>
               </div>
@@ -458,7 +458,7 @@ export function WeatherTab({ region, insights }: WeatherTabProps) {
                   <span className="text-xl font-bold text-white">
                     {forecast[selectedDayIdx].feelsLike}°C
                   </span>
-                  <span className="text-sm font-semibold text-zinc-450 mt-0.5">
+                  <span className="text-sm font-semibold text-zinc-400 mt-0.5">
                     {toFahrenheit(forecast[selectedDayIdx].feelsLike)}°F
                   </span>
                   <span className="text-[9px] text-zinc-500 mt-2 leading-snug">Wind chill and humidity affect this.</span>
@@ -502,7 +502,7 @@ export function WeatherTab({ region, insights }: WeatherTabProps) {
                   </div>
                   <div className="flex items-baseline gap-2">
                     <span className="text-xl font-bold text-white">{forecast[selectedDayIdx].pressure} hPa</span>
-                    <span className="text-[10px] text-zinc-450 font-medium">(1013 hPa is standard sea level)</span>
+                    <span className="text-[10px] text-zinc-400 font-medium">(1013 hPa is standard sea level)</span>
                   </div>
                 </div>
               </div>
