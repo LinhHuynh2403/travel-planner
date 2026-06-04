@@ -94,15 +94,10 @@ export function MapTab({ days, plan, selectedActivity, onActivitySelect, onBack 
   const hasPrevCoords = previousActivity?.place?.lat && previousActivity?.place?.lng;
 
   const mapQuery = hasSelectedCoords
-    ? `${selectedActivity.place!.lat},${selectedActivity.place!.lng}(${encodeURIComponent(selectedActivity.title)})`
+    ? `${selectedActivity.place!.lat},${selectedActivity.place!.lng}`
     : encodeURIComponent(selectedActivity?.location || selectedActivity?.title || days[0]?.activities[0]?.location || 'Paris, France');
 
-  // Only attempt routing if both have valid coordinates to prevent geocoding failures from resetting zoom
-  const routeQuery = previousActivity && selectedActivity && hasPrevCoords && hasSelectedCoords
-    ? `saddr=${previousActivity.place!.lat},${previousActivity.place!.lng}&daddr=${selectedActivity.place!.lat},${selectedActivity.place!.lng}`
-    : `q=${mapQuery}`;
-
-  const mapUrl = `https://maps.google.com/maps?${routeQuery}&t=&z=15&ie=UTF8&iwloc=&output=embed`;
+  const mapUrl = `https://maps.google.com/maps?q=${mapQuery}&t=&z=16&ie=UTF8&iwloc=&output=embed`;
 
   // Fetch nearby places when selected activity changes
   useEffect(() => {
