@@ -9,9 +9,10 @@ interface ItineraryTimelineProps {
   days: DayItinerary[];
   region: string;
   onViewOnMap: (activity: ItineraryActivity) => void;
-  onSwapActivity: (dayNumber: number, activityIdx: number, altIdx: number) => void;
+  onSelectActivity: (activity: ItineraryActivity, dayNumber: number, activityIdx: number) => void;
   hotelRecommendation?: HotelRecommendation;
-  onSwapHotel?: (altIdx: number) => void;
+  onSelectHotel: (hotel: HotelRecommendation) => void;
+  selectedDetailId?: string | null;
 }
 
 const categoryIcons = {
@@ -46,13 +47,15 @@ function ActivityCard({
   activityIdx,
   dayNumber,
   onClick,
-  onSwapActivity
+  onViewOnMap,
+  isSelected
 }: {
   activity: ItineraryActivity;
   activityIdx: number;
   dayNumber: number;
   onClick: () => void;
-  onSwapActivity: (dayNumber: number, activityIdx: number, altIdx: number) => void;
+  onViewOnMap: () => void;
+  isSelected: boolean;
 }) {
   const cat = String(activity.category || "activity").toLowerCase();
   const Icon = (categoryIcons as any)[cat] ?? ActivityIcon;
@@ -72,7 +75,8 @@ function ActivityCard({
         onClick={onClick}
         role="button"
         tabIndex={0}
-        className="flex-1 mb-6 bg-zinc-900 border-zinc-800 hover:border-zinc-700 transition-colors cursor-pointer group/card text-zinc-300"
+        className={`flex-1 mb-6 bg-zinc-900 border-zinc-800 hover:border-zinc-700 transition-colors cursor-pointer group/card text-zinc-300 ${isSelected ? "ring-2 ring-emerald-500 border-transparent bg-zinc-800/40" : ""
+          }`}
       >
         <CardContent className="p-5">
           <div className="flex items-start justify-between gap-2 mb-3">
@@ -112,46 +116,13 @@ function ActivityCard({
               className="text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 h-8"
               onClick={(e) => {
                 e.stopPropagation();
-                onClick();
+                onViewOnMap();
               }}
             >
               <MapPin className="mr-1.5 size-3.5" />
               View on map
             </Button>
           </div>
-
-          {/* Alternatives Subsection */}
-          {activity.alternatives && activity.alternatives.length > 0 && (
-            <div className="mt-4 pt-4 border-t border-zinc-800/80">
-              <div className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest mb-3">Alternative Recommendations</div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {activity.alternatives.map((alt, altIdx) => (
-                  <div
-                    key={altIdx}
-                    className="bg-zinc-950/40 p-3.5 rounded-xl border border-zinc-800/60 hover:border-zinc-700/80 transition-colors flex flex-col justify-between"
-                    onClick={(e) => e.stopPropagation()} // Prevent card selection when clicking alternative info
-                  >
-                    <div>
-                      <h5 className="font-semibold text-xs text-white">{alt.title}</h5>
-                      <p className="text-[9px] text-zinc-500 mt-0.5 truncate">{alt.location}</p>
-                      <p className="text-[11px] text-zinc-400 mt-2 leading-relaxed">{alt.description}</p>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="mt-3 text-[10px] h-7 bg-zinc-900 hover:bg-zinc-800 hover:text-emerald-400 border-zinc-800 w-full"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onSwapActivity(dayNumber, activityIdx, altIdx);
-                      }}
-                    >
-                      Swap with Main Option
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </CardContent>
       </Card>
     </div>
@@ -162,87 +133,75 @@ export function ItineraryTimeline({
   days,
   region,
   onViewOnMap,
-  onSwapActivity,
+  onSelectActivity,
   hotelRecommendation,
-  onSwapHotel
+  onSelectHotel,
+  selectedDetailId
 }: ItineraryTimelineProps) {
   return (
     <div className="space-y-8">
-      {/* Hotel Recommendation block at top */}
+      {/* Hotel Recommendation block at top, styled just like activity cards */}
       {hotelRecommendation && (
-        <Card className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 text-zinc-300">
-          <div className="flex items-start justify-between gap-4 mb-4">
-            <div className="flex-1">
-              <div className="text-[10px] font-bold text-emerald-400 tracking-wider uppercase mb-1.5 flex items-center gap-1.5">
-                <Building2 className="size-3.5" />
-                Recommended Accommodation Base
+        <div className="flex gap-4 group">
+          <div className="flex flex-col items-center">
+            <div className="flex items-center justify-center size-10 rounded-full bg-zinc-900 border-2 text-emerald-400 border-emerald-500/30">
+              <Building2 className="size-5" />
+            </div>
+            <div className="w-0.5 h-full bg-zinc-800 mt-2" />
+          </div>
+
+          <Card
+            onClick={() => onSelectHotel(hotelRecommendation)}
+            role="button"
+            tabIndex={0}
+            className={`flex-1 mb-6 bg-zinc-900 border-zinc-800 hover:border-zinc-700 transition-colors cursor-pointer group/card text-zinc-300 ${selectedDetailId === "hotel" ? "ring-2 ring-emerald-500 border-transparent bg-zinc-800/40" : ""
+              }`}
+          >
+            <CardContent className="p-5">
+              <div className="flex items-start justify-between gap-2 mb-3">
+                <div className="flex-1">
+                  <div className="text-[10px] font-bold text-emerald-400 tracking-wider uppercase mb-1.5 flex items-center gap-1.5">
+                    Recommended Accommodation Base
+                  </div>
+                  <h4 className="font-semibold text-lg text-white">{hotelRecommendation.name}</h4>
+                </div>
+                <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
+                  Stay
+                </Badge>
               </div>
-              <h3 className="text-xl font-bold text-white flex items-center gap-2 group/title">
+
+              <p className="text-sm text-zinc-400 mb-4">{hotelRecommendation.reasoning}</p>
+
+              <div className="flex items-center justify-between pt-4 border-t border-zinc-800">
+                <p className="text-xs text-zinc-500 flex items-center gap-1.5 truncate max-w-[70%]">
+                  <span className="inline-block size-1.5 rounded-full bg-emerald-500 shrink-0" />
+                  {hotelRecommendation.neighborhood}
+                </p>
                 <a
                   href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(hotelRecommendation.name + ", " + (hotelRecommendation.neighborhood || ""))}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="hover:text-emerald-400 transition-colors flex items-center gap-1.5"
+                  onClick={(e) => e.stopPropagation()}
                 >
-                  {hotelRecommendation.name}
-                  <ExternalLink className="size-4 text-zinc-500 group-hover/title:text-emerald-400 opacity-60 group-hover/title:opacity-100 transition-all" />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 h-8"
+                  >
+                    <ExternalLink className="mr-1.5 size-3.5" />
+                    Open Maps
+                  </Button>
                 </a>
-              </h3>
-              <p className="text-xs text-zinc-500 mt-1 flex items-center gap-1.5">
-                <span className="inline-block size-1.5 rounded-full bg-emerald-500" />
-                {hotelRecommendation.neighborhood}
-              </p>
-              <p className="text-sm text-zinc-400 mt-3 leading-relaxed">{hotelRecommendation.reasoning}</p>
-            </div>
-          </div>
-
-          {/* Alternatives Accommodation Subsection */}
-          {hotelRecommendation.alternatives && hotelRecommendation.alternatives.length > 0 && (
-            <div className="mt-5 pt-4 border-t border-zinc-800/80">
-              <div className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest mb-3">Alternative Stays</div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {hotelRecommendation.alternatives.map((alt, altIdx) => (
-                  <div key={altIdx} className="bg-zinc-950/40 p-4 rounded-xl border border-zinc-850 hover:border-zinc-800 transition-colors flex flex-col justify-between">
-                    <div>
-                      <h5 className="font-semibold text-xs text-white flex items-center justify-between gap-1.5 group/alt">
-                        <a
-                          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(alt.name + ", " + (alt.neighborhood || ""))}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="hover:text-emerald-400 transition-colors flex items-center justify-between w-full"
-                        >
-                          <span className="truncate">{alt.name}</span>
-                          <ExternalLink className="size-3 text-zinc-500 group-hover/alt:text-emerald-400 opacity-0 group-hover/alt:opacity-100 transition-all shrink-0" />
-                        </a>
-                      </h5>
-                      <p className="text-[9px] text-zinc-500 mt-0.5">{alt.neighborhood}</p>
-                      <p className="text-[11px] text-zinc-400 mt-2.5 leading-relaxed">{alt.reasoning}</p>
-                    </div>
-                    {onSwapHotel && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="mt-3.5 text-[10px] h-7 bg-zinc-900 hover:bg-zinc-800 hover:text-emerald-400 border-zinc-800 w-full"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onSwapHotel(altIdx);
-                        }}
-                      >
-                        Swap with Main Option
-                      </Button>
-                    )}
-                  </div>
-                ))}
               </div>
-            </div>
-          )}
-        </Card>
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       {/* Daily Schedule Timeline */}
       {days.map((day) => (
-        <Card key={day.dayNumber} className="overflow-hidden bg-zinc-950 border-0 shadow-none">
-          <div className="mb-6">
+        <Card key={day.dayNumber} className="bg-zinc-950 border-0 shadow-none">
+          <div className="mb-6 pl-2">
             <div className="text-xs font-semibold text-zinc-500 tracking-wider uppercase mb-1">
               Day {day.dayNumber}
             </div>
@@ -255,16 +214,20 @@ export function ItineraryTimeline({
           </div>
 
           <div className="pl-2">
-            {day.activities.map((activity, idx) => (
-              <ActivityCard
-                key={idx}
-                activity={activity}
-                activityIdx={idx}
-                dayNumber={day.dayNumber}
-                onClick={() => onViewOnMap(activity)}
-                onSwapActivity={onSwapActivity}
-              />
-            ))}
+            {day.activities.map((activity, idx) => {
+              const uniqueId = `activity-${day.dayNumber}-${idx}`;
+              return (
+                <ActivityCard
+                  key={idx}
+                  activity={activity}
+                  activityIdx={idx}
+                  dayNumber={day.dayNumber}
+                  onClick={() => onSelectActivity(activity, day.dayNumber, idx)}
+                  onViewOnMap={() => onViewOnMap(activity)}
+                  isSelected={selectedDetailId === uniqueId}
+                />
+              );
+            })}
           </div>
         </Card>
       ))}

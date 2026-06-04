@@ -33,8 +33,8 @@ export function MapTab({ days, plan, selectedActivity, onActivitySelect, onBack 
   const getNearbyKeyword = (): string => {
     if (!selectedActivity) return 'restaurant';
 
-    const titleLower = selectedActivity.title.toLowerCase();
-    const descLower = selectedActivity.description.toLowerCase();
+    const titleLower = (selectedActivity.title || '').toLowerCase();
+    const descLower = (selectedActivity.description || '').toLowerCase();
 
     // 1. Check for rest/hotel category or check-in tags
     const category = String(selectedActivity.category || '').toLowerCase();

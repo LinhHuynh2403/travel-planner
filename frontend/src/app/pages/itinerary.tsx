@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
-import { TravelPlan, GeneratedItinerary, ItineraryActivity } from '../types/travel';
+import { TravelPlan, GeneratedItinerary, ItineraryActivity, HotelRecommendation } from '../types/travel';
 import { generateItinerary } from '../utils/generate-itinerary';
 import { ItineraryTimeline } from '../components/itinerary-timeline';
 import { MapTab } from '../components/map-tab';
@@ -8,7 +8,23 @@ import { FlightsTab } from '../components/flights-tab';
 import { PackingTab } from '../components/packing-tab';
 import { WeatherTab } from '../components/weather-tab';
 import { TipsTab } from '../components/tips-tab';
-import { Calendar, Map, Plane, MessageSquare, Briefcase, CloudSun, Sparkles, HelpCircle } from 'lucide-react';
+import { Button } from '../components/ui/button';
+import { Badge } from '../components/ui/badge';
+import {
+  Calendar,
+  Map,
+  Plane,
+  MessageSquare,
+  Briefcase,
+  CloudSun,
+  Sparkles,
+  HelpCircle,
+  Clock,
+  ExternalLink,
+  MapPin,
+  Building2,
+  X
+} from 'lucide-react';
 
 export default function Itinerary() {
   const navigate = useNavigate();
@@ -16,6 +32,11 @@ export default function Itinerary() {
   const [itinerary, setItinerary] = useState<GeneratedItinerary | null>(null);
   const [activeTab, setActiveTab] = useState<'schedule' | 'map' | 'flights' | 'packing' | 'weather' | 'tips'>((searchParams.get('tab') as any) || 'schedule');
   const [selectedActivity, setSelectedActivity] = useState<ItineraryActivity | null>(null);
+  const [selectedDetail, setSelectedDetail] = useState<
+    | { type: 'activity'; activity: ItineraryActivity; dayNumber: number; activityIdx: number }
+    | { type: 'hotel'; hotel: HotelRecommendation }
+    | null
+  >(null);
 
   useEffect(() => {
     const tabParam = searchParams.get('tab');
@@ -82,6 +103,13 @@ export default function Itinerary() {
     }
   }, [navigate]);
 
+  // Set the hotel recommendation as the default active detail panel view
+  useEffect(() => {
+    if (itinerary?.hotelRecommendation && !selectedDetail) {
+      setSelectedDetail({ type: 'hotel', hotel: itinerary.hotelRecommendation });
+    }
+  }, [itinerary]);
+
   if (!itinerary) {
     return (
       <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
@@ -140,10 +168,17 @@ export default function Itinerary() {
     sessionStorage.setItem("generatedItinerary", JSON.stringify(newItinerary));
 
     const targetActivity = updatedDays.find(d => d.dayNumber === dayNumber)?.activities[activityIdx];
-    if (!targetActivity) return;
+    if (targetActivity) {
+      setSelectedDetail({
+        type: 'activity',
+        activity: targetActivity,
+        dayNumber,
+        activityIdx
+      });
+    }
 
     try {
-      const resp = await fetch(`/api/place-lookup?query=${encodeURIComponent(targetActivity.location)}&region=${encodeURIComponent(itinerary.plan.region)}`);
+      const resp = await fetch(`/api/place-lookup?query=${encodeURIComponent(targetActivity!.location)}&region=${encodeURIComponent(itinerary.plan.region)}`);
       if (resp.ok) {
         const data = await resp.json();
         if (data.place) {
@@ -161,6 +196,16 @@ export default function Itinerary() {
           const finalizedItinerary = { ...newItinerary, days: finalizedDays };
           setItinerary(finalizedItinerary);
           sessionStorage.setItem("generatedItinerary", JSON.stringify(finalizedItinerary));
+
+          const targetUpdated = finalizedDays.find(d => d.dayNumber === dayNumber)?.activities[activityIdx];
+          if (targetUpdated) {
+            setSelectedDetail({
+              type: 'activity',
+              activity: targetUpdated,
+              dayNumber,
+              activityIdx
+            });
+          }
         }
       }
     } catch (e) {
@@ -198,6 +243,7 @@ export default function Itinerary() {
 
     setItinerary(newItinerary);
     sessionStorage.setItem("generatedItinerary", JSON.stringify(newItinerary));
+    setSelectedDetail({ type: 'hotel', hotel: newHotel });
   };
 
   return (
@@ -304,23 +350,114 @@ export default function Itinerary() {
       </aside>
 
       {/* Main Content */}
-      <main className="ml-64 flex-1 p-8">
+      <main className="ml-64 flex-1 p-8 h-screen overflow-y-auto pb-24">
         {activeTab === 'schedule' && (
-          <div className="max-w-4xl mx-auto">
-            <div className="mb-8">
-              <h1 className="text-3xl font-bold text-white mb-2 capitalize">{itinerary.plan.region} Itinerary</h1>
-              <p className="text-zinc-400">
-                {itinerary.plan.arrivalDate.toLocaleDateString()} - {itinerary.plan.leaveDate.toLocaleDateString()} · Click any activity to see its location and route
-              </p>
+          <div className="flex gap-8 max-w-6xl mx-auto items-start relative">
+            <div className="flex-1 min-w-0">
+              <div className="mb-8">
+                <h1 className="text-3xl font-bold text-white mb-2 capitalize">{itinerary.plan.region} Itinerary</h1>
+                <p className="text-zinc-400">
+                  {itinerary.plan.arrivalDate.toLocaleDateString()} - {itinerary.plan.leaveDate.toLocaleDateString()} · Click any activity to view alternatives and details
+                </p>
+              </div>
+              <ItineraryTimeline
+                days={itinerary.days}
+                region={itinerary.plan.region}
+                onViewOnMap={handleViewOnMap}
+                onSelectActivity={(activity, dayNum, idx) => {
+                  setSelectedDetail({ type: 'activity', activity, dayNumber: dayNum, activityIdx: idx });
+                }}
+                onSelectHotel={(hotel) => {
+                  setSelectedDetail({ type: 'hotel', hotel });
+                }}
+                hotelRecommendation={itinerary.hotelRecommendation}
+                selectedDetailId={
+                  selectedDetail?.type === 'hotel'
+                    ? 'hotel'
+                    : selectedDetail?.type === 'activity'
+                      ? `activity-${selectedDetail.dayNumber}-${selectedDetail.activityIdx}`
+                      : null
+                }
+              />
             </div>
-            <ItineraryTimeline
-              days={itinerary.days}
-              region={itinerary.plan.region}
-              onViewOnMap={handleViewOnMap}
-              onSwapActivity={handleSwapActivity}
-              hotelRecommendation={itinerary.hotelRecommendation}
-              onSwapHotel={handleSwapHotel}
-            />
+
+            {/* Right Side Detail Drawer */}
+            {selectedDetail && (
+              <aside className="w-96 bg-zinc-900 border border-zinc-800 rounded-2xl p-6 sticky top-0 shrink-0 text-zinc-300 shadow-xl max-h-[calc(100vh-6rem)] overflow-y-auto">
+                <div className="flex items-center justify-between pb-4 border-b border-zinc-800 mb-4">
+                  <h3 className="font-bold text-lg text-white">
+                    {selectedDetail.type === 'hotel' ? 'Accommodation Base' : 'Activity Detail'}
+                  </h3>
+                  <button
+                    onClick={() => setSelectedDetail(null)}
+                    className="text-zinc-500 hover:text-zinc-200 p-1.5 hover:bg-zinc-800 rounded-lg transition-colors"
+                  >
+                    <X className="size-4" />
+                  </button>
+                </div>
+
+                {selectedDetail.type === 'hotel' ? (
+                  <div className="space-y-6">
+                    <div>
+                      <h4 className="font-bold text-xl text-white mb-2">{selectedDetail.hotel.name}</h4>
+                      <p className="text-xs text-zinc-555 mb-4 flex items-center gap-1.5">
+                        <span className="inline-block size-2 rounded-full bg-emerald-500" />
+                        {selectedDetail.hotel.neighborhood}
+                      </p>
+                      <div className="text-sm text-zinc-400 leading-relaxed bg-zinc-950/40 p-4 rounded-xl border border-zinc-850">
+                        <span className="text-xs font-bold text-emerald-400 block mb-1">REASONING</span>
+                        {selectedDetail.hotel.reasoning}
+                      </div>
+                    </div>
+
+                    <a
+                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedDetail.hotel.name + ", " + (selectedDetail.hotel.neighborhood || ""))}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block"
+                    >
+                      <Button className="w-full bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700">
+                        Open in Google Maps
+                        <ExternalLink className="ml-2 size-4" />
+                      </Button>
+                    </a>
+
+
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    <div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <Clock className="size-4 text-zinc-500" />
+                        <span className="font-semibold text-sm text-zinc-300">{selectedDetail.activity.time}</span>
+                        {selectedDetail.activity.travelTimeFromPrevious && (
+                          <Badge variant="outline" className="bg-zinc-950/80 text-zinc-400 border-zinc-800 text-[10px] py-0.5 px-2">
+                            ⏱ {selectedDetail.activity.travelTimeFromPrevious}
+                          </Badge>
+                        )}
+                      </div>
+                      <h4 className="font-bold text-xl text-white mb-2">{selectedDetail.activity.title}</h4>
+                      <p className="text-xs text-zinc-500 mb-4 flex items-center gap-1.5">
+                        <span className="inline-block size-2 rounded-full bg-blue-500" />
+                        {selectedDetail.activity.location}
+                      </p>
+                      <div className="text-sm text-zinc-400 leading-relaxed bg-zinc-950/40 p-4 rounded-xl border border-zinc-850">
+                        <span className="text-xs font-bold text-blue-400 block mb-1">DESCRIPTION</span>
+                        {selectedDetail.activity.description}
+                      </div>
+                    </div>
+
+                    <Button
+                      className="w-full bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700"
+                      onClick={() => handleViewOnMap(selectedDetail.activity)}
+                    >
+                      More Information
+                      <MapPin className="ml-2 size-4" />
+                    </Button>
+                  </div>
+                )}
+              </aside>
+            )}
           </div>
         )}
 
