@@ -445,7 +445,10 @@ app.post("/api/itinerary", async (req, res) => {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            contents: [{ role: 'user', parts: [{ text: prompt }] }]
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+            generationConfig: {
+              temperature: 0.4
+            }
           })
         });
 
@@ -804,7 +807,13 @@ Model reply:`;
         const geminiRes = await fetch(GEMINI_URL, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ contents: geminiContents })
+          body: JSON.stringify({
+            contents: geminiContents,
+            generationConfig: {
+              temperature: 0.7,
+              maxOutputTokens: 150 // Forces chat to stay short and conversational
+            }
+          })
         });
 
         if (geminiRes.ok) {
