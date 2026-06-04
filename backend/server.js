@@ -779,6 +779,49 @@ Model reply:`;
       console.warn("Local Ollama chat failed or not running:", ollamaError.message);
     }
 
+    // 1.5 Try Gemini API if Ollama fails
+    if (!success && process.env.GEMINI_API_KEY) {
+      try {
+        console.log("Sending chat prompt to Gemini API...");
+        const geminiKey = process.env.GEMINI_API_KEY;
+        const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`;
+
+        const geminiContents = messages.map(m => ({
+          role: m.role === 'ai' ? 'model' : 'user',
+          parts: [{ text: m.text }]
+        }));
+
+        // Add system instruction to the first message or prepend it
+        geminiContents.unshift({
+          role: 'user',
+          parts: [{ text: `System Instruction: ${SYSTEM_CHAT_INSTRUCTION}\nCurrent Date: ${currentDateTime}` }]
+        });
+        geminiContents.push({
+          role: 'model',
+          parts: [{ text: 'Understood.' }]
+        });
+
+        const geminiRes = await fetch(GEMINI_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ contents: geminiContents })
+        });
+
+        if (geminiRes.ok) {
+          const geminiData = await geminiRes.json();
+          if (geminiData.candidates && geminiData.candidates[0].content.parts[0].text) {
+            replyText = geminiData.candidates[0].content.parts[0].text.trim();
+            success = true;
+            console.log("Successfully generated chat response via Gemini API!");
+          }
+        } else {
+          console.warn(`Gemini API responded with status ${geminiRes.status}.`);
+        }
+      } catch (geminiError) {
+        console.warn("Gemini API chat failed.", geminiError.message);
+      }
+    }
+
     // 2. Fallback: Canned response matching
     if (!success) {
       console.warn("Using canned response fallback for chat.");
