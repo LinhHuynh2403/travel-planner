@@ -29,6 +29,7 @@ export interface ItineraryActivity {
     lng: number;
     mapsUrl: string;
   };
+  travelTimeFromPrevious?: string;
   alternatives?: ActivityAlternative[];
 }
 

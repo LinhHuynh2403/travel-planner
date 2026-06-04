@@ -3,7 +3,7 @@ import { DayItinerary, ItineraryActivity, HotelRecommendation } from "../types/t
 import { Card, CardContent } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
-import { Clock, Utensils, Building2, Image, Trees, Activity as ActivityIcon, Coffee, MapPin } from "lucide-react";
+import { Clock, Utensils, Building2, Image, Trees, Activity as ActivityIcon, Coffee, MapPin, ExternalLink } from "lucide-react";
 
 interface ItineraryTimelineProps {
   days: DayItinerary[];
@@ -80,6 +80,11 @@ function ActivityCard({
               <div className="flex items-center gap-2 mb-1.5">
                 <Clock className="size-4 text-zinc-500" />
                 <span className="font-semibold text-sm text-zinc-300">{activity.time}</span>
+                {activity.travelTimeFromPrevious && (
+                  <Badge variant="outline" className="ml-2 bg-zinc-950/85 text-zinc-400 border-zinc-800/80 text-[10px] py-0.5 px-2 font-medium">
+                    ⏱ {activity.travelTimeFromPrevious}
+                  </Badge>
+                )}
                 {activity.place?.isOpenNow === true && (
                   <Badge variant="secondary" className="ml-2 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border-0">🟢 Open Now</Badge>
                 )}
@@ -172,7 +177,17 @@ export function ItineraryTimeline({
                 <Building2 className="size-3.5" />
                 Recommended Accommodation Base
               </div>
-              <h3 className="text-xl font-bold text-white">{hotelRecommendation.name}</h3>
+              <h3 className="text-xl font-bold text-white flex items-center gap-2 group/title">
+                <a
+                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(hotelRecommendation.name + ", " + (hotelRecommendation.neighborhood || ""))}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:text-emerald-400 transition-colors flex items-center gap-1.5"
+                >
+                  {hotelRecommendation.name}
+                  <ExternalLink className="size-4 text-zinc-500 group-hover/title:text-emerald-400 opacity-60 group-hover/title:opacity-100 transition-all" />
+                </a>
+              </h3>
               <p className="text-xs text-zinc-500 mt-1 flex items-center gap-1.5">
                 <span className="inline-block size-1.5 rounded-full bg-emerald-500" />
                 {hotelRecommendation.neighborhood}
@@ -187,9 +202,19 @@ export function ItineraryTimeline({
               <div className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest mb-3">Alternative Stays</div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {hotelRecommendation.alternatives.map((alt, altIdx) => (
-                  <div key={altIdx} className="bg-zinc-950/40 p-4 rounded-xl border border-zinc-805 hover:border-zinc-800 transition-colors flex flex-col justify-between">
+                  <div key={altIdx} className="bg-zinc-950/40 p-4 rounded-xl border border-zinc-850 hover:border-zinc-800 transition-colors flex flex-col justify-between">
                     <div>
-                      <h5 className="font-semibold text-xs text-white">{alt.name}</h5>
+                      <h5 className="font-semibold text-xs text-white flex items-center justify-between gap-1.5 group/alt">
+                        <a
+                          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(alt.name + ", " + (alt.neighborhood || ""))}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="hover:text-emerald-400 transition-colors flex items-center justify-between w-full"
+                        >
+                          <span className="truncate">{alt.name}</span>
+                          <ExternalLink className="size-3 text-zinc-500 group-hover/alt:text-emerald-400 opacity-0 group-hover/alt:opacity-100 transition-all shrink-0" />
+                        </a>
+                      </h5>
                       <p className="text-[9px] text-zinc-500 mt-0.5">{alt.neighborhood}</p>
                       <p className="text-[11px] text-zinc-400 mt-2.5 leading-relaxed">{alt.reasoning}</p>
                     </div>

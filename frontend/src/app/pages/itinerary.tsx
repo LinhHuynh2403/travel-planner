@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import { TravelPlan, GeneratedItinerary, ItineraryActivity } from '../types/travel';
 import { generateItinerary } from '../utils/generate-itinerary';
 import { ItineraryTimeline } from '../components/itinerary-timeline';
@@ -12,9 +12,22 @@ import { Calendar, Map, Plane, MessageSquare, Briefcase, CloudSun, Sparkles, Hel
 
 export default function Itinerary() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [itinerary, setItinerary] = useState<GeneratedItinerary | null>(null);
-  const [activeTab, setActiveTab] = useState<'schedule' | 'map' | 'flights' | 'packing' | 'weather' | 'tips'>('schedule');
+  const [activeTab, setActiveTab] = useState<'schedule' | 'map' | 'flights' | 'packing' | 'weather' | 'tips'>((searchParams.get('tab') as any) || 'schedule');
   const [selectedActivity, setSelectedActivity] = useState<ItineraryActivity | null>(null);
+
+  useEffect(() => {
+    const tabParam = searchParams.get('tab');
+    if (tabParam) {
+      setActiveTab(tabParam as any);
+    }
+  }, [searchParams]);
+
+  const handleTabChange = (tab: typeof activeTab) => {
+    setActiveTab(tab);
+    setSearchParams({ tab });
+  };
 
   useEffect(() => {
     const planData = sessionStorage.getItem("travelPlan");
@@ -205,7 +218,7 @@ export default function Itinerary() {
             <ul className="space-y-1">
               <li>
                 <button
-                  onClick={() => setActiveTab('schedule')}
+                  onClick={() => handleTabChange('schedule')}
                   className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${activeTab === 'schedule' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
                     }`}
                 >
@@ -214,7 +227,7 @@ export default function Itinerary() {
               </li>
               <li>
                 <button
-                  onClick={() => setActiveTab('map')}
+                  onClick={() => handleTabChange('map')}
                   className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${activeTab === 'map' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
                     }`}
                 >
@@ -223,7 +236,7 @@ export default function Itinerary() {
               </li>
               <li>
                 <button
-                  onClick={() => setActiveTab('flights')}
+                  onClick={() => handleTabChange('flights')}
                   className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${activeTab === 'flights' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
                     }`}
                 >
@@ -246,7 +259,7 @@ export default function Itinerary() {
               </li>
               <li>
                 <button
-                  onClick={() => setActiveTab('packing')}
+                  onClick={() => handleTabChange('packing')}
                   className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${activeTab === 'packing' ? 'bg-zinc-800 text-white border-l-2 border-emerald-500 -ml-[2px]' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
                     }`}
                 >
@@ -255,7 +268,7 @@ export default function Itinerary() {
               </li>
               <li>
                 <button
-                  onClick={() => setActiveTab('weather')}
+                  onClick={() => handleTabChange('weather')}
                   className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${activeTab === 'weather' ? 'bg-zinc-800 text-white border-l-2 border-emerald-500 -ml-[2px]' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
                     }`}
                 >
@@ -264,7 +277,7 @@ export default function Itinerary() {
               </li>
               <li>
                 <button
-                  onClick={() => setActiveTab('tips')}
+                  onClick={() => handleTabChange('tips')}
                   className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${activeTab === 'tips' ? 'bg-zinc-800 text-white border-l-2 border-emerald-500 -ml-[2px]' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
                     }`}
                 >
@@ -295,7 +308,7 @@ export default function Itinerary() {
         {activeTab === 'schedule' && (
           <div className="max-w-4xl mx-auto">
             <div className="mb-8">
-              <h1 className="text-3xl font-bold text-white mb-2">{itinerary.plan.region} itinerary</h1>
+              <h1 className="text-3xl font-bold text-white mb-2 capitalize">{itinerary.plan.region} Itinerary</h1>
               <p className="text-zinc-400">
                 {itinerary.plan.arrivalDate.toLocaleDateString()} - {itinerary.plan.leaveDate.toLocaleDateString()} · Click any activity to see its location and route
               </p>
@@ -314,6 +327,7 @@ export default function Itinerary() {
         {activeTab === 'map' && (
           <MapTab
             days={itinerary.days}
+            plan={itinerary.plan}
             selectedActivity={selectedActivity}
             onActivitySelect={(act) => setSelectedActivity(act)}
             onBack={() => setActiveTab('schedule')}

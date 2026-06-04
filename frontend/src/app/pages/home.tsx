@@ -4,6 +4,7 @@ import { Button } from '../components/ui/button';
 import { Calendar, Map, Plane, MessageSquare, Briefcase, CloudSun, Sparkles, Send, MoreHorizontal, User } from 'lucide-react';
 import { TravelPlan } from '../types/travel';
 import { generateItinerary } from '../utils/generate-itinerary';
+import { FlightsTab } from '../components/flights-tab';
 
 type Message = {
   id: string;
@@ -15,6 +16,7 @@ type Message = {
 export default function Home() {
   const navigate = useNavigate();
   const [inputValue, setInputValue] = useState('');
+  const [activeView, setActiveView] = useState<'chat' | 'flights'>('chat');
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
@@ -36,11 +38,16 @@ export default function Home() {
   }, [messages]);
 
   const handleDestinationSelect = (region: string) => {
-    setPlan({ ...plan, region });
+    const formattedRegion = region
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ');
+
+    setPlan({ ...plan, region: formattedRegion });
     setMessages(prev => [
       ...prev,
       { id: Date.now().toString(), role: 'user', text: region },
-      { id: (Date.now() + 1).toString(), role: 'ai', text: `Awesome! ${region} is a fantastic choice. ✈️\n\nWhen are you planning to travel and for how long? (e.g., "Next month for a week" or "Jul 14 to Jul 21")`, step: 'dates' }
+      { id: (Date.now() + 1).toString(), role: 'ai', text: `Awesome! ${formattedRegion} is a fantastic choice. ✈️\n\nWhen are you planning to travel and for how long? (e.g., "Next month for a week" or "Jul 14 to Jul 21")`, step: 'dates' }
     ]);
     setCurrentStep('dates');
   };
@@ -55,7 +62,7 @@ export default function Home() {
     setMessages(prev => [
       ...prev,
       { id: Date.now().toString(), role: 'user', text: datesText },
-      { id: (Date.now() + 1).toString(), role: 'ai', text: `Got it! Marked your calendar. 📅\n\nTo make this itinerary perfect, tell me a bit about your hobbies, interests, or specific things you'd love to see or do. We can keep chat planning as long as you like, or say 'good to go' to build your schedule!`, step: 'chatting' }
+      { id: (Date.now() + 1).toString(), role: 'ai', text: `Got it! Marked your calendar. 📅\n\nHave you booked your flight? If no, please use the flight tab on the left sidebar to search for the best flights. If yes, what time will you arrive and leave?`, step: 'chatting' }
     ]);
     setCurrentStep('chatting');
   };
@@ -171,7 +178,10 @@ export default function Home() {
             <div className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3 px-2">Menu</div>
             <ul className="space-y-1">
               <li>
-                <button className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm bg-zinc-800 border-l-2 border-emerald-500 text-white">
+                <button
+                  onClick={() => setActiveView('chat')}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${activeView === 'chat' ? 'bg-zinc-800 border-l-2 border-emerald-500 text-white' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'}`}
+                >
                   <MessageSquare className="size-4" /> Plan with AI
                 </button>
               </li>
@@ -181,17 +191,34 @@ export default function Home() {
                 </button>
               </li>
               <li>
-                <button className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 transition-colors">
+                <button onClick={() => {
+                  const saved = sessionStorage.getItem('generatedItinerary');
+                  if (saved) {
+                    navigate('/itinerary?tab=packing');
+                  } else {
+                    alert("Please complete the AI planning first to generate a packing list!");
+                  }
+                }} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 transition-colors">
                   <Briefcase className="size-4" /> Packing List
                 </button>
               </li>
               <li>
-                <button className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 transition-colors">
+                <button onClick={() => {
+                  const saved = sessionStorage.getItem('generatedItinerary');
+                  if (saved) {
+                    navigate('/itinerary?tab=weather');
+                  } else {
+                    alert("Please complete the AI planning first to view weather forecasts!");
+                  }
+                }} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 transition-colors">
                   <CloudSun className="size-4" /> Weather
                 </button>
               </li>
               <li>
-                <button className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 transition-colors">
+                <button
+                  onClick={() => setActiveView('flights')}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${activeView === 'flights' ? 'bg-zinc-800 border-l-2 border-emerald-500 text-white' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'}`}
+                >
                   <Plane className="size-4" /> Flights
                 </button>
               </li>
@@ -216,112 +243,144 @@ export default function Home() {
         )}
       </aside>
 
-      {/* Main Content (Chat UI) */}
+      {/* Main Content */}
       <main className="ml-64 flex-1 flex flex-col h-screen relative">
-        <div className="flex-1 overflow-y-auto p-8 pb-32">
-          <div className="max-w-3xl mx-auto space-y-6">
+        {activeView === 'chat' ? (
+          <>
+            <div className="flex-1 overflow-y-auto p-8 pb-32">
+              <div className="max-w-3xl mx-auto space-y-6">
 
-            {messages.map((msg) => (
-              <div key={msg.id} className={`flex gap-4 items-start ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
-                <div className={`size-8 rounded-full flex items-center justify-center shrink-0 border ${msg.role === 'ai'
-                  ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
-                  : 'bg-blue-500/20 text-blue-400 border-blue-500/30'
-                  }`}>
-                  {msg.role === 'ai' ? <Sparkles className="size-4" /> : <User className="size-4" />}
-                </div>
-
-                <div className={`relative group max-w-[80%] ${msg.role === 'ai'
-                  ? 'bg-zinc-900 border border-zinc-800 rounded-2xl rounded-tl-sm p-5 text-zinc-300'
-                  : 'bg-blue-600 border border-blue-500 rounded-2xl rounded-tr-sm p-4 text-white'
-                  }`}>
-                  {msg.role === 'ai' && (
-                    <Button variant="ghost" size="icon" className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 h-8 w-8 text-zinc-500">
-                      <MoreHorizontal className="size-4" />
-                    </Button>
-                  )}
-
-                  <div className="whitespace-pre-wrap leading-relaxed">{msg.text}</div>
-
-                  {/* Contextual Actions / Suggestions */}
-                  {msg.role === 'ai' && msg.step === 'destination' && currentStep === 'destination' && (
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      {["Tokyo, Japan 🇯🇵", "Paris, France 🇫🇷", "Bali, Indonesia 🇮🇩", "New York, USA 🗽"].map(dest => (
-                        <button
-                          key={dest}
-                          onClick={() => handleDestinationSelect(dest)}
-                          className="px-4 py-2 rounded-full border border-zinc-700 bg-zinc-950 hover:bg-zinc-800 text-sm text-zinc-300 transition-colors"
-                        >
-                          {dest}
-                        </button>
-                      ))}
+                {messages.map((msg) => (
+                  <div key={msg.id} className={`flex gap-4 items-start ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
+                    <div className={`size-8 rounded-full flex items-center justify-center shrink-0 border ${msg.role === 'ai'
+                      ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                      : 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+                      }`}>
+                      {msg.role === 'ai' ? <Sparkles className="size-4" /> : <User className="size-4" />}
                     </div>
-                  )}
 
-                  {msg.role === 'ai' && msg.step === 'dates' && currentStep === 'dates' && (
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      {["Jul 14 to Jul 21", "Next week for 5 days", "In September for 2 weeks"].map(dates => (
-                        <button
-                          key={dates}
-                          onClick={() => handleDatesSelect(dates)}
-                          className="px-4 py-2 rounded-full border border-zinc-700 bg-zinc-950 hover:bg-zinc-800 text-sm text-zinc-300 transition-colors"
-                        >
-                          {dates}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                    <div className={`relative group max-w-[80%] ${msg.role === 'ai'
+                      ? 'bg-zinc-900 border border-zinc-800 rounded-2xl rounded-tl-sm p-5 text-zinc-300'
+                      : 'bg-blue-600 border border-blue-500 rounded-2xl rounded-tr-sm p-4 text-white'
+                      }`}>
+                      {msg.role === 'ai' && (
+                        <Button variant="ghost" size="icon" className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 h-8 w-8 text-zinc-500">
+                          <MoreHorizontal className="size-4" />
+                        </Button>
+                      )}
 
-                  {msg.role === 'ai' && msg.step === 'chatting' && currentStep === 'chatting' && (
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      <button
-                        onClick={() => handleGenerateItinerary()}
-                        className="px-4 py-2 rounded-full border border-emerald-500 bg-emerald-950/20 hover:bg-emerald-950/40 text-sm font-semibold text-emerald-400 transition-colors flex items-center gap-1.5 shadow-md animate-pulse"
-                      >
-                        Generate Itinerary 🪄
-                      </button>
-                    </div>
-                  )}
+                      <div className="whitespace-pre-wrap leading-relaxed">{msg.text}</div>
 
-                  {msg.role === 'ai' && msg.step === 'generating' && (
-                    <div className="mt-4 flex items-center gap-3 text-emerald-400 text-sm font-medium">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-emerald-400"></div>
-                      Crafting your perfect trip...
+                      {/* Contextual Actions / Suggestions */}
+                      {msg.role === 'ai' && msg.step === 'destination' && currentStep === 'destination' && (
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          {["Tokyo, Japan 🇯🇵", "Paris, France 🇫🇷", "Bali, Indonesia 🇮🇩", "New York, USA 🗽"].map(dest => (
+                            <button
+                              key={dest}
+                              onClick={() => handleDestinationSelect(dest)}
+                              className="px-4 py-2 rounded-full border border-zinc-700 bg-zinc-950 hover:bg-zinc-800 text-sm text-zinc-300 transition-colors"
+                            >
+                              {dest}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      {msg.role === 'ai' && msg.step === 'dates' && currentStep === 'dates' && (
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          {["Jul 14 to Jul 21", "Next week for 5 days", "In September for 2 weeks"].map(dates => (
+                            <button
+                              key={dates}
+                              onClick={() => handleDatesSelect(dates)}
+                              className="px-4 py-2 rounded-full border border-zinc-700 bg-zinc-950 hover:bg-zinc-800 text-sm text-zinc-300 transition-colors"
+                            >
+                              {dates}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      {msg.role === 'ai' && msg.step === 'chatting' && currentStep === 'chatting' && (
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          <button
+                            onClick={() => handleGenerateItinerary()}
+                            className="px-4 py-2 rounded-full border border-emerald-500 bg-emerald-950/20 hover:bg-emerald-950/40 text-sm font-semibold text-emerald-400 transition-colors flex items-center gap-1.5 shadow-md animate-pulse"
+                          >
+                            Generate Itinerary 🪄
+                          </button>
+                        </div>
+                      )}
+
+                      {msg.role === 'ai' && msg.step === 'generating' && (
+                        <div className="mt-4 flex items-center gap-3 text-emerald-400 text-sm font-medium">
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-emerald-400"></div>
+                          Crafting your perfect trip...
+                        </div>
+                      )}
                     </div>
-                  )}
+                  </div>
+                ))}
+
+                <div ref={messagesEndRef} />
+              </div>
+            </div>
+
+            {/* Input Area */}
+            <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-zinc-950 via-zinc-950 to-transparent">
+              <div className="max-w-3xl mx-auto">
+                <div className="relative flex items-center">
+                  <input
+                    type="text"
+                    value={inputValue}
+                    onChange={(e) => setInputValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleSubmit();
+                    }}
+                    disabled={currentStep === 'generating'}
+                    placeholder={currentStep === 'generating' ? "Generating..." : "Ask anything about your trip..."}
+                    className="w-full bg-zinc-900 border border-zinc-700 rounded-2xl py-4 pl-5 pr-14 text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 shadow-lg disabled:opacity-50"
+                  />
+                  <Button
+                    size="icon"
+                    onClick={handleSubmit}
+                    disabled={currentStep === 'generating' || !inputValue.trim()}
+                    className="absolute right-2 h-10 w-10 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl disabled:bg-zinc-800 disabled:text-zinc-500"
+                  >
+                    <Send className="size-4" />
+                  </Button>
                 </div>
               </div>
-            ))}
-
-            <div ref={messagesEndRef} />
-          </div>
-        </div>
-
-        {/* Input Area */}
-        <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-zinc-950 via-zinc-950 to-transparent">
-          <div className="max-w-3xl mx-auto">
-            <div className="relative flex items-center">
-              <input
-                type="text"
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleSubmit();
-                }}
-                disabled={currentStep === 'generating'}
-                placeholder={currentStep === 'generating' ? "Generating..." : "Ask anything about your trip..."}
-                className="w-full bg-zinc-900 border border-zinc-700 rounded-2xl py-4 pl-5 pr-14 text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 shadow-lg disabled:opacity-50"
-              />
+            </div>
+          </>
+        ) : (
+          <div className="p-8 flex-1 overflow-y-auto flex flex-col">
+            <div className="mb-6 flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-bold text-white">Flight Search</h2>
+                <p className="text-zinc-400 text-sm">
+                  Search flight deals to <span className="text-emerald-400 font-semibold">{plan.region || "your destination"}</span>
+                </p>
+              </div>
               <Button
-                size="icon"
-                onClick={handleSubmit}
-                disabled={currentStep === 'generating' || !inputValue.trim()}
-                className="absolute right-2 h-10 w-10 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl disabled:bg-zinc-800 disabled:text-zinc-500"
+                onClick={() => setActiveView('chat')}
+                className="bg-zinc-800 hover:bg-zinc-750 text-white border border-zinc-700"
               >
-                <Send className="size-4" />
+                Back to Chat Planning
               </Button>
             </div>
+            <div className="flex-1">
+              <FlightsTab
+                itinerary={{
+                  plan: {
+                    region: plan.region || "San Jose",
+                    arrivalDate: plan.arrivalDate || new Date(),
+                    leaveDate: plan.leaveDate || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+                  }
+                } as any}
+              />
+            </div>
           </div>
-        </div>
+        )}
       </main>
     </div>
   );
