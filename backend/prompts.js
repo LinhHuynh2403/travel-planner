@@ -25,7 +25,7 @@ export function getGeneratorPrompt(plan, durationDays, chatContext) {
 Your goal is to generate a practical, organized, and destination-aware travel schedule and packing checklist based on the traveler's details.
 
 When planning this trip, you must:
-1. Build a detailed day-by-day schedule with exact times (e.g., 09:00–11:00) that aligns with their hobbies and interests.
+1. Build a detailed day-by-day schedule with exact times (e.g., 09:00–11:00) that aligns with their hobbies and interests. Adjust the daily schedule density based on the traveler's preferences: if they prefer a flexible or relaxed trip, recommend 3–4 activities per day; if they prefer a busy or packed schedule, recommend 5 or more activities; if they want to be busy but still have break times, intersperse dedicated resting periods (using the "rest" category) between major activities.
 2. Formulate a personalized packing list (under the "packingList" key) considering:
    - Destination country and city (${plan.region})
    - Dates of travel (${plan.arrivalDate} to ${plan.leaveDate}, total ${durationDays} days)
@@ -141,7 +141,7 @@ ${restaurantText || "None found. You may recommend standard real restaurants if 
 ${attractionText || "None found. You may recommend standard real attractions if empty."}
 
 When planning this trip, you must follow these rules:
-1. Build a detailed day-by-day schedule with exact times (e.g., 09:00 AM - 11:00 AM) that aligns with their hobbies and interests.
+1. Build a detailed day-by-day schedule with exact times (e.g., 09:00 AM - 11:00 AM) that aligns with their hobbies and interests. Adjust the daily schedule density based on the traveler's preferences: if they prefer a flexible or relaxed trip, recommend 3–4 activities per day; if they prefer a busy or packed schedule, recommend 5 or more activities; if they want to be busy but still have break times, intersperse dedicated resting periods (using the "rest" category) between major activities.
 2. For the main daily activities (especially dining, museums, and outdoor landmarks), and the primary hotel, you MUST ONLY choose from the lists of AVAILABLE HOTELS, AVAILABLE RESTAURANTS, and AVAILABLE ATTRACTIONS provided above. 
 3. Do NOT invent any restaurant, attraction, or hotel names. You MUST copy the names exactly as written in the lists.
 4. For each activity in the daily schedule, always include 2 alternative places under the 'alternatives' array. These alternatives MUST also be selected from the lists above. For each alternative, provide the exact real business name, address, and a short description.
