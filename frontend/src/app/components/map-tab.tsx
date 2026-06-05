@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { DayItinerary, ItineraryActivity, TravelPlan } from '../types/travel';
+import { fetchSpontaneousBackup } from '../utils/generate-itinerary';
 import { Card, CardContent } from './ui/card';
 import { Button } from './ui/button';
-import { MapPin, ExternalLink, ArrowLeft, Utensils, Hotel } from 'lucide-react';
+import { MapPin, ExternalLink, ArrowLeft, Utensils, Hotel, Sparkles } from 'lucide-react';
 
 interface NearbyPlace {
   placeId: string;
@@ -21,13 +22,46 @@ interface MapTabProps {
   selectedActivity: ItineraryActivity | null;
   onActivitySelect: (activity: ItineraryActivity) => void;
   onBack: () => void;
+  onReplaceActivity?: (newActivityData: Partial<ItineraryActivity>) => void;
 }
 
-export function MapTab({ days, plan, selectedActivity, onActivitySelect, onBack }: MapTabProps) {
+export function MapTab({ days, plan, selectedActivity, onActivitySelect, onBack, onReplaceActivity }: MapTabProps) {
   const allActivities = days.flatMap(d => d.activities);
 
   const [nearbyPlaces, setNearbyPlaces] = useState<NearbyPlace[]>([]);
   const [isLoadingNearby, setIsLoadingNearby] = useState(false);
+  const [customKeyword, setCustomKeyword] = useState('');
+
+  const handleSpontaneousSearch = async (keyword: string) => {
+    if (!keyword.trim()) return;
+    setIsLoadingNearby(true);
+    try {
+      // Use selected activity coordinates if selected, fallback to live geolocation
+      if (selectedActivity?.place?.lat && selectedActivity?.place?.lng) {
+        const data = await fetchSpontaneousBackup(
+          selectedActivity.place.lat,
+          selectedActivity.place.lng,
+          keyword
+        );
+        setNearbyPlaces(data.places || []);
+      } else {
+        if (!navigator.geolocation) {
+          alert("Geolocation not supported by your browser");
+          setIsLoadingNearby(false);
+          return;
+        }
+        navigator.geolocation.getCurrentPosition(async (pos) => {
+          const { latitude, longitude } = pos.coords;
+          const data = await fetchSpontaneousBackup(latitude, longitude, keyword);
+          setNearbyPlaces(data.places || []);
+          setIsLoadingNearby(false);
+        }, () => setIsLoadingNearby(false));
+      }
+    } catch (err) {
+      console.error("Spontaneous search failed:", err);
+      setIsLoadingNearby(false);
+    }
+  };
 
   // Helper to dynamically extract the search keyword for nearby suggestions
   const getNearbyKeyword = (): string => {
@@ -217,6 +251,27 @@ export function MapTab({ days, plan, selectedActivity, onActivitySelect, onBack 
                   )}
                 </h4>
 
+                {/* 🌟 NEW WORKFLOW: SPONTANEOUS AD-HOC SEARCH OVERRIDE INPUT */}
+                <div className="flex gap-1.5 mb-4">
+                  <input
+                    type="text"
+                    value={customKeyword}
+                    onChange={(e) => setCustomKeyword(e.target.value)}
+                    placeholder="Search spontaneous (e.g. coffee, park, food)..."
+                    className="flex-1 bg-zinc-950 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-emerald-500 placeholder-zinc-550"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleSpontaneousSearch(customKeyword);
+                    }}
+                  />
+                  <Button
+                    size="sm"
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] h-[30px] font-semibold px-3 rounded-lg"
+                    onClick={() => handleSpontaneousSearch(customKeyword)}
+                  >
+                    Go
+                  </Button>
+                </div>
+
                 {isLoadingNearby ? (
                   <div className="space-y-3">
                     {[1, 2, 3].map(i => (
@@ -226,62 +281,139 @@ export function MapTab({ days, plan, selectedActivity, onActivitySelect, onBack 
                 ) : nearbyPlaces.length > 0 ? (
                   <div className="flex flex-col gap-3">
                     {nearbyPlaces.map((place) => (
-                      <a
+                      <div
                         key={place.placeId}
-                        href={`https://www.google.com/maps/place/?q=place_id:${place.placeId}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex gap-3 p-3.5 bg-zinc-900 hover:bg-zinc-850 border border-zinc-800/80 rounded-xl hover:border-zinc-700/80 transition-all group/item text-left"
+                        className="flex flex-col gap-2 p-3.5 bg-zinc-900 border border-zinc-800/80 rounded-xl hover:border-zinc-700/80 transition-all text-left"
                       >
-                        {place.photoUrl ? (
-                          <img
-                            src={place.photoUrl}
-                            alt={place.name}
-                            className="w-16 h-16 object-cover rounded-lg shrink-0 border border-zinc-800"
-                          />
-                        ) : (
-                          <div className="w-16 h-16 bg-zinc-950 rounded-lg shrink-0 flex items-center justify-center border border-zinc-800/50">
-                            {currentKeyword === 'hotel' ? (
-                              <Hotel className="size-5 text-zinc-650" />
-                            ) : (
-                              <Utensils className="size-5 text-zinc-650" />
-                            )}
-                          </div>
-                        )}
-                        <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
-                          <div>
-                            <div className="flex items-start justify-between gap-1.5">
-                              <h5 className="text-xs font-semibold text-white truncate group-hover/item:text-emerald-400 transition-colors">
-                                {place.name}
-                              </h5>
-                              <ExternalLink className="size-3 text-zinc-600 shrink-0 opacity-0 group-hover/item:opacity-100 transition-opacity" />
+                        <div className="flex gap-3">
+                          {place.photoUrl ? (
+                            <img
+                              src={place.photoUrl}
+                              alt={place.name}
+                              className="w-16 h-16 object-cover rounded-lg shrink-0 border border-zinc-800"
+                            />
+                          ) : (
+                            <div className="w-16 h-16 bg-zinc-950 rounded-lg shrink-0 flex items-center justify-center border border-zinc-800/50">
+                              {currentKeyword === 'hotel' ? (
+                                <Hotel className="size-5 text-zinc-650" />
+                              ) : (
+                                <Utensils className="size-5 text-zinc-650" />
+                              )}
                             </div>
-                            <p className="text-[10px] text-zinc-500 truncate mt-0.5">{place.vicinity}</p>
-                          </div>
-                          <div className="flex items-center gap-2 mt-1.5">
-                            {place.rating && (
-                              <span className="text-[10px] text-amber-400 font-semibold flex items-center gap-0.5">
-                                ★ {place.rating.toFixed(1)}
-                              </span>
-                            )}
-                            {place.priceLevel !== undefined && place.priceLevel > 0 && (
-                              <span className="text-[10px] text-zinc-400 font-bold tracking-wider">
-                                {'$'.repeat(place.priceLevel)}
-                              </span>
-                            )}
-                            {place.isOpenNow !== undefined && (
-                              <span className={`text-[9px] px-1.5 py-0.5 rounded font-semibold ${place.isOpenNow ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
-                                {place.isOpenNow ? 'Open' : 'Closed'}
-                              </span>
-                            )}
+                          )}
+                          <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
+                            <div>
+                              <div className="flex items-start justify-between gap-1.5">
+                                <h5 
+                                  className="text-xs font-semibold text-white truncate hover:text-emerald-400 cursor-pointer transition-colors"
+                                  onClick={() => window.open(`https://www.google.com/maps/place/?q=place_id:${place.placeId}`, '_blank')}
+                                >
+                                  {place.name}
+                                </h5>
+                                <ExternalLink 
+                                  className="size-3 text-zinc-600 shrink-0 cursor-pointer hover:text-zinc-355 transition-colors" 
+                                  onClick={() => window.open(`https://www.google.com/maps/place/?q=place_id:${place.placeId}`, '_blank')}
+                                />
+                              </div>
+                              <p className="text-[10px] text-zinc-500 truncate mt-0.5">{place.vicinity}</p>
+                            </div>
+                            <div className="flex items-center gap-2 mt-1.5">
+                              {place.rating && (
+                                <span className="text-[10px] text-amber-400 font-semibold flex items-center gap-0.5">
+                                  ★ {place.rating.toFixed(1)}
+                                </span>
+                              )}
+                              {place.priceLevel !== undefined && place.priceLevel > 0 && (
+                                <span className="text-[10px] text-zinc-400 font-bold tracking-wider">
+                                  {'$'.repeat(place.priceLevel)}
+                                </span>
+                              )}
+                              {place.isOpenNow !== undefined && (
+                                <span className={`text-[9px] px-1.5 py-0.5 rounded font-semibold ${place.isOpenNow ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
+                                  {place.isOpenNow ? 'Open' : 'Closed'}
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </a>
+
+                        {onReplaceActivity && selectedActivity && (
+                          <Button
+                            size="sm"
+                            className="w-full bg-emerald-500 hover:bg-emerald-600 text-zinc-950 text-[10px] font-extrabold h-8 mt-1 rounded-lg"
+                            onClick={() => onReplaceActivity({
+                              title: place.name,
+                              location: place.vicinity,
+                              description: `Discovered nearby: ${place.name} located at ${place.vicinity}.`,
+                              place: {
+                                placeId: place.placeId,
+                                address: place.vicinity,
+                                lat: selectedActivity.place?.lat || 0,
+                                lng: selectedActivity.place?.lng || 0,
+                                mapsUrl: `https://www.google.com/maps/place/?q=place_id:${place.placeId}`
+                              }
+                            })}
+                          >
+                            Replace Current Stop
+                          </Button>
+                        )}
+                      </div>
                     ))}
                   </div>
                 ) : (
-                  <div className="text-center py-8 text-zinc-500 text-xs border border-dashed border-zinc-800 rounded-xl">
-                    No nearby restaurant recommendations found.
+                  <div className="flex flex-col items-center justify-center text-center py-12 px-4 border border-dashed border-zinc-800 rounded-xl bg-zinc-950/20">
+                    <Sparkles className="w-8 h-8 text-zinc-600 mb-3 animate-pulse" />
+                    <p className="text-xs text-zinc-400 font-semibold mb-1">Looking for a change of pace?</p>
+                    <p className="text-[11px] text-zinc-500 max-w-[220px] mb-4">
+                      Ditch the planned itinerary! Grab your live location to fetch immediate local alternatives based on your profile.
+                    </p>
+
+                    <div className="flex flex-col gap-2 w-full max-w-[200px]">
+                      <Button
+                        size="sm"
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-[11px] h-8 flex items-center gap-1.5"
+                        onClick={() => {
+                          if (!navigator.geolocation) return alert("Geolocation not supported by your browser");
+                          setIsLoadingNearby(true);
+                          navigator.geolocation.getCurrentPosition(async (pos) => {
+                            try {
+                              const { latitude, longitude } = pos.coords;
+                              const data = await fetchSpontaneousBackup(latitude, longitude, "street-food");
+                              setNearbyPlaces(data.places || []);
+                            } catch (err) {
+                              console.error("Spontaneous search failed:", err);
+                            } finally {
+                              setIsLoadingNearby(false);
+                            }
+                          }, () => setIsLoadingNearby(false));
+                        }}
+                      >
+                        ✨ Find Nearby Street Food
+                      </Button>
+
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 font-medium text-[11px] h-8"
+                        onClick={() => {
+                          if (!navigator.geolocation) return alert("Geolocation not supported by your browser");
+                          setIsLoadingNearby(true);
+                          navigator.geolocation.getCurrentPosition(async (pos) => {
+                            try {
+                              const { latitude, longitude } = pos.coords;
+                              const data = await fetchSpontaneousBackup(latitude, longitude, "cafe");
+                              setNearbyPlaces(data.places || []);
+                            } catch (err) {
+                              console.error("Spontaneous search failed:", err);
+                            } finally {
+                              setIsLoadingNearby(false);
+                            }
+                          }, () => setIsLoadingNearby(false));
+                        }}
+                      >
+                        ☕ Find Nearby Hidden Cafes
+                      </Button>
+                    </div>
                   </div>
                 )}
               </>

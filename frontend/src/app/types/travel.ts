@@ -6,12 +6,21 @@ export interface TravelPlan {
   favoriteFood: string[];
   restaurantPreferences: string[];
   placePreferences: string[];
+  budget?: string;
+  whoTraveling?: string;
 }
 
 export interface ActivityAlternative {
   title: string;
   location: string;
   description: string;
+  place?: {
+    placeId: string;
+    address: string;
+    lat: number;
+    lng: number;
+    mapsUrl: string;
+  };
 }
 
 export interface ItineraryActivity {
@@ -20,8 +29,6 @@ export interface ItineraryActivity {
   description: string;
   category: "food" | "museum" | "exhibition" | "nature" | "activity" | "rest";
   location: string;
-
-  // optional info returned from backend (Google Places lookup)
   place?: {
     placeId: string;
     address: string;
@@ -31,6 +38,7 @@ export interface ItineraryActivity {
   };
   travelTimeFromPrevious?: string;
   alternatives?: ActivityAlternative[];
+  cost?: number;
 }
 
 export interface DayItinerary {
@@ -67,6 +75,12 @@ export interface HotelRecommendation {
   neighborhood: string;
   reasoning: string;
   alternatives?: HotelAlternative[];
+  pricePerNight?: number;
+}
+
+export interface ExpandedLogisticsGuide {
+  connectivity: string;
+  transitCards: string;
 }
 
 export interface GeneratedItinerary {
@@ -79,6 +93,15 @@ export interface GeneratedItinerary {
     culturalTips: string[];
     safetyTips: string[];
     customsRestrictions?: string[];
+    emergencyNumbers?: {
+      police: string;
+      ambulance: string;
+      fire: string;
+      touristPolice?: string;
+    };
+    safeNeighborhoods?: string[];
+    commonScams?: string[];
   };
   hotelRecommendation?: HotelRecommendation;
+  logisticsGuide?: ExpandedLogisticsGuide; // New Hook for Day-One logistics
 }

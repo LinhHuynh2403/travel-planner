@@ -1,99 +1,132 @@
-import { HelpCircle, ShieldAlert, AlertTriangle, Sparkles } from 'lucide-react';
-import { Card, CardContent } from './ui/card';
+import React from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import { AlertTriangle, ShieldCheck, Globe, Wifi, Bus, UserCheck } from 'lucide-react';
 
-interface TipsTabProps {
-  region: string;
-  insights?: {
-    culturalTips: string[];
-    safetyTips: string[];
-    customsRestrictions?: string[];
-  };
+interface LogisticsGuide {
+  connectivity: string;
+  transitCards: string;
 }
 
-export function TipsTab({ region, insights }: TipsTabProps) {
-  if (!insights || !insights.culturalTips || !insights.safetyTips) {
-    return (
-      <div className="flex-1 overflow-y-auto p-8 pb-32">
-        <div className="max-w-2xl mx-auto text-center py-12">
-          <Sparkles className="size-12 mx-auto mb-4 text-emerald-400" />
-          <h2 className="text-xl font-semibold text-white mb-2">No custom local tips available</h2>
-          <p className="text-zinc-400 text-sm">
-            To view custom AI-generated local etiquette and safety rules for {region}, plan a new itinerary using JourZy!
-          </p>
-        </div>
-      </div>
-    );
-  }
+interface TipsTabProps {
+  insights: {
+    weatherOverview: string;
+    culturalTips: string[];
+    safetyTips: string[];
+    customsRestrictions: string[];
+  };
+  region: string;
+  logisticsGuide?: LogisticsGuide;
+  isSoloTraveler?: boolean; // Hooked up for Feature 6 (Safety Layer)
+}
 
+export const TipsTab: React.FC<TipsTabProps> = ({
+  insights,
+  region,
+  logisticsGuide,
+  isSoloTraveler = false
+}) => {
   return (
-    <div className="flex-1 overflow-y-auto p-8 pb-32">
-      <div className="max-w-4xl mx-auto">
-        <div className="mb-8">
-          <h2 className="text-3xl font-bold text-white mb-2">Local Insights</h2>
-          <p className="text-zinc-400">
-            AI-suggested cultural etiquette and safety rules for {region.split(',')[0]}
-          </p>
-        </div>
+    <div className="space-y-6 animate-fade-in">
+      <div>
+        <h2 className="text-xl font-bold text-white tracking-tight">Local Insights & Day-1 Logistics</h2>
+        <p className="text-xs text-zinc-400 mt-1">
+          Essential travel rules, safety frameworks, and connectivity setups curated by JourZy for {region}.
+        </p>
+      </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Cultural Etiquette */}
-          <Card className="bg-zinc-900 border-zinc-800">
-            <CardContent className="p-6">
-              <h3 className="font-semibold text-lg text-white mb-4 flex items-center gap-2">
-                <HelpCircle className="size-5 text-emerald-400" />
-                Cultural Etiquette
-              </h3>
-              <ul className="space-y-3">
-                {insights.culturalTips.map((tip, i) => (
-                  <li key={i} className="flex gap-2 text-sm text-zinc-400 leading-relaxed">
-                    <span className="text-emerald-500 font-bold shrink-0">•</span>
-                    <span>{tip}</span>
-                  </li>
-                ))}
-              </ul>
+      {/* 📱 NEW WORKFLOW: DAY ONE CONNECTIVITY & TRANSIT BLUEPRINTS */}
+      {logisticsGuide && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Card className="bg-zinc-900 border-zinc-800 border-l-4 border-teal-500 shadow-xl">
+            <CardHeader className="pb-2 flex flex-row items-center gap-2 space-y-0">
+              <Wifi className="w-4 h-4 text-teal-400" />
+              <CardTitle className="text-sm font-bold text-zinc-200">Cellular Connectivity (SIM/eSIM)</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-xs text-zinc-400 leading-relaxed">{logisticsGuide.connectivity}</p>
             </CardContent>
           </Card>
 
-          {/* Safety & Travel Warnings */}
-          <Card className="bg-zinc-900 border-zinc-800">
-            <CardContent className="p-6">
-              <h3 className="font-semibold text-lg text-white mb-4 flex items-center gap-2">
-                <ShieldAlert className="size-5 text-red-400" />
-                Safety & Local Regulations
-              </h3>
-              <ul className="space-y-3">
-                {insights.safetyTips.map((tip, i) => (
-                  <li key={i} className="flex gap-2 text-sm text-zinc-400 leading-relaxed">
-                    <span className="text-red-500 font-bold shrink-0">•</span>
-                    <span>{tip}</span>
-                  </li>
-                ))}
-              </ul>
+          <Card className="bg-zinc-900 border-zinc-800 border-l-4 border-indigo-500 shadow-xl">
+            <CardHeader className="pb-2 flex flex-row items-center gap-2 space-y-0">
+              <Bus className="w-4 h-4 text-indigo-400" />
+              <CardTitle className="text-sm font-bold text-zinc-200">Local Transit Cards & Logistics</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-xs text-zinc-400 leading-relaxed">{logisticsGuide.transitCards}</p>
             </CardContent>
           </Card>
-
-          {/* Customs & Restrictions */}
-          {insights.customsRestrictions && insights.customsRestrictions.length > 0 && (
-            <Card className="bg-zinc-900 border-zinc-800 md:col-span-2">
-              <CardContent className="p-6">
-                <h3 className="font-semibold text-lg text-white mb-4 flex items-center gap-2">
-                  <AlertTriangle className="size-5 text-amber-400" />
-                  Customs & Travel Restrictions
-                </h3>
-                <p className="text-xs text-zinc-500 mb-4">Items that are prohibited, restricted, or require special attention when entering {region.split(',')[0]}.</p>
-                <ul className="space-y-3">
-                  {insights.customsRestrictions.map((tip, i) => (
-                    <li key={i} className="flex gap-2 text-sm text-zinc-400 leading-relaxed">
-                      <span className="text-amber-500 font-bold shrink-0">⚠</span>
-                      <span>{tip}</span>
-                    </li>
-                  ))}
-                </ul>
-              </CardContent>
-            </Card>
-          )}
         </div>
+      )}
+
+      {/* 🛡️ NEW WORKFLOW: DYNAMIC SOLO TRAVELER SAFETY MONITOR */}
+      {isSoloTraveler && (
+        <Card className="bg-amber-950/20 border-amber-900/50 border-l-4 border-amber-500">
+          <CardHeader className="pb-2 flex flex-row items-center gap-2 space-y-0">
+            <UserCheck className="w-4 h-4 text-amber-400" />
+            <CardTitle className="text-sm font-bold text-amber-300">Solo Traveler Protection Briefing</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-xs text-amber-200/80 leading-relaxed">
+              Since you're exploring {region} solo, remember to store your emergency contacts locally, share your live path
+              updates via JourZy, and favor busy, highly-rated transit paths after dark. Keep copies of your passport hidden in your accommodation base.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Cultural Etiquette Card */}
+        <Card className="bg-zinc-900 border-zinc-800">
+          <CardHeader className="pb-3 border-b border-zinc-800">
+            <CardTitle className="text-sm font-semibold text-white flex items-center gap-2">
+              <Globe className="w-4 h-4 text-zinc-400" /> Cultural Etiquette
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-4 space-y-2">
+            {insights.culturalTips.map((tip, idx) => (
+              <div key={idx} className="flex gap-2 items-start text-xs text-zinc-400">
+                <span className="text-zinc-600 mt-0.5">•</span>
+                <p className="leading-relaxed">{tip}</p>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        {/* Safety Card */}
+        <Card className="bg-zinc-900 border-zinc-800">
+          <CardHeader className="pb-3 border-b border-zinc-800">
+            <CardTitle className="text-sm font-semibold text-white flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-emerald-500" /> Safety & Regulations
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-4 space-y-2">
+            {insights.safetyTips.map((tip, idx) => (
+              <div key={idx} className="flex gap-2 items-start text-xs text-zinc-400">
+                <span className="text-emerald-900/60 mt-0.5">•</span>
+                <p className="leading-relaxed">{tip}</p>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        {/* Customs & Bans */}
+        <Card className="bg-zinc-900 border-zinc-800 md:col-span-2">
+          <CardHeader className="pb-3 border-b border-zinc-800">
+            <CardTitle className="text-sm font-semibold text-white flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-500" /> Customs & Country Entry Prohibitions
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+            {insights.customsRestrictions.map((restriction, idx) => (
+              <div key={idx} className="flex gap-2 items-start text-xs text-zinc-400 bg-zinc-950/40 p-2.5 rounded-lg border border-zinc-800/60">
+                <span className="text-amber-500/80 font-bold">!</span>
+                <p className="leading-relaxed">{restriction}</p>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
-}
+};

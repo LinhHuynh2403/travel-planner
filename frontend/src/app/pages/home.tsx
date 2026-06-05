@@ -1,21 +1,118 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { Button } from '../components/ui/button';
-import { Calendar, Map, Plane, MessageSquare, Briefcase, CloudSun, Sparkles, Send, MoreHorizontal, User } from 'lucide-react';
+import { Calendar, Map, Plane, MessageSquare, Briefcase, CloudSun, Sparkles, Send, MoreHorizontal, User as UserIcon } from 'lucide-react';
 import { TravelPlan } from '../types/travel';
 import { generateItinerary } from '../utils/generate-itinerary';
 import { FlightsTab } from '../components/flights-tab';
+import { supabase } from '../utils/supabaseClient';
+import { User } from '@supabase/supabase-js';
 
 type Message = {
   id: string;
   role: 'ai' | 'user';
   text: string;
-  step?: 'destination' | 'dates' | 'chatting' | 'generating';
+  step?: 'persona' | 'destination' | 'dates' | 'chatting' | 'generating';
 };
 
 export default function Home() {
   const navigate = useNavigate();
+  const [user, setUser] = useState<User | null>(null);
+
+  useEffect(() => {
+    const checkUser = async () => {
+      const isDemoMode = localStorage.getItem('isDemoMode') === 'true';
+      if (isDemoMode) {
+        setUser({ id: 'demo-user-12345', email: 'demo@jourzy.com' } as any);
+        return;
+      }
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        navigate('/login');
+      } else {
+        setUser(session.user);
+        if (session.user.id) {
+          localStorage.setItem('userId', session.user.id);
+        }
+      }
+    };
+    checkUser();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      const isDemoMode = localStorage.getItem('isDemoMode') === 'true';
+      if (isDemoMode) return;
+
+      if (!session) {
+        navigate('/login');
+      } else {
+        setUser(session.user);
+        if (session.user.id) {
+          localStorage.setItem('userId', session.user.id);
+        }
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [navigate]);
+
   const [inputValue, setInputValue] = useState('');
+  const [savedTrips, setSavedTrips] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (user?.id) {
+      const fetchTrips = async () => {
+        try {
+          const API_BASE = import.meta.env.VITE_API_URL || "";
+          const resp = await fetch(`${API_BASE}/api/trips?userId=${user.id}`);
+          if (resp.ok) {
+            const data = await resp.json();
+            setSavedTrips(data.trips || []);
+          }
+        } catch (e) {
+          console.error("Failed to load saved trips:", e);
+        }
+      };
+      fetchTrips();
+    }
+  }, [user]);
+
+  const handleLoadSavedTrip = async (tripId: string) => {
+    try {
+      const API_BASE = import.meta.env.VITE_API_URL || "";
+      const resp = await fetch(`${API_BASE}/api/trips/${tripId}`);
+      if (resp.ok) {
+        const { trip, itinerary } = await resp.json();
+        const loadedPlan: TravelPlan = {
+          region: trip.region,
+          arrivalDate: new Date(trip.arrival_date),
+          leaveDate: new Date(trip.leave_date),
+          budget: trip.budget || "moderate",
+          whoTraveling: trip.who_traveling || "solo",
+          hobbies: [],
+          favoriteFood: [],
+          restaurantPreferences: [],
+          placePreferences: []
+        };
+        const loadedItinerary = {
+          plan: loadedPlan,
+          hotelRecommendation: itinerary.hotel_recommendation,
+          days: itinerary.days,
+          packingList: itinerary.packing_list,
+          insights: itinerary.insights
+        };
+
+        sessionStorage.setItem('travelPlan', JSON.stringify(loadedPlan));
+        sessionStorage.setItem('generatedItinerary', JSON.stringify(loadedItinerary));
+        navigate('/itinerary');
+      }
+    } catch (e) {
+      console.error("Failed to load saved trip details:", e);
+    }
+  };
+
   const [activeView, setActiveView] = useState<'chat' | 'flights'>('chat');
   const [messages, setMessages] = useState<Message[]>(() => {
     const saved = sessionStorage.getItem('chatMessages');
@@ -23,15 +120,15 @@ export default function Home() {
       {
         id: '1',
         role: 'ai',
-        text: "Hi! I'm your AI travel assistant. I'll help you plan every detail of your trip — flights, hotels, activities, weather, and a full day-by-day schedule. Let's start with a few questions. 🌍\n\nWhere would you like to go?",
-        step: 'destination'
+        text: "Hi! I'm JourZy, your AI travel assistant! I want to plan the perfect trip tailored exactly to your vibe. 🌍\n\nBefore we pick a location, tell me a bit about your travel persona! (e.g. Are you an adventurous hiker, a luxury foodie, a budget backpacker, or a museum lover?)",
+        step: 'welcome'
       }
     ];
   });
 
-  const [currentStep, setCurrentStep] = useState<'destination' | 'dates' | 'chatting' | 'generating'>(() => {
+  const [currentStep, setCurrentStep] = useState<'persona' | 'destination' | 'dates' | 'chatting' | 'generating'>(() => {
     const saved = sessionStorage.getItem('chatStep');
-    const step = saved ? JSON.parse(saved) : 'destination';
+    const step = saved ? JSON.parse(saved) : 'chatting';
     // If they navigated back after generating, reset to chatting so the input box works
     return step === 'generating' ? 'chatting' : step;
   });
@@ -40,6 +137,8 @@ export default function Home() {
     const saved = sessionStorage.getItem('chatPlan');
     return saved ? JSON.parse(saved) : {};
   });
+
+  const [isThinking, setIsThinking] = useState(false);
 
   useEffect(() => {
     sessionStorage.setItem('chatMessages', JSON.stringify(messages));
@@ -55,6 +154,17 @@ export default function Home() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  const handlePersonaSelect = (personaText: string) => {
+    // Save persona to hobbies so it gets explicitly passed into the generation prompt
+    setPlan({ ...plan, hobbies: [personaText] });
+    setMessages(prev => [
+      ...prev,
+      { id: Date.now().toString(), role: 'user', text: personaText },
+      { id: (Date.now() + 1).toString(), role: 'ai', text: `Got it! I've noted your travel style and preferences. 📝\n\nNow, where would you like to go? (e.g., "Paris, France" or "Tokyo, Japan")`, step: 'destination' }
+    ]);
+    setCurrentStep('destination');
+  };
 
   const handleDestinationSelect = (region: string) => {
     const formattedRegion = region
@@ -81,7 +191,7 @@ export default function Home() {
     setMessages(prev => [
       ...prev,
       { id: Date.now().toString(), role: 'user', text: datesText },
-      { id: (Date.now() + 1).toString(), role: 'ai', text: `Got it! Marked your calendar. 📅\n\nHave you booked your flight? If no, please use the flight tab on the left sidebar to search for the best flights. If yes, what time will you arrive and leave?`, step: 'chatting' }
+      { id: (Date.now() + 1).toString(), role: 'ai', text: `Got it! Marked your calendar. 📅\n\nHave you booked your transportation (flight/train) yet? If not, you can use the Flights tab on the left to check Expedia/Booking.\nAlso, what kind of accommodation are you looking for based on your budget? (e.g., "Cheap hostel near downtown", "Luxury hotel near the beach")`, step: 'chatting' }
     ]);
     setCurrentStep('chatting');
   };
@@ -110,6 +220,28 @@ export default function Home() {
       sessionStorage.setItem('travelPlan', JSON.stringify(finalPlan));
       sessionStorage.setItem('generatedItinerary', JSON.stringify(generated));
 
+      if (user?.id) {
+        try {
+          const API_BASE = import.meta.env.VITE_API_URL || "";
+          await fetch(`${API_BASE}/api/trips`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              userId: user.id,
+              region: finalPlan.region,
+              arrivalDate: finalPlan.arrivalDate,
+              leaveDate: finalPlan.leaveDate,
+              budget: finalPlan.budget || "moderate",
+              whoTraveling: finalPlan.whoTraveling || "solo",
+              itinerary: generated
+            })
+          });
+          console.log("Trip successfully saved to Supabase!");
+        } catch (dbErr) {
+          console.warn("Failed to persist trip to DB:", dbErr);
+        }
+      }
+
       // Reset generating state immediately before navigating so the 'Generating...' UI disappears
       setCurrentStep('chatting');
       navigate('/itinerary');
@@ -126,7 +258,8 @@ export default function Home() {
   const handleChattingInput = async (text: string) => {
     const isReady = text.toLowerCase().includes("good to go") ||
       text.toLowerCase().includes("ready") ||
-      text.toLowerCase().includes("generate");
+      text.toLowerCase().includes("generate") ||
+      text.toLowerCase().includes("done");
 
     const userMessage: Message = { id: Date.now().toString(), role: 'user', text };
     const updatedMessages = [...messages, userMessage];
@@ -138,12 +271,30 @@ export default function Home() {
       return;
     }
 
+    setIsThinking(true);
     try {
       const API_BASE = import.meta.env.VITE_API_URL || "";
+      let sessionId = sessionStorage.getItem('sessionId');
+      let userId = localStorage.getItem('userId');
+
+      if (!sessionId) {
+        sessionId = `sess_${Date.now()}`;
+        sessionStorage.setItem('sessionId', sessionId);
+      }
+      if (!userId) {
+        userId = `usr_${Math.random().toString(36).substring(2, 9)}`;
+        localStorage.setItem('userId', userId);
+      }
+
       const response = await fetch(`${API_BASE}/api/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: updatedMessages }),
+        body: JSON.stringify({
+          messages: updatedMessages,
+          text: text,
+          sessionId: sessionId,
+          userId: userId
+        }),
       });
 
       if (!response.ok) {
@@ -166,6 +317,8 @@ export default function Home() {
         ...prev,
         { id: Date.now().toString(), role: 'ai', text: "Sorry, I couldn't connect to JourZy. Try saying 'good to go' to force generation or check your connection." }
       ]);
+    } finally {
+      setIsThinking(false);
     }
   };
 
@@ -175,11 +328,7 @@ export default function Home() {
     const text = inputValue;
     setInputValue('');
 
-    if (currentStep === 'destination') {
-      handleDestinationSelect(text);
-    } else if (currentStep === 'dates') {
-      handleDatesSelect(text);
-    } else if (currentStep === 'chatting') {
+    if (currentStep !== 'generating') {
       handleChattingInput(text);
     }
   };
@@ -247,6 +396,31 @@ export default function Home() {
               </li>
             </ul>
           </div>
+
+          {user && (
+            <div className="pt-4 border-t border-zinc-800">
+              <div className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3 px-2">Saved Trips</div>
+              {savedTrips.length === 0 ? (
+                <div className="text-xs text-zinc-500 px-2 italic">No saved trips yet</div>
+              ) : (
+                <ul className="space-y-1">
+                  {savedTrips.map((trip: any) => (
+                    <li key={trip.id}>
+                      <button
+                        onClick={() => handleLoadSavedTrip(trip.id)}
+                        className="w-full text-left px-2 py-1.5 rounded-lg text-xs font-medium text-zinc-400 hover:bg-zinc-800/50 hover:text-white transition-colors truncate flex justify-between items-center group"
+                      >
+                        <span className="truncate flex-1 pr-2">{trip.region}</span>
+                        <span className="text-[10px] text-zinc-650 group-hover:text-zinc-400 shrink-0">
+                          {new Date(trip.arrival_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
         </nav>
 
         {plan.region && (
@@ -264,6 +438,32 @@ export default function Home() {
             </div>
           </div>
         )}
+
+        {/* User Profile / Log Out */}
+        {user && (
+          <div className="p-4 border-t border-zinc-800 bg-zinc-900/60 mt-auto">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="size-8 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center font-bold text-sm">
+                {user.email?.[0].toUpperCase() || 'U'}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-white truncate">{user.email}</p>
+                <p className="text-[10px] text-zinc-500">Explorer Profile</p>
+              </div>
+            </div>
+            <button
+              onClick={async () => {
+                await supabase.auth.signOut();
+                localStorage.removeItem('userId');
+                sessionStorage.clear();
+                navigate('/login');
+              }}
+              className="w-full bg-zinc-950 border border-zinc-800 hover:bg-zinc-850 hover:text-red-400 text-zinc-400 py-2 rounded-xl text-xs font-medium transition-colors"
+            >
+              Sign Out
+            </button>
+          </div>
+        )}
       </aside>
 
       {/* Main Content */}
@@ -279,7 +479,7 @@ export default function Home() {
                       ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
                       : 'bg-blue-500/20 text-blue-400 border-blue-500/30'
                       }`}>
-                      {msg.role === 'ai' ? <Sparkles className="size-4" /> : <User className="size-4" />}
+                      {msg.role === 'ai' ? <Sparkles className="size-4" /> : <UserIcon className="size-4" />}
                     </div>
 
                     <div className={`relative group max-w-[80%] ${msg.role === 'ai'
@@ -324,14 +524,29 @@ export default function Home() {
                       )}
 
                       {msg.role === 'ai' && msg.step === 'chatting' && currentStep === 'chatting' && (
-                        <div className="mt-4 flex flex-wrap gap-2">
-                          <button
-                            onClick={() => handleGenerateItinerary()}
-                            className="px-4 py-2 rounded-full border border-emerald-500 bg-emerald-950/20 hover:bg-emerald-950/40 text-sm font-semibold text-emerald-400 transition-colors flex items-center gap-1.5 shadow-md animate-pulse"
-                          >
-                            Generate Itinerary 🪄
-                          </button>
-                        </div>
+                        (() => {
+                          const userMsgs = messages.filter(m => m.role === 'user');
+                          const lastUser = userMsgs[userMsgs.length - 1];
+                          const hasSaidReady = lastUser && (
+                            lastUser.text.toLowerCase().includes("ready") ||
+                            lastUser.text.toLowerCase().includes("done") ||
+                            lastUser.text.toLowerCase().includes("good to") ||
+                            lastUser.text.toLowerCase().includes("generate")
+                          );
+
+                          if (!hasSaidReady) return null;
+
+                          return (
+                            <div className="mt-4 flex flex-wrap gap-2">
+                              <button
+                                onClick={() => handleGenerateItinerary()}
+                                className="px-4 py-2 rounded-full border border-emerald-500 bg-emerald-950/20 hover:bg-emerald-950/40 text-sm font-semibold text-emerald-400 transition-colors flex items-center gap-1.5 shadow-md animate-pulse"
+                              >
+                                Generate Itinerary 🪄
+                              </button>
+                            </div>
+                          );
+                        })()
                       )}
 
                       {msg.role === 'ai' && msg.step === 'generating' && (
@@ -343,6 +558,22 @@ export default function Home() {
                     </div>
                   </div>
                 ))}
+
+                {isThinking && (
+                  <div className="flex gap-4 items-start">
+                    <div className="size-8 rounded-full flex items-center justify-center shrink-0 border bg-emerald-500/20 text-emerald-400 border-emerald-500/30">
+                      <Sparkles className="size-4 animate-pulse" />
+                    </div>
+                    <div className="relative group max-w-[80%] bg-zinc-900 border border-zinc-800 rounded-2xl rounded-tl-sm p-4 text-zinc-400 flex items-center gap-2">
+                      <span className="text-sm font-medium"></span>
+                      <div className="flex gap-1 items-center pt-1">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 <div ref={messagesEndRef} />
               </div>

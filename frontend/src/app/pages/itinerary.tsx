@@ -8,6 +8,13 @@ import { FlightsTab } from '../components/flights-tab';
 import { PackingTab } from '../components/packing-tab';
 import { WeatherTab } from '../components/weather-tab';
 import { TipsTab } from '../components/tips-tab';
+import { BudgetTab } from '../components/budget-tab';
+import { SafetyTab } from '../components/safety-tab';
+import { CompanionTab } from '../components/companion-tab';
+import { EventsTab } from '../components/events-tab';
+import { MemoryTab } from '../components/memory-tab';
+import { supabase } from '../utils/supabaseClient';
+import { User } from '@supabase/supabase-js';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import {
@@ -23,14 +30,127 @@ import {
   ExternalLink,
   MapPin,
   Building2,
-  X
+  X,
+  Coins,
+  ShieldCheck,
+  Radio,
+  PartyPopper,
+  Brain,
+  BookmarkCheck,
+  BookmarkPlus
 } from 'lucide-react';
 
 export default function Itinerary() {
   const navigate = useNavigate();
+  const [user, setUser] = useState<User | null>(null);
+
+  useEffect(() => {
+    const checkUser = async () => {
+      const isDemoMode = localStorage.getItem('isDemoMode') === 'true';
+      if (isDemoMode) {
+        setUser({ id: 'demo-user-12345', email: 'demo@jourzy.com' } as any);
+        return;
+      }
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        navigate('/login');
+      } else {
+        setUser(session.user);
+        if (session.user.id) {
+          localStorage.setItem('userId', session.user.id);
+        }
+      }
+    };
+    checkUser();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      const isDemoMode = localStorage.getItem('isDemoMode') === 'true';
+      if (isDemoMode) return;
+
+      if (!session) {
+        navigate('/login');
+      } else {
+        setUser(session.user);
+        if (session.user.id) {
+          localStorage.setItem('userId', session.user.id);
+        }
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [navigate]);
+
+  const [savedTrips, setSavedTrips] = useState<any[]>([]);
+  const [isSavingTrip, setIsSavingTrip] = useState(false);
+  const [tripSaved, setTripSaved] = useState(false);
+  const [savedTripId, setSavedTripId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (user?.id) {
+      const fetchTrips = async () => {
+        try {
+          const API_BASE = import.meta.env.VITE_API_URL || "";
+          const resp = await fetch(`${API_BASE}/api/trips?userId=${user.id}`);
+          if (resp.ok) {
+            const data = await resp.json();
+            setSavedTrips(data.trips || []);
+          }
+        } catch (e) {
+          console.error("Failed to load saved trips:", e);
+        }
+      };
+      fetchTrips();
+    }
+  }, [user]);
+
+  const handleLoadSavedTrip = async (tripId: string) => {
+    try {
+      const API_BASE = import.meta.env.VITE_API_URL || "";
+      const resp = await fetch(`${API_BASE}/api/trips/${tripId}`);
+      if (resp.ok) {
+        const { trip, itinerary } = await resp.json();
+        const loadedPlan: TravelPlan = {
+          region: trip.region,
+          arrivalDate: new Date(trip.arrival_date),
+          leaveDate: new Date(trip.leave_date),
+          budget: trip.budget || "moderate",
+          whoTraveling: trip.who_traveling || "solo",
+          hobbies: [],
+          favoriteFood: [],
+          restaurantPreferences: [],
+          placePreferences: []
+        };
+        const loadedItinerary = {
+          plan: loadedPlan,
+          hotelRecommendation: itinerary.hotel_recommendation,
+          days: itinerary.days,
+          packingList: itinerary.packing_list,
+          insights: itinerary.insights
+        };
+
+        sessionStorage.setItem('travelPlan', JSON.stringify(loadedPlan));
+        sessionStorage.setItem('generatedItinerary', JSON.stringify(loadedItinerary));
+
+        // Force refresh or trigger itinerary load if already on itinerary page
+        setItinerary(loadedItinerary as any);
+        setActiveTab('schedule');
+        setSearchParams({ tab: 'schedule' });
+        const scrollContainer = document.getElementById("main-content-scroll");
+        if (scrollContainer) {
+          scrollContainer.scrollTo({ top: 0, behavior: 'instant' });
+        }
+      }
+    } catch (e) {
+      console.error("Failed to load saved trip details:", e);
+    }
+  };
+
   const [searchParams, setSearchParams] = useSearchParams();
   const [itinerary, setItinerary] = useState<GeneratedItinerary | null>(null);
-  const [activeTab, setActiveTab] = useState<'schedule' | 'map' | 'flights' | 'packing' | 'weather' | 'tips'>((searchParams.get('tab') as any) || 'schedule');
+  const [activeTab, setActiveTab] = useState<'schedule' | 'map' | 'flights' | 'packing' | 'weather' | 'tips' | 'budget' | 'safety' | 'companion' | 'events' | 'memory'>((searchParams.get('tab') as any) || 'schedule');
   const [selectedActivity, setSelectedActivity] = useState<ItineraryActivity | null>(null);
   const [selectedDetail, setSelectedDetail] = useState<
     | { type: 'activity'; activity: ItineraryActivity; dayNumber: number; activityIdx: number }
@@ -48,6 +168,10 @@ export default function Itinerary() {
   const handleTabChange = (tab: typeof activeTab) => {
     setActiveTab(tab);
     setSearchParams({ tab });
+    const scrollContainer = document.getElementById("main-content-scroll");
+    if (scrollContainer) {
+      scrollContainer.scrollTo({ top: 0, behavior: 'instant' });
+    }
   };
 
   useEffect(() => {
@@ -93,6 +217,13 @@ export default function Itinerary() {
           ]
         };
       }
+      if (!parsed.logisticsGuide) {
+        parsed.logisticsGuide = {
+          connectivity: "Pre-book a local eSIM or pick up a data SIM at the arrival terminal counters.",
+          transitCards: "Look up standard local tap-and-go cards or use contactless cards at city turnstiles."
+        };
+      }
+
       return parsed;
     };
 
@@ -126,12 +257,7 @@ export default function Itinerary() {
     }
   }, [navigate]);
 
-  // Set the hotel recommendation as the default active detail panel view
-  useEffect(() => {
-    if (itinerary?.hotelRecommendation && !selectedDetail) {
-      setSelectedDetail({ type: 'hotel', hotel: itinerary.hotelRecommendation });
-    }
-  }, [itinerary]);
+
 
   if (!itinerary) {
     return (
@@ -147,93 +273,91 @@ export default function Itinerary() {
   const handleViewOnMap = (activity: ItineraryActivity) => {
     setSelectedActivity(activity);
     setActiveTab('map');
+    setSearchParams({ tab: 'map' });
+    const scrollContainer = document.getElementById("main-content-scroll");
+    if (scrollContainer) {
+      scrollContainer.scrollTo({ top: 0, behavior: 'instant' });
+    }
   };
 
-  const handleSwapActivity = async (dayNumber: number, activityIdx: number, altIdx: number) => {
+  const handleSwapActivity = (dayNumber: number, activityIdx: number, newActivityData: Partial<ItineraryActivity>) => {
     if (!itinerary) return;
+    const updatedDays = [...itinerary.days];
+    const day = updatedDays.find(d => d.dayNumber === dayNumber);
+    if (day) {
+      const original = day.activities[activityIdx];
+      const swapped: ItineraryActivity = {
+        ...original,
+        ...newActivityData,
+        time: original.time
+      } as any;
+      day.activities[activityIdx] = swapped;
+      const updatedItinerary = {
+        ...itinerary,
+        days: updatedDays
+      };
+      setItinerary(updatedItinerary);
+      sessionStorage.setItem("generatedItinerary", JSON.stringify(updatedItinerary));
 
-    const updatedDays = itinerary.days.map(d => {
-      if (d.dayNumber !== dayNumber) return d;
-      const activities = d.activities.map((act, idx) => {
-        if (idx !== activityIdx) return act;
+      if (selectedDetail && selectedDetail.type === 'activity' && selectedDetail.dayNumber === dayNumber && selectedDetail.activityIdx === activityIdx) {
+        setSelectedDetail({
+          type: 'activity',
+          activity: swapped,
+          dayNumber,
+          activityIdx
+        });
+      }
 
-        const alternatives = act.alternatives ? [...act.alternatives] : [];
-        const alt = alternatives[altIdx];
-        if (!alt) return act;
-
-        const newMain: ItineraryActivity = {
-          ...act,
-          title: alt.title,
-          location: alt.location,
-          description: alt.description,
-          place: undefined // Reset place coordinates until fetched
-        };
-
-        const newAlt = {
-          title: act.title,
-          location: act.location,
-          description: act.description
-        };
-        alternatives[altIdx] = newAlt;
-        newMain.alternatives = alternatives;
-
-        return newMain;
-      });
-      return { ...d, activities };
-    });
-
-    const newItinerary = {
-      ...itinerary,
-      days: updatedDays
-    };
-
-    setItinerary(newItinerary);
-    sessionStorage.setItem("generatedItinerary", JSON.stringify(newItinerary));
-
-    const targetActivity = updatedDays.find(d => d.dayNumber === dayNumber)?.activities[activityIdx];
-    if (targetActivity) {
-      setSelectedDetail({
-        type: 'activity',
-        activity: targetActivity,
-        dayNumber,
-        activityIdx
-      });
+      if (selectedActivity && (selectedActivity.title === original.title || (selectedActivity.place && original.place && selectedActivity.place.placeId === original.place.placeId))) {
+        setSelectedActivity(swapped);
+      }
     }
+  };
 
-    try {
-      const API_BASE = import.meta.env.VITE_API_URL || "";
-      const resp = await fetch(`${API_BASE}/api/place-lookup?query=${encodeURIComponent(targetActivity!.location)}&region=${encodeURIComponent(itinerary.plan.region)}`);
-      if (resp.ok) {
-        const data = await resp.json();
-        if (data.place) {
-          const finalizedDays = newItinerary.days.map(d => {
-            if (d.dayNumber !== dayNumber) return d;
-            const activities = d.activities.map((act, idx) => {
-              if (idx !== activityIdx) return act;
-              return {
-                ...act,
-                place: data.place
-              };
-            });
-            return { ...d, activities };
-          });
-          const finalizedItinerary = { ...newItinerary, days: finalizedDays };
-          setItinerary(finalizedItinerary);
-          sessionStorage.setItem("generatedItinerary", JSON.stringify(finalizedItinerary));
+  const handleBackToTimeline = () => {
+    setActiveTab('schedule');
+    setSearchParams({ tab: 'schedule' });
 
-          const targetUpdated = finalizedDays.find(d => d.dayNumber === dayNumber)?.activities[activityIdx];
-          if (targetUpdated) {
-            setSelectedDetail({
-              type: 'activity',
-              activity: targetUpdated,
-              dayNumber,
-              activityIdx
-            });
-          }
+    // Use selectedActivity if available, otherwise fallback to selectedDetail if it's an activity
+    const activeAct = selectedActivity || (selectedDetail?.type === 'activity' ? selectedDetail.activity : null);
+
+    if (activeAct) {
+      // Find the day number and index for the selected activity
+      let foundDayNum = -1;
+      let foundIdx = -1;
+      let foundAct = null;
+      for (const day of itinerary?.days || []) {
+        const idx = day.activities.findIndex(act =>
+          act.title === activeAct.title ||
+          (act.place && activeAct.place && act.place.placeId === activeAct.place.placeId)
+        );
+        if (idx !== -1) {
+          foundDayNum = day.dayNumber;
+          foundIdx = idx;
+          foundAct = day.activities[idx];
+          break;
         }
       }
-    } catch (e) {
-      console.error("Failed to lookup swapped place details", e);
+
+      if (foundDayNum !== -1 && foundIdx !== -1 && foundAct) {
+        // Keep both selectedActivity and selectedDetail in sync!
+        setSelectedActivity(foundAct);
+        setSelectedDetail({
+          type: 'activity',
+          activity: foundAct,
+          dayNumber: foundDayNum,
+          activityIdx: foundIdx
+        });
+
+        const elementId = `activity-${foundDayNum}-${foundIdx}`;
+        // Wait for the timeline DOM to render before scrolling
+        setTimeout(() => {
+          const el = document.getElementById(elementId);
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }, 150);
+      }
     }
   };
 
@@ -268,6 +392,56 @@ export default function Itinerary() {
     setItinerary(newItinerary);
     sessionStorage.setItem("generatedItinerary", JSON.stringify(newItinerary));
     setSelectedDetail({ type: 'hotel', hotel: newHotel });
+  };
+
+  const handleSaveTrip = async () => {
+    if (!user || !itinerary || isSavingTrip || tripSaved) return;
+    setIsSavingTrip(true);
+    try {
+      const API_BASE = import.meta.env.VITE_API_URL || '';
+      const resp = await fetch(`${API_BASE}/api/trips`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.id,
+          region: itinerary.plan.region,
+          arrivalDate: itinerary.plan.arrivalDate instanceof Date
+            ? itinerary.plan.arrivalDate.toISOString().split('T')[0]
+            : itinerary.plan.arrivalDate,
+          leaveDate: itinerary.plan.leaveDate instanceof Date
+            ? itinerary.plan.leaveDate.toISOString().split('T')[0]
+            : itinerary.plan.leaveDate,
+          budget: (itinerary.plan as any).budget || 'moderate',
+          whoTraveling: (itinerary.plan as any).whoTraveling || 'solo',
+          itinerary: {
+            hotelRecommendation: itinerary.hotelRecommendation || null,
+            days: itinerary.days || [],
+            packingList: itinerary.packingList || null,
+            insights: itinerary.insights || null,
+          },
+        }),
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        setSavedTripId(data.tripId || null);
+        setTripSaved(true);
+        // Refresh saved trips list in sidebar
+        const tripsResp = await fetch(`${API_BASE}/api/trips?userId=${user.id}`);
+        if (tripsResp.ok) {
+          const tripsData = await tripsResp.json();
+          setSavedTrips(tripsData.trips || []);
+        }
+      } else {
+        const errData = await resp.json().catch(() => ({}));
+        console.error('Save trip failed:', errData);
+        alert(`Failed to save trip: ${errData.error || resp.statusText}`);
+      }
+    } catch (e) {
+      console.error('Failed to save trip:', e);
+      alert('Network error — could not save trip.');
+    } finally {
+      setIsSavingTrip(false);
+    }
   };
 
   return (
@@ -354,8 +528,87 @@ export default function Itinerary() {
                   <HelpCircle className="size-4" /> Local Tips
                 </button>
               </li>
+              <li>
+                <button
+                  onClick={() => handleTabChange('budget')}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${activeTab === 'budget' ? 'bg-zinc-800 text-white border-l-2 border-emerald-500 -ml-[2px]' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
+                    }`}
+                >
+                  <Coins className="size-4" /> Budget Tracker
+                </button>
+              </li>
+              <li>
+                <button
+                  onClick={() => handleTabChange('safety')}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${activeTab === 'safety' ? 'bg-zinc-800 text-white border-l-2 border-emerald-500 -ml-[2px]' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
+                    }`}
+                >
+                  <ShieldCheck className="size-4" /> Safety Assistant
+                </button>
+              </li>
+              <li>
+                <button
+                  onClick={() => handleTabChange('companion')}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${activeTab === 'companion' ? 'bg-zinc-800 text-white border-l-2 border-emerald-500 -ml-[2px]' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
+                    }`}
+                >
+                  <span className="relative flex size-4 items-center justify-center shrink-0">
+                    <Radio className="size-4" />
+                    {activeTab === 'companion' && (
+                      <span className="absolute -top-0.5 -right-0.5 flex size-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                        <span className="relative inline-flex rounded-full size-2 bg-emerald-400" />
+                      </span>
+                    )}
+                  </span>
+                  Live Companion
+                </button>
+              </li>
+              <li>
+                <button
+                  onClick={() => handleTabChange('events')}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${activeTab === 'events' ? 'bg-zinc-800 text-white border-l-2 border-emerald-500 -ml-[2px]' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
+                    }`}
+                >
+                  <PartyPopper className="size-4" /> Events
+                </button>
+              </li>
+              <li>
+                <button
+                  onClick={() => handleTabChange('memory')}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${activeTab === 'memory' ? 'bg-zinc-800 text-white border-l-2 border-emerald-500 -ml-[2px]' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
+                    }`}
+                >
+                  <Brain className="size-4" /> Memory
+                </button>
+              </li>
             </ul>
           </div>
+
+          {user && (
+            <div className="pt-4 border-t border-zinc-800">
+              <div className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3 px-2">Saved Trips</div>
+              {savedTrips.length === 0 ? (
+                <div className="text-xs text-zinc-500 px-2 italic">No saved trips yet</div>
+              ) : (
+                <ul className="space-y-1">
+                  {savedTrips.map((trip: any) => (
+                    <li key={trip.id}>
+                      <button
+                        onClick={() => handleLoadSavedTrip(trip.id)}
+                        className="w-full text-left px-2 py-1.5 rounded-lg text-xs font-medium text-zinc-400 hover:bg-zinc-800/50 hover:text-white transition-colors truncate flex justify-between items-center group"
+                      >
+                        <span className="truncate flex-1 pr-2">{trip.region}</span>
+                        <span className="text-[10px] text-zinc-650 group-hover:text-zinc-400 shrink-0">
+                          {new Date(trip.arrival_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
         </nav>
 
         <div className="p-4 border-t border-zinc-800">
@@ -366,15 +619,64 @@ export default function Itinerary() {
             <div className="text-xs text-zinc-500 mt-1">
               {itinerary.plan.arrivalDate.toLocaleDateString()} - {itinerary.plan.leaveDate.toLocaleDateString()}
             </div>
-            <div className="mt-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-500/10 text-emerald-400">
-              In progress
+            <div className="flex items-center gap-2 mt-2">
+              <div className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-500/10 text-emerald-400">
+                In progress
+              </div>
             </div>
+            {user ? (
+              <button
+                onClick={handleSaveTrip}
+                disabled={isSavingTrip || tripSaved}
+                className={`w-full mt-3 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold transition-all border ${
+                  tripSaved
+                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 cursor-default'
+                    : 'bg-zinc-900 hover:bg-emerald-500/10 hover:text-emerald-400 hover:border-emerald-500/30 text-zinc-400 border-zinc-700'
+                }`}
+              >
+                {tripSaved ? (
+                  <><BookmarkCheck className="size-3.5" /> Saved!</>
+                ) : isSavingTrip ? (
+                  <><span className="animate-spin">⏳</span> Saving...</>
+                ) : (
+                  <><BookmarkPlus className="size-3.5" /> Save Trip</>
+                )}
+              </button>
+            ) : (
+              <p className="text-[10px] text-zinc-600 mt-2 italic">Sign in to save trips</p>
+            )}
           </div>
         </div>
+
+        {/* User Profile / Log Out */}
+        {user && (
+          <div className="p-4 border-t border-zinc-800 bg-zinc-900/60 mt-auto">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="size-8 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center font-bold text-sm">
+                {user.email?.[0].toUpperCase() || 'U'}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-white truncate">{user.email}</p>
+                <p className="text-[10px] text-zinc-500">Explorer Profile</p>
+              </div>
+            </div>
+            <button
+              onClick={async () => {
+                await supabase.auth.signOut();
+                localStorage.removeItem('userId');
+                sessionStorage.clear();
+                navigate('/login');
+              }}
+              className="w-full bg-zinc-950 border border-zinc-800 hover:bg-zinc-850 hover:text-red-400 text-zinc-400 py-2 rounded-xl text-xs font-medium transition-colors"
+            >
+              Sign Out
+            </button>
+          </div>
+        )}
       </aside>
 
       {/* Main Content */}
-      <main className="ml-64 flex-1 p-8 h-screen overflow-y-auto pb-24">
+      <main id="main-content-scroll" className="ml-64 flex-1 p-8 h-screen overflow-y-auto pb-24">
         {activeTab === 'schedule' && (
           <div className="flex gap-8 max-w-6xl mx-auto items-start relative">
             <div className="flex-1 min-w-0">
@@ -383,6 +685,30 @@ export default function Itinerary() {
                 <p className="text-zinc-400">
                   {itinerary.plan.arrivalDate.toLocaleDateString()} - {itinerary.plan.leaveDate.toLocaleDateString()} · Click any activity to view alternatives and details
                 </p>
+              </div>
+
+              {/* 💰 NEW WORKFLOW: INTERACTIVE REAL-TIME BUDGET PROGRESS DISPLAY */}
+              <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 flex flex-col md:flex-row items-center justify-between gap-4 shadow-md mb-6">
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold text-zinc-300">Live Trip Budget Tracker</p>
+                  <p className="text-[11px] text-zinc-500">
+                    Aggregated price tier allocations across your primary activities and active stay configurations.
+                  </p>
+                </div>
+                <div className="flex items-center gap-6 w-full md:w-auto justify-end">
+                  <div className="text-right">
+                    <span className="text-[10px] text-zinc-500 uppercase block tracking-wider font-bold">Planned Pace</span>
+                    <span className="text-xs text-zinc-200 font-semibold bg-zinc-950 px-2 py-0.5 rounded border border-zinc-800">
+                      Moderate / Dense
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[10px] text-zinc-500 uppercase block tracking-wider font-bold">Cost Estimate</span>
+                    <span className="text-xs text-emerald-400 font-bold bg-emerald-950/30 border border-emerald-800/40 px-2 py-0.5 rounded">
+                      Medium ($$)
+                    </span>
+                  </div>
+                </div>
               </div>
               <ItineraryTimeline
                 days={itinerary.days}
@@ -454,12 +780,18 @@ export default function Itinerary() {
                       <div className="flex items-center gap-2 mb-2">
                         <Clock className="size-4 text-zinc-500" />
                         <span className="font-semibold text-sm text-zinc-300">{selectedDetail.activity.time}</span>
-                        {selectedDetail.activity.travelTimeFromPrevious && (
+                        {selectedDetail.activity.travelTimeFromPrevious && selectedDetail.activity.travelTimeFromPrevious.length <= 45 && (
                           <Badge variant="outline" className="bg-zinc-950/80 text-zinc-400 border-zinc-800 text-[10px] py-0.5 px-2">
                             ⏱ {selectedDetail.activity.travelTimeFromPrevious}
                           </Badge>
                         )}
                       </div>
+                      {selectedDetail.activity.travelTimeFromPrevious && selectedDetail.activity.travelTimeFromPrevious.length > 45 && (
+                        <div className="mb-3 text-[11px] text-zinc-400 bg-zinc-950/50 border border-zinc-800/80 rounded-lg p-2.5 flex items-start gap-2 max-w-full whitespace-normal">
+                          <span className="text-zinc-500 mt-0.5 shrink-0">⏱</span>
+                          <span className="leading-relaxed">{selectedDetail.activity.travelTimeFromPrevious}</span>
+                        </div>
+                      )}
                       <h4 className="font-bold text-xl text-white mb-2">{selectedDetail.activity.title}</h4>
                       <p className="text-xs text-zinc-500 mb-4 flex items-center gap-1.5">
                         <span className="inline-block size-2 rounded-full bg-blue-500" />
@@ -478,6 +810,39 @@ export default function Itinerary() {
                       More Information
                       <MapPin className="ml-2 size-4" />
                     </Button>
+
+                    {/* Alternatives for Dynamic Replanning */}
+                    {selectedDetail.activity.alternatives && selectedDetail.activity.alternatives.length > 0 && (
+                      <div className="pt-4 border-t border-zinc-800 space-y-3">
+                        <h5 className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+                          <Sparkles className="size-3.5 text-amber-400 animate-pulse" />
+                          Dynamic Alternatives
+                        </h5>
+                        <div className="space-y-2.5">
+                          {selectedDetail.activity.alternatives.map((alt: any, idx: number) => (
+                            <div key={idx} className="bg-zinc-950/60 border border-zinc-850 p-3.5 rounded-xl flex flex-col gap-2">
+                              <div>
+                                <p className="text-xs font-bold text-white leading-tight">{alt.title}</p>
+                                <p className="text-[10px] text-zinc-500 mt-0.5 truncate">{alt.location}</p>
+                                <p className="text-[10px] text-zinc-400 mt-1.5 leading-relaxed">{alt.description}</p>
+                              </div>
+                              <Button
+                                size="sm"
+                                className="w-full bg-emerald-500 hover:bg-emerald-600 text-zinc-950 text-[10px] font-extrabold h-8 rounded-lg flex items-center justify-center gap-1"
+                                onClick={() => handleSwapActivity(selectedDetail.dayNumber, selectedDetail.activityIdx, {
+                                  title: alt.title,
+                                  location: alt.location,
+                                  description: alt.description,
+                                  place: alt.place
+                                })}
+                              >
+                                Swap Stop
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </aside>
@@ -492,6 +857,24 @@ export default function Itinerary() {
             selectedActivity={selectedActivity}
             onActivitySelect={(act) => setSelectedActivity(act)}
             onBack={() => setActiveTab('schedule')}
+            onReplaceActivity={(newActivityData) => {
+              if (!selectedActivity) return;
+              let foundDayNum = -1;
+              let foundIdx = -1;
+              for (const day of itinerary.days) {
+                const idx = day.activities.findIndex(a => a === selectedActivity);
+                if (idx !== -1) {
+                  foundDayNum = day.dayNumber;
+                  foundIdx = idx;
+                  break;
+                }
+              }
+              if (foundDayNum !== -1 && foundIdx !== -1) {
+                handleSwapActivity(foundDayNum, foundIdx, newActivityData);
+                setActiveTab('schedule');
+                setSearchParams({ tab: 'schedule' });
+              }
+            }}
           />
         )}
 
@@ -508,7 +891,34 @@ export default function Itinerary() {
         )}
 
         {activeTab === 'tips' && (
-          <TipsTab insights={itinerary.insights} region={itinerary.plan.region} />
+          <TipsTab
+            insights={itinerary.insights}
+            region={itinerary.plan.region}
+            logisticsGuide={(itinerary as any).logisticsGuide}
+          />
+        )}
+
+        {activeTab === 'budget' && (
+          <BudgetTab itinerary={itinerary} />
+        )}
+
+        {activeTab === 'safety' && (
+          <SafetyTab itinerary={itinerary} />
+        )}
+
+        {activeTab === 'companion' && (
+          <CompanionTab
+            itinerary={itinerary}
+            onSwapActivity={handleSwapActivity}
+          />
+        )}
+
+        {activeTab === 'events' && (
+          <EventsTab itinerary={itinerary} />
+        )}
+
+        {activeTab === 'memory' && (
+          <MemoryTab itinerary={itinerary} />
         )}
       </main>
     </div>
