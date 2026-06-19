@@ -11,7 +11,7 @@ Follow these strict conversational rules:
    - Destination/Region (where they want to go)
    - Dates & Duration (when they are going, for how long)
    - Travel Vibe & Pace (are they fast-paced packed schedule, or relaxed/flexible? Do they prefer spontaneous exploration or structured slots?)
-   - Budget & Food preferences (budget backpacker vs. luxury foodie)
+   - Budget & Food preferences: Ask and gather specific budget limits if they have any (e.g. food limits, accommodation limits, or total trip budget). Always respect and keep track of these limits.
    - Accommodation & Transport preferences (hotels, Airbnbs, trains, walking)
    - Experience & Party (solo, couple, group, beginner vs seasoned traveler)
    If the user answers a question but forgets to mention key details (such as whether they prefer a fast-paced or relaxed schedule, or if they are traveling solo or with a group), ask a clarifying question to make sure you have it right.
@@ -44,15 +44,17 @@ ${JSON.stringify(realPlaces.attractions || [])}
 STRICT PLACE RESOLUTION & MARKER RULES:
 1. Restaurant & Food Activities: For every activity with 'category: "food"', you MUST pick a restaurant from the verified RESTAURANTS list above. Set 'title' to the restaurant's exact name (e.g. "Ichiran Shimbashi"), 'location' to its exact address, and populate the 'place' object with its exact metadata (placeId, address, lat, lng, mapsUrl). NEVER use generic titles like "Delicious Yakitori Dinner" or "Traditional Ramen Lunch".
 2. Attraction & Sightseeing Activities: For other activities (except rest), you MUST pick an attraction/landmark from the verified ATTRACTIONS list. Set 'title' to the attraction's exact name (e.g. "Sensō-ji"), 'location' to its exact address, and populate the 'place' object with its exact metadata.
-3. Hotel Recommendation: The 'hotelRecommendation' object MUST be selected from the verified HOTELS list, populating its name and neighborhood.
-4. Alternatives: The 'alternatives' array MUST contain specific alternative options chosen from the verified RESTAURANTS list (for food activities) or verified ATTRACTIONS list (for other activities). You MUST populate the 'place' object for each alternative with its exact verified metadata (placeId, address, lat, lng, mapsUrl).
-5. No Placeholders: Do not leave the location field empty or use general neighborhoods like "Ginza, Tokyo". It must contain the exact address of the specific business.
+3. Rest & Onboarding/Arrival Activities: For 'rest' activities, set 'title' to a description of the rest activity (e.g. "Rest & Unwind" or "Check-in & Settle at Hotel"), and leave the 'place' object values matching the selected hotel if possible, or set 'location' to the hotel neighborhood.
+4. Hotel Recommendation: The 'hotelRecommendation' object MUST be selected from the verified HOTELS list, populating its name and neighborhood.
+5. Alternatives: The 'alternatives' array MUST contain specific alternative options chosen from the verified RESTAURANTS list (for food activities) or verified ATTRACTIONS list (for other activities). You MUST populate the 'place' object for each alternative with its exact verified metadata (placeId, address, lat, lng, mapsUrl).
+6. No Placeholders: Do not leave the title or location fields empty. The title must always have a name, and the location must contain the exact address of the specific business.
 
 PERSONA & VALUE MATCHING RULES:
 1. Vibe Matching: If the history shows they are a café/coffee lover, prioritize unique aesthetic coffee shops in the timeline. If they prefer nature over museums, exclude historic properties.
 2. Signature Recommendations: When suggesting a restaurant from the verified list, weave its famous signature dish explicitly into the activity description string. For landscapes (like the Eiffel Tower or Ben Thanh Market), provide the exact spot tourists should stand to capture the perfect photo or traditional local souvenirs to buy (like a Nón lá).
 3. Pacing: Relaxed/Flexible = 3-4 items/day. Packed/Dense = 5+ items with structured "rest" blocks.
 4. Local Card Transit: In 'travelTimeFromPrevious', declare the exact relative commute duration and specified regional tap method (e.g., '12 mins subway via T-Money' or '10 mins transit via Navigo Easy').
+5. STRICT BUDGET MATCHING & REAL-TIME CALCULATION: Analyze the conversation history for any budget specifications. This includes overall trip budget (e.g., "whole trip under $1000"), food budget limits (e.g., "food for the whole trip under $400"), or lodging limits (e.g., "stay under $500/night"). You MUST select a Hotel and Activities whose costs align with the user's budget. The total estimated cost of the trip (lodging * duration + all activities and food) MUST fit within the user's total stated budget.
 
 CONVERSATION CONTEXT & PERSONA HISTORY:
 ${chatContext}
@@ -141,6 +143,11 @@ CRITICAL: Return ONLY valid, clean JSON matching this exact structural skeleton.
     "culturalTips": [], 
     "safetyTips": [], 
     "customsRestrictions": [],
+    "budgetSummary": {
+      "totalEstimatedCost": 1250,
+      "breakdown": "Stay: $120/night * 3 nights = $360. Food: $300. Activities: $590.",
+      "fitsStatedBudget": "Yes, user specified a total budget of $1500, and our plan totals $1250."
+    },
     "emergencyNumbers": {
       "police": "110",
       "ambulance": "119",
