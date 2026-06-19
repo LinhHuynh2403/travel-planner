@@ -57,51 +57,10 @@ export function WeatherTab({ region, insights }: WeatherTabProps) {
           if (!resp.ok) throw new Error("Failed to fetch weather from API");
           data = await resp.json();
         } catch (apiErr) {
-          console.warn("Failed to fetch live weather, generating realistic mock forecast:", apiErr);
-
-          const conditions = ["Clear", "Clouds", "Rain", "Clear", "Clouds"];
-          const weatherDescriptions = ["clear sky", "few clouds", "light rain", "sunny", "broken clouds"];
-          const icons = ["01d", "02d", "10d", "01d", "03d"];
-
-          const mockList = [];
-          const startDate = new Date();
-          for (let i = 0; i < 5; i++) {
-            const dateObj = new Date(startDate);
-            dateObj.setDate(startDate.getDate() + i);
-            const dateStr = dateObj.toISOString().split('T')[0];
-
-            for (let hourIdx = 0; hourIdx < 8; hourIdx++) {
-              const hourDate = new Date(dateObj);
-              hourDate.setHours(hourIdx * 3, 0, 0, 0);
-              const dtTxt = `${dateStr} ${hourDate.toTimeString().split(' ')[0]}`;
-
-              // Sinusoidal temperature variation (peaking in early afternoon)
-              const baseTemp = 18 + Math.sin((hourIdx - 4) * Math.PI / 4) * 6;
-
-              mockList.push({
-                dt_txt: dtTxt,
-                main: {
-                  temp: Number(baseTemp.toFixed(1)),
-                  feels_like: Number((baseTemp + (Math.random() * 2 - 1)).toFixed(1)),
-                  humidity: 55 + Math.round(Math.random() * 20),
-                  pressure: 1011 + Math.round(Math.random() * 8)
-                },
-                weather: [{
-                  main: conditions[i],
-                  description: weatherDescriptions[i],
-                  icon: icons[i]
-                }],
-                wind: {
-                  speed: Number((2.5 + Math.random() * 3.5).toFixed(1))
-                },
-                clouds: {
-                  all: i === 0 ? 5 : i === 1 ? 25 : 85
-                },
-                pop: i === 2 ? 0.65 : 0.05
-              });
-            }
-          }
-          data = { list: mockList };
+          console.error("Failed to fetch live weather:", apiErr);
+          setForecast([]);
+          setLoading(false);
+          return;
         }
 
         // Process OpenWeather 5-day/3-hour forecast to daily forecast

@@ -8,7 +8,6 @@ import { FlightsTab } from '../components/flights-tab';
 import { PackingTab } from '../components/packing-tab';
 import { WeatherTab } from '../components/weather-tab';
 import { TipsTab } from '../components/tips-tab';
-import { BudgetTab } from '../components/budget-tab';
 import { SafetyTab } from '../components/safety-tab';
 import { CompanionTab } from '../components/companion-tab';
 import { EventsTab } from '../components/events-tab';
@@ -37,7 +36,8 @@ import {
   PartyPopper,
   Brain,
   BookmarkCheck,
-  BookmarkPlus
+  BookmarkPlus,
+  User as UserIcon
 } from 'lucide-react';
 
 export default function Itinerary() {
@@ -46,12 +46,6 @@ export default function Itinerary() {
 
   useEffect(() => {
     const checkUser = async () => {
-      const isDemoMode = localStorage.getItem('isDemoMode') === 'true';
-      if (isDemoMode) {
-        setUser({ id: 'demo-user-12345', email: 'demo@jourzy.com' } as any);
-        return;
-      }
-
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         navigate('/login');
@@ -65,9 +59,6 @@ export default function Itinerary() {
     checkUser();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      const isDemoMode = localStorage.getItem('isDemoMode') === 'true';
-      if (isDemoMode) return;
-
       if (!session) {
         navigate('/login');
       } else {
@@ -150,7 +141,7 @@ export default function Itinerary() {
 
   const [searchParams, setSearchParams] = useSearchParams();
   const [itinerary, setItinerary] = useState<GeneratedItinerary | null>(null);
-  const [activeTab, setActiveTab] = useState<'schedule' | 'map' | 'flights' | 'packing' | 'weather' | 'tips' | 'budget' | 'safety' | 'companion' | 'events' | 'memory'>((searchParams.get('tab') as any) || 'schedule');
+  const [activeTab, setActiveTab] = useState<'schedule' | 'map' | 'flights' | 'packing' | 'weather' | 'tips' | 'safety' | 'companion' | 'events' | 'memory'>((searchParams.get('tab') as any) || 'schedule');
   const [selectedActivity, setSelectedActivity] = useState<ItineraryActivity | null>(null);
   const [selectedDetail, setSelectedDetail] = useState<
     | { type: 'activity'; activity: ItineraryActivity; dayNumber: number; activityIdx: number }
@@ -450,136 +441,30 @@ export default function Itinerary() {
       <aside className="w-64 bg-zinc-900 border-r border-zinc-800 flex flex-col fixed inset-y-0 z-10">
         <div className="p-6 border-b border-zinc-800">
           <div className="flex items-center gap-2 font-bold text-xl mb-1 text-white">
-            <Sparkles className="size-5" />
+            <Sparkles className="size-5 text-emerald-400 animate-pulse" />
             JourZy
           </div>
-          <div className="text-zinc-500 text-sm">Your AI travel assistant</div>
+          <div className="text-zinc-500 text-xs">Your AI travel assistant</div>
         </div>
 
-        <nav className="flex-1 p-4 space-y-8 overflow-y-auto">
+        <nav className="flex-1 p-4 space-y-6 overflow-y-auto">
           <div>
-            <div className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-4 px-2">Plan</div>
+            <div className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3 px-2">Menu</div>
             <ul className="space-y-1">
               <li>
                 <button
-                  onClick={() => handleTabChange('schedule')}
-                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${activeTab === 'schedule' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
-                    }`}
-                >
-                  <Calendar className="size-4" /> My schedule
-                </button>
-              </li>
-              <li>
-                <button
-                  onClick={() => handleTabChange('map')}
-                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${activeTab === 'map' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
-                    }`}
-                >
-                  <Map className="size-4" /> Map view
-                </button>
-              </li>
-              <li>
-                <button
-                  onClick={() => handleTabChange('flights')}
-                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${activeTab === 'flights' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
-                    }`}
-                >
-                  <Plane className="size-4" /> Flights
-                </button>
-              </li>
-            </ul>
-          </div>
-
-          <div>
-            <div className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3 px-2 mt-6">More</div>
-            <ul className="space-y-1">
-              <li>
-                <button
-                  onClick={() => navigate('/')}
+                  onClick={() => navigate('/?view=chat')}
                   className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 transition-colors"
                 >
-                  <MessageSquare className="size-4" /> Plan with AI
+                  <MessageSquare className="size-4 text-emerald-400" /> Plan with AI
                 </button>
               </li>
               <li>
                 <button
-                  onClick={() => handleTabChange('packing')}
-                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${activeTab === 'packing' ? 'bg-zinc-800 text-white border-l-2 border-emerald-500 -ml-[2px]' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
-                    }`}
+                  onClick={() => navigate('/?view=profile')}
+                  className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 transition-colors"
                 >
-                  <Briefcase className="size-4" /> Packing list
-                </button>
-              </li>
-              <li>
-                <button
-                  onClick={() => handleTabChange('weather')}
-                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${activeTab === 'weather' ? 'bg-zinc-800 text-white border-l-2 border-emerald-500 -ml-[2px]' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
-                    }`}
-                >
-                  <CloudSun className="size-4" /> Weather
-                </button>
-              </li>
-              <li>
-                <button
-                  onClick={() => handleTabChange('tips')}
-                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${activeTab === 'tips' ? 'bg-zinc-800 text-white border-l-2 border-emerald-500 -ml-[2px]' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
-                    }`}
-                >
-                  <HelpCircle className="size-4" /> Local Tips
-                </button>
-              </li>
-              <li>
-                <button
-                  onClick={() => handleTabChange('budget')}
-                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${activeTab === 'budget' ? 'bg-zinc-800 text-white border-l-2 border-emerald-500 -ml-[2px]' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
-                    }`}
-                >
-                  <Coins className="size-4" /> Budget Tracker
-                </button>
-              </li>
-              <li>
-                <button
-                  onClick={() => handleTabChange('safety')}
-                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${activeTab === 'safety' ? 'bg-zinc-800 text-white border-l-2 border-emerald-500 -ml-[2px]' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
-                    }`}
-                >
-                  <ShieldCheck className="size-4" /> Safety Assistant
-                </button>
-              </li>
-              <li>
-                <button
-                  onClick={() => handleTabChange('companion')}
-                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${activeTab === 'companion' ? 'bg-zinc-800 text-white border-l-2 border-emerald-500 -ml-[2px]' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
-                    }`}
-                >
-                  <span className="relative flex size-4 items-center justify-center shrink-0">
-                    <Radio className="size-4" />
-                    {activeTab === 'companion' && (
-                      <span className="absolute -top-0.5 -right-0.5 flex size-2">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                        <span className="relative inline-flex rounded-full size-2 bg-emerald-400" />
-                      </span>
-                    )}
-                  </span>
-                  Live Companion
-                </button>
-              </li>
-              <li>
-                <button
-                  onClick={() => handleTabChange('events')}
-                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${activeTab === 'events' ? 'bg-zinc-800 text-white border-l-2 border-emerald-500 -ml-[2px]' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
-                    }`}
-                >
-                  <PartyPopper className="size-4" /> Events
-                </button>
-              </li>
-              <li>
-                <button
-                  onClick={() => handleTabChange('memory')}
-                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${activeTab === 'memory' ? 'bg-zinc-800 text-white border-l-2 border-emerald-500 -ml-[2px]' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
-                    }`}
-                >
-                  <Brain className="size-4" /> Memory
+                  <UserIcon className="size-4 text-emerald-400" /> My Travel Profile
                 </button>
               </li>
             </ul>
@@ -587,7 +472,9 @@ export default function Itinerary() {
 
           {user && (
             <div className="pt-4 border-t border-zinc-800">
-              <div className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3 px-2">Saved Trips</div>
+              <div className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3 px-2 flex items-center gap-1.5">
+                <Calendar className="size-3 text-zinc-500" /> Saved Trips
+              </div>
               {savedTrips.length === 0 ? (
                 <div className="text-xs text-zinc-500 px-2 italic">No saved trips yet</div>
               ) : (
@@ -599,7 +486,7 @@ export default function Itinerary() {
                         className="w-full text-left px-2 py-1.5 rounded-lg text-xs font-medium text-zinc-400 hover:bg-zinc-800/50 hover:text-white transition-colors truncate flex justify-between items-center group"
                       >
                         <span className="truncate flex-1 pr-2">{trip.region}</span>
-                        <span className="text-[10px] text-zinc-650 group-hover:text-zinc-400 shrink-0">
+                        <span className="text-[10px] text-zinc-650 group-hover:text-zinc-450 shrink-0">
                           {new Date(trip.arrival_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                         </span>
                       </button>
@@ -610,43 +497,6 @@ export default function Itinerary() {
             </div>
           )}
         </nav>
-
-        <div className="p-4 border-t border-zinc-800">
-          <div className="bg-zinc-800/50 rounded-lg p-3">
-            <div className="text-sm font-semibold text-white truncate">
-              {itinerary.plan.region}
-            </div>
-            <div className="text-xs text-zinc-500 mt-1">
-              {itinerary.plan.arrivalDate.toLocaleDateString()} - {itinerary.plan.leaveDate.toLocaleDateString()}
-            </div>
-            <div className="flex items-center gap-2 mt-2">
-              <div className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-500/10 text-emerald-400">
-                In progress
-              </div>
-            </div>
-            {user ? (
-              <button
-                onClick={handleSaveTrip}
-                disabled={isSavingTrip || tripSaved}
-                className={`w-full mt-3 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold transition-all border ${
-                  tripSaved
-                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 cursor-default'
-                    : 'bg-zinc-900 hover:bg-emerald-500/10 hover:text-emerald-400 hover:border-emerald-500/30 text-zinc-400 border-zinc-700'
-                }`}
-              >
-                {tripSaved ? (
-                  <><BookmarkCheck className="size-3.5" /> Saved!</>
-                ) : isSavingTrip ? (
-                  <><span className="animate-spin">⏳</span> Saving...</>
-                ) : (
-                  <><BookmarkPlus className="size-3.5" /> Save Trip</>
-                )}
-              </button>
-            ) : (
-              <p className="text-[10px] text-zinc-600 mt-2 italic">Sign in to save trips</p>
-            )}
-          </div>
-        </div>
 
         {/* User Profile / Log Out */}
         {user && (
@@ -677,39 +527,71 @@ export default function Itinerary() {
 
       {/* Main Content */}
       <main id="main-content-scroll" className="ml-64 flex-1 p-8 h-screen overflow-y-auto pb-24">
+        {/* Destination Header */}
+        <div className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-800 pb-6">
+          <div>
+            <h1 className="text-3xl font-extrabold text-white capitalize flex items-center gap-2">
+              {itinerary.plan.region} Itinerary ✈️
+            </h1>
+            <p className="text-zinc-400 text-sm mt-1">
+              {new Date(itinerary.plan.arrivalDate).toLocaleDateString()} - {new Date(itinerary.plan.leaveDate).toLocaleDateString()} · Custom tailored for you
+            </p>
+          </div>
+          {user && (
+            <div className="flex gap-2">
+              <button
+                onClick={handleSaveTrip}
+                disabled={isSavingTrip || tripSaved}
+                className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold transition-all border ${tripSaved
+                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 cursor-default'
+                  : 'bg-zinc-900 hover:bg-emerald-500/10 hover:text-emerald-400 hover:border-emerald-500/30 text-zinc-300 border-zinc-700'
+                  }`}
+              >
+                {tripSaved ? (
+                  <><BookmarkCheck className="size-3.5" /> Saved!</>
+                ) : isSavingTrip ? (
+                  <><span className="animate-spin">⏳</span> Saving...</>
+                ) : (
+                  <><BookmarkPlus className="size-3.5" /> Save Itinerary</>
+                )}
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Sticky horizontal sub-tab menu */}
+        <div className="flex items-center gap-1 border-b border-zinc-800 overflow-x-auto pb-px mb-6 scrollbar-none sticky top-0 bg-zinc-950 z-10">
+          {[
+            { id: 'schedule', label: '📅 Schedule' },
+            { id: 'map', label: '🗺️ Map View' },
+            { id: 'flights', label: '✈️ Transit Hub' },
+            { id: 'packing', label: '🧳 Packing' },
+            { id: 'weather', label: '🌦️ Weather' },
+            { id: 'tips', label: '💡 Local Tips' },
+            { id: 'safety', label: '🛡️ Safety' },
+            { id: 'companion', label: '🎙️ Live Companion' },
+            { id: 'events', label: '🎉 Events' },
+            { id: 'memory', label: '🧠 Memory' }
+          ].map(tab => {
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => handleTabChange(tab.id as any)}
+                className={`px-4 py-3 text-sm font-semibold whitespace-nowrap border-b-2 transition-all ${isActive
+                  ? 'border-emerald-500 text-emerald-400 font-bold bg-emerald-500/5'
+                  : 'border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/40'
+                  }`}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+
         {activeTab === 'schedule' && (
           <div className="flex gap-8 max-w-6xl mx-auto items-start relative">
             <div className="flex-1 min-w-0">
-              <div className="mb-8">
-                <h1 className="text-3xl font-bold text-white mb-2 capitalize">{itinerary.plan.region} Itinerary</h1>
-                <p className="text-zinc-400">
-                  {itinerary.plan.arrivalDate.toLocaleDateString()} - {itinerary.plan.leaveDate.toLocaleDateString()} · Click any activity to view alternatives and details
-                </p>
-              </div>
-
-              {/* 💰 NEW WORKFLOW: INTERACTIVE REAL-TIME BUDGET PROGRESS DISPLAY */}
-              <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 flex flex-col md:flex-row items-center justify-between gap-4 shadow-md mb-6">
-                <div className="space-y-1">
-                  <p className="text-xs font-semibold text-zinc-300">Live Trip Budget Tracker</p>
-                  <p className="text-[11px] text-zinc-500">
-                    Aggregated price tier allocations across your primary activities and active stay configurations.
-                  </p>
-                </div>
-                <div className="flex items-center gap-6 w-full md:w-auto justify-end">
-                  <div className="text-right">
-                    <span className="text-[10px] text-zinc-500 uppercase block tracking-wider font-bold">Planned Pace</span>
-                    <span className="text-xs text-zinc-200 font-semibold bg-zinc-950 px-2 py-0.5 rounded border border-zinc-800">
-                      Moderate / Dense
-                    </span>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-[10px] text-zinc-500 uppercase block tracking-wider font-bold">Cost Estimate</span>
-                    <span className="text-xs text-emerald-400 font-bold bg-emerald-950/30 border border-emerald-800/40 px-2 py-0.5 rounded">
-                      Medium ($$)
-                    </span>
-                  </div>
-                </div>
-              </div>
               <ItineraryTimeline
                 days={itinerary.days}
                 region={itinerary.plan.region}
@@ -761,7 +643,7 @@ export default function Itinerary() {
                     </div>
 
                     <a
-                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedDetail.hotel.name + ", " + (selectedDetail.hotel.neighborhood || ""))}`}
+                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedDetail.hotel.name + " " + (selectedDetail.hotel.neighborhood || ""))}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="block"
@@ -772,7 +654,33 @@ export default function Itinerary() {
                       </Button>
                     </a>
 
-
+                    {/* Alternatives for Accommodations */}
+                    {selectedDetail.hotel.alternatives && selectedDetail.hotel.alternatives.length > 0 && (
+                      <div className="pt-4 border-t border-zinc-800 space-y-3">
+                        <h5 className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+                          <Sparkles className="size-3.5 text-amber-400 animate-pulse" />
+                          Alternative Accommodations
+                        </h5>
+                        <div className="space-y-2.5">
+                          {selectedDetail.hotel.alternatives.map((alt: any, idx: number) => (
+                            <div key={idx} className="bg-zinc-950/60 border border-zinc-850 p-3.5 rounded-xl flex flex-col gap-2">
+                              <div>
+                                <p className="text-xs font-bold text-white leading-tight">{alt.name}</p>
+                                <p className="text-[10px] text-zinc-500 mt-0.5">{alt.neighborhood}</p>
+                                <p className="text-[10px] text-zinc-400 mt-1.5 leading-relaxed">{alt.reasoning}</p>
+                              </div>
+                              <Button
+                                size="sm"
+                                className="w-full bg-emerald-500 hover:bg-emerald-600 text-zinc-950 text-[10px] font-extrabold h-8 rounded-lg flex items-center justify-center gap-1"
+                                onClick={() => handleSwapHotel(idx)}
+                              >
+                                Swap Hotel
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-6">
@@ -792,24 +700,56 @@ export default function Itinerary() {
                           <span className="leading-relaxed">{selectedDetail.activity.travelTimeFromPrevious}</span>
                         </div>
                       )}
-                      <h4 className="font-bold text-xl text-white mb-2">{selectedDetail.activity.title}</h4>
-                      <p className="text-xs text-zinc-500 mb-4 flex items-center gap-1.5">
-                        <span className="inline-block size-2 rounded-full bg-blue-500" />
-                        {selectedDetail.activity.location}
-                      </p>
+                      <h4 className="font-bold text-xl text-white mb-2">
+                        {selectedDetail.activity.title || (selectedDetail.activity.category === 'rest' ? 'Rest & Relaxation' : selectedDetail.activity.category === 'food' ? 'Dining Stop' : 'Activity Stop')}
+                      </h4>
+                      {selectedDetail.activity.location && (
+                        <p className="text-xs text-zinc-550 mb-4 flex items-center gap-1.5">
+                          <span className="inline-block size-2 rounded-full bg-blue-500" />
+                          {selectedDetail.activity.location}
+                        </p>
+                      )}
                       <div className="text-sm text-zinc-400 leading-relaxed bg-zinc-950/40 p-4 rounded-xl border border-zinc-850">
                         <span className="text-xs font-bold text-blue-400 block mb-1">DESCRIPTION</span>
                         {selectedDetail.activity.description}
                       </div>
                     </div>
 
-                    <Button
-                      className="w-full bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700"
-                      onClick={() => handleViewOnMap(selectedDetail.activity)}
-                    >
-                      More Information
-                      <MapPin className="ml-2 size-4" />
-                    </Button>
+                    <div className="flex flex-col gap-2">
+                      <Button
+                        className="w-full bg-zinc-850 hover:bg-zinc-800 text-white border border-zinc-800"
+                        onClick={() => handleViewOnMap(selectedDetail.activity)}
+                      >
+                        View on Internal Map
+                        <Map className="ml-2 size-4 text-emerald-400" />
+                      </Button>
+
+                      {selectedDetail.activity.place?.mapsUrl ? (
+                        <a
+                          href={selectedDetail.activity.place.mapsUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block w-full"
+                        >
+                          <Button className="w-full bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700">
+                            Open in Google Maps
+                            <ExternalLink className="ml-2 size-4 text-blue-400" />
+                          </Button>
+                        </a>
+                      ) : (
+                        <a
+                          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((selectedDetail.activity.title || 'Activity Stop') + " " + (selectedDetail.activity.location || ""))}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block w-full"
+                        >
+                          <Button className="w-full bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700">
+                            Open in Google Maps (Search)
+                            <ExternalLink className="ml-2 size-4 text-zinc-400" />
+                          </Button>
+                        </a>
+                      )}
+                    </div>
 
                     {/* Alternatives for Dynamic Replanning */}
                     {selectedDetail.activity.alternatives && selectedDetail.activity.alternatives.length > 0 && (
@@ -896,10 +836,6 @@ export default function Itinerary() {
             region={itinerary.plan.region}
             logisticsGuide={(itinerary as any).logisticsGuide}
           />
-        )}
-
-        {activeTab === 'budget' && (
-          <BudgetTab itinerary={itinerary} />
         )}
 
         {activeTab === 'safety' && (

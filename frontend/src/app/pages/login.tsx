@@ -72,13 +72,7 @@ export default function Login() {
     }
   };
 
-  const handleDemoLogin = () => {
-    setLoading(true);
-    localStorage.setItem('isDemoMode', 'true');
-    localStorage.setItem('userId', 'demo-user-12345');
-    navigate('/');
-    setLoading(false);
-  };
+
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center p-4 relative overflow-hidden">
@@ -177,17 +171,6 @@ export default function Login() {
         >
           <Chrome className="size-4 text-emerald-400" />
           Continue with Google
-        </Button>
-
-        {/* Demo Bypass Button */}
-        <Button
-          type="button"
-          onClick={handleDemoLogin}
-          disabled={loading}
-          className="w-full bg-emerald-600/10 border border-emerald-500/20 hover:bg-emerald-600/20 text-emerald-400 rounded-2xl py-6 font-semibold flex items-center justify-center gap-3 transition-all"
-        >
-          <Sparkles className="size-4" />
-          Test with Demo Account (Bypass)
         </Button>
 
         {/* Toggle Sign In / Sign Up */}

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { DayItinerary, ItineraryActivity, TravelPlan } from '../types/travel';
 import { fetchSpontaneousBackup } from '../utils/generate-itinerary';
 import { Card, CardContent } from './ui/card';
@@ -27,6 +27,17 @@ interface MapTabProps {
 
 export function MapTab({ days, plan, selectedActivity, onActivitySelect, onBack, onReplaceActivity }: MapTabProps) {
   const allActivities = days.flatMap(d => d.activities);
+
+  const hotelName = useMemo(() => {
+    try {
+      const data = sessionStorage.getItem("generatedItinerary");
+      if (data) {
+        const parsed = JSON.parse(data);
+        return parsed.hotelRecommendation?.name || "Hotel";
+      }
+    } catch (_) { }
+    return "Hotel";
+  }, []);
 
   const [nearbyPlaces, setNearbyPlaces] = useState<NearbyPlace[]>([]);
   const [isLoadingNearby, setIsLoadingNearby] = useState(false);
@@ -127,12 +138,15 @@ export function MapTab({ days, plan, selectedActivity, onActivitySelect, onBack,
   const hasSelectedCoords = selectedActivity?.place?.lat && selectedActivity?.place?.lng;
   const hasPrevCoords = previousActivity?.place?.lat && previousActivity?.place?.lng;
 
-  const mapQuery = hasSelectedCoords
-    ? `${selectedActivity.place!.lat},${selectedActivity.place!.lng}`
-    : encodeURIComponent(selectedActivity?.location || selectedActivity?.title || days[0]?.activities[0]?.location || 'Paris, France');
+  const mapQuery = encodeURIComponent(
+    (selectedActivity?.location && selectedActivity?.title)
+      ? `${selectedActivity.title} ${selectedActivity.location}`
+      : (selectedActivity?.location || selectedActivity?.title || 'Paris, France')
+  );
 
-  const mapUrl = `https://maps.google.com/maps?q=${mapQuery}&t=&z=16&ie=UTF8&iwloc=&output=embed`;
-
+  const mapUrl = hasSelectedCoords
+    ? `https://maps.google.com/maps?q=${selectedActivity.place!.lat},${selectedActivity.place!.lng}+(${encodeURIComponent(selectedActivity.title || 'Location')})&t=&z=16&ie=UTF8&iwloc=&output=embed`
+    : `https://maps.google.com/maps?q=${mapQuery}&t=&z=14&ie=UTF8&iwloc=&output=embed`;
   // Fetch nearby places when selected activity changes
   useEffect(() => {
     if (!selectedActivity?.place?.lat || !selectedActivity?.place?.lng) {
@@ -199,22 +213,20 @@ export function MapTab({ days, plan, selectedActivity, onActivitySelect, onBack,
 
                   <p className="text-zinc-400 text-sm mb-6">{selectedActivity.location}</p>
 
-                  {previousActivity && (
-                    <div className="bg-zinc-950 p-4 rounded-lg mb-6 border border-zinc-800">
-                      <div className="text-xs text-zinc-500 mb-2 font-medium uppercase tracking-wider">Route Info</div>
-                      <div className="flex items-center gap-3 text-sm text-zinc-300">
-                        <div className="flex flex-col items-center gap-1">
-                          <div className="w-2 h-2 rounded-full bg-zinc-600"></div>
-                          <div className="w-0.5 h-6 bg-zinc-700"></div>
-                          <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-                        </div>
-                        <div className="flex flex-col gap-3">
-                          <div>From {previousActivity.title}</div>
-                          <div>To {selectedActivity.title}</div>
-                        </div>
+                  <div className="bg-zinc-950 p-4 rounded-lg mb-6 border border-zinc-800">
+                    <div className="text-xs text-zinc-500 mb-2 font-medium uppercase tracking-wider">Route Info</div>
+                    <div className="flex items-center gap-3 text-sm text-zinc-300">
+                      <div className="flex flex-col items-center gap-1">
+                        <div className="w-2 h-2 rounded-full bg-zinc-600"></div>
+                        <div className="w-0.5 h-6 bg-zinc-700"></div>
+                        <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                      </div>
+                      <div className="flex flex-col gap-3">
+                        <div>From {previousActivity ? (previousActivity.title || "Activity Stop") : hotelName}</div>
+                        <div>To {selectedActivity.title || "Activity Stop"}</div>
                       </div>
                     </div>
-                  )}
+                  </div>
 
                   <Button
                     className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
@@ -304,18 +316,17 @@ export function MapTab({ days, plan, selectedActivity, onActivitySelect, onBack,
                           <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
                             <div>
                               <div className="flex items-start justify-between gap-1.5">
-                                <h5 
+                                <h5
                                   className="text-xs font-semibold text-white truncate hover:text-emerald-400 cursor-pointer transition-colors"
-                                  onClick={() => window.open(`https://www.google.com/maps/place/?q=place_id:${place.placeId}`, '_blank')}
+                                  onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.name + " " + place.vicinity)}&query_place_id=${place.placeId}`, '_blank')}
                                 >
                                   {place.name}
                                 </h5>
-                                <ExternalLink 
-                                  className="size-3 text-zinc-600 shrink-0 cursor-pointer hover:text-zinc-355 transition-colors" 
-                                  onClick={() => window.open(`https://www.google.com/maps/place/?q=place_id:${place.placeId}`, '_blank')}
-                                />
+                                <ExternalLink
+                                  className="size-3 text-zinc-600 shrink-0 cursor-pointer hover:text-zinc-355 transition-colors"
+                                  onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.name + " " + place.vicinity)}&query_place_id=${place.placeId}`, '_blank')} />
                               </div>
-                              <p className="text-[10px] text-zinc-500 truncate mt-0.5">{place.vicinity}</p>
+                              <p className="text-[10px] text-zinc-550 truncate mt-0.5">{place.vicinity}</p>
                             </div>
                             <div className="flex items-center gap-2 mt-1.5">
                               {place.rating && (
@@ -350,7 +361,7 @@ export function MapTab({ days, plan, selectedActivity, onActivitySelect, onBack,
                                 address: place.vicinity,
                                 lat: selectedActivity.place?.lat || 0,
                                 lng: selectedActivity.place?.lng || 0,
-                                mapsUrl: `https://www.google.com/maps/place/?q=place_id:${place.placeId}`
+                                mapsUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.name + " " + place.vicinity)}&query_place_id=${place.placeId}`
                               }
                             })}
                           >
@@ -446,6 +457,6 @@ export function MapTab({ days, plan, selectedActivity, onActivitySelect, onBack,
           </div>
         </div>
       </div>
-    </div>
+    </div >
   );
 }

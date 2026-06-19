@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Card, CardContent } from './ui/card';
 import { Button } from './ui/button';
-import { Plane, ExternalLink, Settings2, MapPin } from 'lucide-react';
+import { Plane, Train, Bus, ExternalLink, Settings2, MapPin } from 'lucide-react';
 import { GeneratedItinerary } from '../types/travel';
 
 interface FlightsTabProps {
@@ -11,6 +11,7 @@ interface FlightsTabProps {
 export function FlightsTab({ itinerary }: FlightsTabProps) {
   const [origin, setOrigin] = useState("San Francisco (SFO)");
   const [flightClass, setFlightClass] = useState("Economy");
+  const [activeSubTab, setActiveSubTab] = useState<'flights' | 'trains' | 'buses'>('flights');
 
   const region = itinerary.plan.region;
   const depDate = itinerary.plan.arrivalDate;
@@ -27,52 +28,142 @@ export function FlightsTab({ itinerary }: FlightsTabProps) {
 
   return (
     <div className="flex gap-6 max-w-5xl mx-auto h-[calc(100vh-2rem)]">
-      {/* Main Flights Search Panel */}
+      {/* Main Flights & Transit Search Panel */}
       <div className="flex-1 flex flex-col justify-center items-center">
         <Card className="bg-zinc-900 border-zinc-800 text-white w-full max-w-md">
           <CardContent className="p-8 text-center flex flex-col items-center">
-            <Plane className="mx-auto mb-4 text-emerald-400 size-12" />
-
-            <h3 className="text-xl font-semibold mb-3 text-white">
-              Find Live Flights
-            </h3>
-
-            <p className="text-zinc-400 text-sm mb-6 leading-relaxed">
-              Flight prices change constantly. Search live flight deals from <span className="text-emerald-400 font-medium">{origin}</span> to <span className="text-emerald-400 font-medium">{cleanDestination}</span> using trusted booking platforms:
-            </p>
-
-            <div className="flex flex-col gap-3 w-full">
-              <Button
-                className="bg-emerald-600 hover:bg-emerald-700 text-zinc-950 font-bold py-6 flex items-center justify-center gap-2 w-full"
-                onClick={() => window.open(getGoogleFlightsUrl(), '_blank')}
+            {/* Sub-tab Selection */}
+            <div className="flex gap-1.5 p-1 bg-zinc-950 rounded-xl mb-6 w-full border border-zinc-850">
+              <button
+                onClick={() => setActiveSubTab('flights')}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold transition-all ${
+                  activeSubTab === 'flights'
+                    ? 'bg-emerald-600/10 text-emerald-400 border border-emerald-500/20'
+                    : 'text-zinc-400 hover:text-zinc-200 border border-transparent'
+                }`}
               >
-                Google Flights <ExternalLink className="size-4" />
-              </Button>
-
-              <Button
-                className="bg-emerald-600 hover:bg-emerald-700 text-zinc-950 font-bold py-6 flex items-center justify-center gap-2 w-full"
-                onClick={() =>
-                  window.open(
-                    `https://www.expedia.com/Flights`,
-                    '_blank'
-                  )
-                }
+                <Plane className="size-3.5" /> Flights
+              </button>
+              <button
+                onClick={() => setActiveSubTab('trains')}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold transition-all ${
+                  activeSubTab === 'trains'
+                    ? 'bg-emerald-600/10 text-emerald-400 border border-emerald-500/20'
+                    : 'text-zinc-400 hover:text-zinc-200 border border-transparent'
+                }`}
               >
-                Expedia <ExternalLink className="size-4" />
-              </Button>
-
-              <Button
-                className="bg-emerald-600 hover:bg-emerald-700 text-zinc-950 font-bold py-6 flex items-center justify-center gap-2 w-full"
-                onClick={() =>
-                  window.open(
-                    `https://www.skyscanner.com`,
-                    '_blank'
-                  )
-                }
+                <Train className="size-3.5" /> Trains
+              </button>
+              <button
+                onClick={() => setActiveSubTab('buses')}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold transition-all ${
+                  activeSubTab === 'buses'
+                    ? 'bg-emerald-600/10 text-emerald-400 border border-emerald-500/20'
+                    : 'text-zinc-400 hover:text-zinc-200 border border-transparent'
+                }`}
               >
-                Skyscanner <ExternalLink className="size-4" />
-              </Button>
+                <Bus className="size-3.5" /> Buses
+              </button>
             </div>
+
+            {activeSubTab === 'flights' && (
+              <>
+                <Plane className="mx-auto mb-4 text-emerald-400 size-12" />
+                <h3 className="text-xl font-semibold mb-3 text-white">Find Live Flights</h3>
+                <p className="text-zinc-400 text-sm mb-6 leading-relaxed">
+                  Search live flight deals from <span className="text-emerald-400 font-medium">{origin}</span> to <span className="text-emerald-400 font-medium">{cleanDestination}</span> using trusted booking platforms:
+                </p>
+
+                <div className="flex flex-col gap-3 w-full">
+                  <Button
+                    className="bg-emerald-600 hover:bg-emerald-700 text-zinc-950 font-bold py-6 flex items-center justify-center gap-2 w-full animate-fade-in"
+                    onClick={() => window.open(getGoogleFlightsUrl(), '_blank')}
+                  >
+                    Google Flights <ExternalLink className="size-4" />
+                  </Button>
+
+                  <Button
+                    className="bg-emerald-600 hover:bg-emerald-700 text-zinc-950 font-bold py-6 flex items-center justify-center gap-2 w-full"
+                    onClick={() => window.open(`https://www.expedia.com/Flights`, '_blank')}
+                  >
+                    Expedia <ExternalLink className="size-4" />
+                  </Button>
+
+                  <Button
+                    className="bg-emerald-600 hover:bg-emerald-700 text-zinc-950 font-bold py-6 flex items-center justify-center gap-2 w-full"
+                    onClick={() => window.open(`https://www.booking.com/flights/index.html?origin=${encodeURIComponent(origin)}&dest=${encodeURIComponent(cleanDestination)}`, '_blank')}
+                  >
+                    Booking.com Flights <ExternalLink className="size-4" />
+                  </Button>
+
+                  <Button
+                    className="bg-emerald-600 hover:bg-emerald-700 text-zinc-950 font-bold py-6 flex items-center justify-center gap-2 w-full"
+                    onClick={() => window.open(`https://www.skyscanner.com`, '_blank')}
+                  >
+                    Skyscanner <ExternalLink className="size-4" />
+                  </Button>
+                </div>
+              </>
+            )}
+
+            {activeSubTab === 'trains' && (
+              <>
+                <Train className="mx-auto mb-4 text-emerald-400 size-12" />
+                <h3 className="text-xl font-semibold mb-3 text-white">Find Train Routes</h3>
+                <p className="text-zinc-400 text-sm mb-6 leading-relaxed">
+                  Search train timetables and tickets to travel easily from <span className="text-emerald-400 font-medium">{origin}</span> to <span className="text-emerald-400 font-medium">{cleanDestination}</span>:
+                </p>
+
+                <div className="flex flex-col gap-3 w-full">
+                  <Button
+                    className="bg-emerald-600 hover:bg-emerald-700 text-zinc-950 font-bold py-6 flex items-center justify-center gap-2 w-full"
+                    onClick={() => window.open(`https://www.thetrainline.com/`, '_blank')}
+                  >
+                    Trainline <ExternalLink className="size-4" />
+                  </Button>
+
+                  <Button
+                    className="bg-emerald-600 hover:bg-emerald-700 text-zinc-950 font-bold py-6 flex items-center justify-center gap-2 w-full"
+                    onClick={() => window.open(`https://www.omio.com/`, '_blank')}
+                  >
+                    Omio Trains <ExternalLink className="size-4" />
+                  </Button>
+
+                  <Button
+                    className="bg-emerald-600 hover:bg-emerald-700 text-zinc-950 font-bold py-6 flex items-center justify-center gap-2 w-full"
+                    onClick={() => window.open(`https://www.rome2rio.com/s/${encodeURIComponent(origin)}/${encodeURIComponent(cleanDestination)}`, '_blank')}
+                  >
+                    Rome2Rio Routes <ExternalLink className="size-4" />
+                  </Button>
+                </div>
+              </>
+            )}
+
+            {activeSubTab === 'buses' && (
+              <>
+                <Bus className="mx-auto mb-4 text-emerald-400 size-12" />
+                <h3 className="text-xl font-semibold mb-3 text-white">Find Bus Timetables</h3>
+                <p className="text-zinc-400 text-sm mb-6 leading-relaxed">
+                  Plan your long-distance bus commutes between <span className="text-emerald-400 font-medium">{origin}</span> and <span className="text-emerald-400 font-medium">{cleanDestination}</span>:
+                </p>
+
+                <div className="flex flex-col gap-3 w-full">
+                  <Button
+                    className="bg-emerald-600 hover:bg-emerald-700 text-zinc-950 font-bold py-6 flex items-center justify-center gap-2 w-full"
+                    onClick={() => window.open(`https://www.busbud.com/`, '_blank')}
+                  >
+                    Busbud <ExternalLink className="size-4" />
+                  </Button>
+
+                  <Button
+                    className="bg-emerald-600 hover:bg-emerald-700 text-zinc-950 font-bold py-6 flex items-center justify-center gap-2 w-full"
+                    onClick={() => window.open(`https://www.flixbus.com/`, '_blank')}
+                  >
+                    Flixbus <ExternalLink className="size-4" />
+                  </Button>
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>

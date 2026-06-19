@@ -1,10 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import { Button } from '../components/ui/button';
 import { Calendar, Map, Plane, MessageSquare, Briefcase, CloudSun, Sparkles, Send, MoreHorizontal, User as UserIcon } from 'lucide-react';
 import { TravelPlan } from '../types/travel';
 import { generateItinerary } from '../utils/generate-itinerary';
-import { FlightsTab } from '../components/flights-tab';
 import { supabase } from '../utils/supabaseClient';
 import { User } from '@supabase/supabase-js';
 
@@ -21,12 +20,6 @@ export default function Home() {
 
   useEffect(() => {
     const checkUser = async () => {
-      const isDemoMode = localStorage.getItem('isDemoMode') === 'true';
-      if (isDemoMode) {
-        setUser({ id: 'demo-user-12345', email: 'demo@jourzy.com' } as any);
-        return;
-      }
-
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         navigate('/login');
@@ -40,9 +33,6 @@ export default function Home() {
     checkUser();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      const isDemoMode = localStorage.getItem('isDemoMode') === 'true';
-      if (isDemoMode) return;
-
       if (!session) {
         navigate('/login');
       } else {
@@ -113,22 +103,31 @@ export default function Home() {
     }
   };
 
-  const [activeView, setActiveView] = useState<'chat' | 'flights'>('chat');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeView = searchParams.get('view') || 'chat';
+
+  // Profile preferences states
+  const [travelPersonaArchetype, setTravelPersonaArchetype] = useState<string[]>([]);
+  const [vibeSettings, setVibeSettings] = useState<string[]>([]);
+  const [foodPreferences, setFoodPreferences] = useState<string[]>([]);
+  const [environmentPriorities, setEnvironmentPriorities] = useState<string[]>([]);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+
   const [messages, setMessages] = useState<Message[]>(() => {
     const saved = sessionStorage.getItem('chatMessages');
     return saved ? JSON.parse(saved) : [
       {
         id: '1',
         role: 'ai',
-        text: "Hi! I'm JourZy, your AI travel assistant! I want to plan the perfect trip tailored exactly to your vibe. 🌍\n\nBefore we pick a location, tell me a bit about your travel persona! (e.g. Are you an adventurous hiker, a luxury foodie, a budget backpacker, or a museum lover?)",
-        step: 'welcome'
+        text: "Hi! I'm JourZy, your AI travel assistant! I want to plan the perfect trip tailored exactly to your vibe. 🌍\n\nYou can set up your style and preferences in the 'My Travel Profile' tab on the left, or just tell me here! Where would you like to go first? (e.g., \"Paris, France\" or \"Tokyo, Japan\")",
+        step: 'destination'
       }
     ];
   });
 
   const [currentStep, setCurrentStep] = useState<'persona' | 'destination' | 'dates' | 'chatting' | 'generating'>(() => {
     const saved = sessionStorage.getItem('chatStep');
-    const step = saved ? JSON.parse(saved) : 'chatting';
+    const step = saved ? JSON.parse(saved) : 'destination';
     // If they navigated back after generating, reset to chatting so the input box works
     return step === 'generating' ? 'chatting' : step;
   });
@@ -139,6 +138,94 @@ export default function Home() {
   });
 
   const [isThinking, setIsThinking] = useState(false);
+
+  // Load User Preferences on page mount
+  useEffect(() => {
+    if (user?.id) {
+      const fetchProfile = async () => {
+        try {
+          const API_BASE = import.meta.env.VITE_API_URL || "";
+          const resp = await fetch(`${API_BASE}/api/memory?userId=${user.id}`);
+          if (resp.ok) {
+            const data = await resp.json();
+            if (data?.memory?.preferences) {
+              const prefs = data.memory.preferences;
+              setTravelPersonaArchetype(prefs.travelPersonaArchetype || []);
+              setVibeSettings(prefs.vibeSettings || []);
+              setFoodPreferences(prefs.foodPreferences || []);
+              setEnvironmentPriorities(prefs.environmentPriorities || []);
+              
+              // If we have profile preferences, skip welcome and go straight to destination
+              const hasConfigured = (prefs.travelPersonaArchetype?.length > 0 || prefs.vibeSettings?.length > 0);
+              if (hasConfigured && messages.length <= 1) {
+                const archetypesText = prefs.travelPersonaArchetype.join(', ');
+                const initialMsg: Message = {
+                  id: '1',
+                  role: 'ai',
+                  text: `Hi! I'm JourZy, your AI travel assistant! I've loaded your travel profile preferences (${archetypesText}) in the background. 🌍\n\nWhere would you like to go? (e.g., "Paris, France" or "Tokyo, Japan")`,
+                  step: 'destination'
+                };
+                setMessages([initialMsg]);
+                setCurrentStep('destination');
+              }
+            }
+          }
+        } catch (e) {
+          console.error("Failed to load user profile:", e);
+        }
+      };
+      fetchProfile();
+    }
+  }, [user]);
+
+  // Handle Save Profile Settings to Supabase and keep it backward-compatible
+  const handleSaveProfile = async () => {
+    if (!user?.id) return;
+    setIsSavingProfile(true);
+    
+    const loves = [
+      ...travelPersonaArchetype.map(a => `Archetype: ${a}`),
+      ...vibeSettings.map(v => `Vibe: ${v}`),
+      ...foodPreferences.map(f => `Food: ${f}`),
+      ...environmentPriorities.map(e => `Environment: ${e}`)
+    ];
+    
+    const notes = `User prefers: Archetype: ${travelPersonaArchetype.join(', ')}. Vibes: ${vibeSettings.join(', ')}. Food: ${foodPreferences.join(', ')}. Environment: ${environmentPriorities.join(', ')}.`;
+    
+    const preferences = {
+      travelPersonaArchetype,
+      vibeSettings,
+      foodPreferences,
+      environmentPriorities,
+      loves,
+      dislikes: [],
+      transportPreferences: [],
+      accommodationStyle: travelPersonaArchetype.includes("🏨 Luxury") ? "Luxury accommodation" : "Standard style",
+      notes
+    };
+
+    try {
+      const API_BASE = import.meta.env.VITE_API_URL || "";
+      const resp = await fetch(`${API_BASE}/api/memory`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: user.id,
+          preferences
+        })
+      });
+      if (resp.ok) {
+        alert("Travel Profile saved successfully!");
+      } else {
+        alert("Failed to save profile.");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Error saving profile.");
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
 
   useEffect(() => {
     sessionStorage.setItem('chatMessages', JSON.stringify(messages));
@@ -339,10 +426,10 @@ export default function Home() {
       <aside className="w-64 bg-zinc-900 border-r border-zinc-800 flex flex-col fixed inset-y-0 z-10">
         <div className="p-6 border-b border-zinc-800">
           <div className="flex items-center gap-2 font-bold text-xl mb-1 text-white">
-            <Sparkles className="size-5" />
+            <Sparkles className="size-5 text-emerald-400 animate-pulse" />
             JourZy
           </div>
-          <div className="text-zinc-500 text-sm">Your AI travel assistant</div>
+          <div className="text-zinc-500 text-xs">Your AI travel assistant</div>
         </div>
 
         <nav className="flex-1 p-4 space-y-6 overflow-y-auto">
@@ -351,47 +438,26 @@ export default function Home() {
             <ul className="space-y-1">
               <li>
                 <button
-                  onClick={() => setActiveView('chat')}
-                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${activeView === 'chat' ? 'bg-zinc-800 border-l-2 border-emerald-500 text-white' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'}`}
+                  onClick={() => setSearchParams({ view: 'chat' })}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+                    activeView === 'chat'
+                      ? 'bg-zinc-800 border-l-2 border-emerald-500 text-white font-bold'
+                      : 'text-zinc-400 hover:text-zinc-250 hover:bg-zinc-800/50'
+                  }`}
                 >
-                  <MessageSquare className="size-4" /> Plan with AI
-                </button>
-              </li>
-              <li>
-                <button onClick={() => navigate('/itinerary')} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 transition-colors">
-                  <Calendar className="size-4" /> My Schedule
-                </button>
-              </li>
-              <li>
-                <button onClick={() => {
-                  const saved = sessionStorage.getItem('generatedItinerary');
-                  if (saved) {
-                    navigate('/itinerary?tab=packing');
-                  } else {
-                    alert("Please complete the AI planning first to generate a packing list!");
-                  }
-                }} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 transition-colors">
-                  <Briefcase className="size-4" /> Packing List
-                </button>
-              </li>
-              <li>
-                <button onClick={() => {
-                  const saved = sessionStorage.getItem('generatedItinerary');
-                  if (saved) {
-                    navigate('/itinerary?tab=weather');
-                  } else {
-                    alert("Please complete the AI planning first to view weather forecasts!");
-                  }
-                }} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 transition-colors">
-                  <CloudSun className="size-4" /> Weather
+                  <MessageSquare className="size-4 text-emerald-400" /> Plan with AI
                 </button>
               </li>
               <li>
                 <button
-                  onClick={() => setActiveView('flights')}
-                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${activeView === 'flights' ? 'bg-zinc-800 border-l-2 border-emerald-500 text-white' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'}`}
+                  onClick={() => setSearchParams({ view: 'profile' })}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+                    activeView === 'profile'
+                      ? 'bg-zinc-800 border-l-2 border-emerald-500 text-white font-bold'
+                      : 'text-zinc-400 hover:text-zinc-250 hover:bg-zinc-800/50'
+                  }`}
                 >
-                  <Plane className="size-4" /> Flights
+                  <UserIcon className="size-4 text-emerald-400" /> My Travel Profile
                 </button>
               </li>
             </ul>
@@ -399,7 +465,9 @@ export default function Home() {
 
           {user && (
             <div className="pt-4 border-t border-zinc-800">
-              <div className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3 px-2">Saved Trips</div>
+              <div className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3 px-2 flex items-center gap-1.5">
+                <Calendar className="size-3 text-zinc-500" /> Saved Trips
+              </div>
               {savedTrips.length === 0 ? (
                 <div className="text-xs text-zinc-500 px-2 italic">No saved trips yet</div>
               ) : (
@@ -411,7 +479,7 @@ export default function Home() {
                         className="w-full text-left px-2 py-1.5 rounded-lg text-xs font-medium text-zinc-400 hover:bg-zinc-800/50 hover:text-white transition-colors truncate flex justify-between items-center group"
                       >
                         <span className="truncate flex-1 pr-2">{trip.region}</span>
-                        <span className="text-[10px] text-zinc-650 group-hover:text-zinc-400 shrink-0">
+                        <span className="text-[10px] text-zinc-650 group-hover:text-zinc-450 shrink-0">
                           {new Date(trip.arrival_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                         </span>
                       </button>
@@ -607,31 +675,154 @@ export default function Home() {
             </div>
           </>
         ) : (
-          <div className="p-8 flex-1 overflow-y-auto flex flex-col">
-            <div className="mb-6 flex items-center justify-between">
+          <div className="flex-1 overflow-y-auto p-8 pb-32">
+            <div className="max-w-3xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
               <div>
-                <h2 className="text-2xl font-bold text-white">Flight Search</h2>
+                <h2 className="text-3xl font-extrabold text-white mb-2">My Travel Profile</h2>
                 <p className="text-zinc-400 text-sm">
-                  Search flight deals to <span className="text-emerald-400 font-semibold">{plan.region || "your destination"}</span>
+                  Configure your style and vibe preferences once. The AI agent will ingest these details quietly in the background to build your tailor-made itineraries.
                 </p>
               </div>
-              <Button
-                onClick={() => setActiveView('chat')}
-                className="bg-zinc-800 hover:bg-zinc-750 text-white border border-zinc-700"
-              >
-                Back to Chat Planning
-              </Button>
-            </div>
-            <div className="flex-1">
-              <FlightsTab
-                itinerary={{
-                  plan: {
-                    region: plan.region || "San Jose",
-                    arrivalDate: plan.arrivalDate || new Date(),
-                    leaveDate: plan.leaveDate || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
-                  }
-                } as any}
-              />
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Archetype Section */}
+                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 space-y-4 shadow-xl">
+                  <h3 className="text-sm font-bold text-zinc-300 uppercase tracking-wider flex items-center gap-2">
+                    <span>🎒</span> Travel Persona Archetype
+                  </h3>
+                  <p className="text-xs text-zinc-500 leading-relaxed">Select your core travel pacing and accommodation budget style.</p>
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {["🎒 Backpacker", "🏨 Luxury", "🌿 Slow Travel", "⚡ Action-Packed"].map(arch => {
+                      const isSelected = travelPersonaArchetype.includes(arch);
+                      return (
+                        <button
+                          key={arch}
+                          onClick={() => {
+                            if (isSelected) {
+                              setTravelPersonaArchetype(travelPersonaArchetype.filter(x => x !== arch));
+                            } else {
+                              setTravelPersonaArchetype([...travelPersonaArchetype, arch]);
+                            }
+                          }}
+                          className={`px-4 py-2 rounded-xl border text-xs font-semibold transition-all ${
+                            isSelected
+                              ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400 shadow-md shadow-emerald-500/5'
+                              : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200'
+                          }`}
+                        >
+                          {arch}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Vibe Section */}
+                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 space-y-4 shadow-xl">
+                  <h3 className="text-sm font-bold text-zinc-300 uppercase tracking-wider flex items-center gap-2">
+                    <span>✨</span> Vibe Settings
+                  </h3>
+                  <p className="text-xs text-zinc-500 leading-relaxed">What kind of experiences are you looking to highlight?</p>
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {["📸 Viral Instagram Spots", "🗺️ Local Secrets", "🪵 Minimalist/Quiet"].map(vibe => {
+                      const isSelected = vibeSettings.includes(vibe);
+                      return (
+                        <button
+                          key={vibe}
+                          onClick={() => {
+                            if (isSelected) {
+                              setVibeSettings(vibeSettings.filter(x => x !== vibe));
+                            } else {
+                              setVibeSettings([...vibeSettings, vibe]);
+                            }
+                          }}
+                          className={`px-4 py-2 rounded-xl border text-xs font-semibold transition-all ${
+                            isSelected
+                              ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400 shadow-md shadow-emerald-500/5'
+                              : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200'
+                          }`}
+                        >
+                          {vibe}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Food Section */}
+                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 space-y-4 shadow-xl">
+                  <h3 className="text-sm font-bold text-zinc-300 uppercase tracking-wider flex items-center gap-2">
+                    <span>🍜</span> Food Preferences
+                  </h3>
+                  <p className="text-xs text-zinc-500 leading-relaxed">Pick your favorite dining experiences and culinary preferences.</p>
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {["🍜 Street Food", "🍽️ Fine Dining", "☕ Aesthetic Cafes"].map(food => {
+                      const isSelected = foodPreferences.includes(food);
+                      return (
+                        <button
+                          key={food}
+                          onClick={() => {
+                            if (isSelected) {
+                              setFoodPreferences(foodPreferences.filter(x => x !== food));
+                            } else {
+                              setFoodPreferences([...foodPreferences, food]);
+                            }
+                          }}
+                          className={`px-4 py-2 rounded-xl border text-xs font-semibold transition-all ${
+                            isSelected
+                              ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400 shadow-md shadow-emerald-500/5'
+                              : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200'
+                          }`}
+                        >
+                          {food}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Environment Section */}
+                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 space-y-4 shadow-xl">
+                  <h3 className="text-sm font-bold text-zinc-300 uppercase tracking-wider flex items-center gap-2">
+                    <span>🌲</span> Environment Priorities
+                  </h3>
+                  <p className="text-xs text-zinc-500 leading-relaxed">Which types of terrain and surroundings do you prefer?</p>
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {["🏙️ Bustling Downtown", "🌲 Nature/Hiking", "🌊 Coastal/Beach"].map(env => {
+                      const isSelected = environmentPriorities.includes(env);
+                      return (
+                        <button
+                          key={env}
+                          onClick={() => {
+                            if (isSelected) {
+                              setEnvironmentPriorities(environmentPriorities.filter(x => x !== env));
+                            } else {
+                              setEnvironmentPriorities([...environmentPriorities, env]);
+                            }
+                          }}
+                          className={`px-4 py-2 rounded-xl border text-xs font-semibold transition-all ${
+                            isSelected
+                              ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400 shadow-md shadow-emerald-500/5'
+                              : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200'
+                          }`}
+                        >
+                          {env}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-6 border-t border-zinc-800 flex justify-end">
+                <Button
+                  onClick={handleSaveProfile}
+                  disabled={isSavingProfile}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 py-3 rounded-xl shadow-lg transition-all"
+                >
+                  {isSavingProfile ? 'Saving Preferences...' : 'Save Profile Settings'}
+                </Button>
+              </div>
             </div>
           </div>
         )}

@@ -102,7 +102,9 @@ function ActivityCard({
                   <span className="leading-relaxed">{activity.travelTimeFromPrevious}</span>
                 </div>
               )}
-              <h4 className="font-semibold text-lg text-white">{activity.title}</h4>
+              <h4 className="font-semibold text-lg text-white">
+                {activity.title || (activity.category === 'rest' ? 'Rest & Relaxation' : activity.category === 'food' ? 'Dining Stop' : 'Activity Stop')}
+              </h4>
             </div>
             <Badge variant="outline" className={`${badgeClass} capitalize`}>
               {cat}
@@ -130,10 +132,14 @@ function ActivityCard({
           </div>
 
           <div className="flex items-center justify-between pt-4 border-t border-zinc-800">
-            <p className="text-xs text-zinc-500 flex items-center gap-1.5 truncate max-w-[70%]">
-              <span className="inline-block size-1.5 rounded-full bg-zinc-600 shrink-0" />
-              {activity.location}
-            </p>
+            {activity.location ? (
+              <p className="text-xs text-zinc-550 flex items-center gap-1.5 truncate max-w-[70%]">
+                <span className="inline-block size-1.5 rounded-full bg-zinc-600 shrink-0" />
+                {activity.location}
+              </p>
+            ) : (
+              <div />
+            )}
             <Button
               variant="ghost"
               size="sm"

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
-import { AlertTriangle, ShieldCheck, Globe, Wifi, Bus, UserCheck } from 'lucide-react';
+import { AlertTriangle, ShieldCheck, Globe, Wifi, Bus, UserCheck, Coins } from 'lucide-react';
 
 interface LogisticsGuide {
   connectivity: string;
@@ -13,6 +13,11 @@ interface TipsTabProps {
     culturalTips: string[];
     safetyTips: string[];
     customsRestrictions: string[];
+    budgetSummary?: {
+      totalEstimatedCost: number;
+      breakdown: string;
+      fitsStatedBudget: string;
+    };
   };
   region: string;
   logisticsGuide?: LogisticsGuide;
@@ -33,6 +38,29 @@ export const TipsTab: React.FC<TipsTabProps> = ({
           Essential travel rules, safety frameworks, and connectivity setups curated by JourZy for {region}.
         </p>
       </div>
+
+      {/* 🪙 Dynamic Budget Summary Card */}
+      {insights.budgetSummary && (
+        <Card className="bg-zinc-900 border-zinc-800 border-l-4 border-emerald-500 shadow-xl">
+          <CardHeader className="pb-2 flex flex-row items-center gap-2 space-y-0">
+            <Coins className="w-4 h-4 text-emerald-400" />
+            <CardTitle className="text-sm font-bold text-zinc-200 font-sans">Stated Budget Allocation & Breakdown</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <div className="flex items-baseline gap-2">
+              <span className="text-2xl font-extrabold text-emerald-400 font-sans">${insights.budgetSummary.totalEstimatedCost}</span>
+              <span className="text-xs text-zinc-500 font-medium">Estimated Total Cost</span>
+            </div>
+            <div className="text-xs text-zinc-350 leading-relaxed bg-zinc-950/60 p-3 rounded-lg border border-zinc-850">
+              <span className="text-zinc-500 font-bold uppercase tracking-wider block text-[10px] mb-1">Cost Breakdown</span>
+              {insights.budgetSummary.breakdown}
+            </div>
+            <p className="text-xs text-emerald-300 bg-emerald-950/30 border border-emerald-800/40 p-3 rounded-lg leading-relaxed">
+              ✨ <strong className="text-white">Status:</strong> {insights.budgetSummary.fitsStatedBudget}
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {/* 📱 NEW WORKFLOW: DAY ONE CONNECTIVITY & TRANSIT BLUEPRINTS */}
       {logisticsGuide && (
