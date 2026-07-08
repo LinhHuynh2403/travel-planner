@@ -20,18 +20,18 @@ function timeGreeting(): string {
 /* If the trip we were last chatting about has already ended, clear the
  * cached conversation so JourZy starts a fresh "plan a new trip" chat
  * instead of resuming a stale conversation about a completed trip. Must run
- * before the lazy useState initializers below read sessionStorage. */
+ * before the lazy useState initializers below read localStorage. */
 function clearStaleTripSession() {
-  const savedPlanRaw = sessionStorage.getItem('chatPlan');
+  const savedPlanRaw = localStorage.getItem('chatPlan');
   if (!savedPlanRaw) return;
   try {
     const savedPlan = JSON.parse(savedPlanRaw);
     if (savedPlan.leaveDate && new Date(savedPlan.leaveDate) < new Date()) {
-      sessionStorage.removeItem('chatMessages');
-      sessionStorage.removeItem('chatStep');
-      sessionStorage.removeItem('chatPlan');
-      sessionStorage.removeItem('travelPlan');
-      sessionStorage.removeItem('generatedItinerary');
+      localStorage.removeItem('chatMessages');
+      localStorage.removeItem('chatStep');
+      localStorage.removeItem('chatPlan');
+      localStorage.removeItem('travelPlan');
+      localStorage.removeItem('generatedItinerary');
     }
   } catch (e) {
     // ignore malformed cached plan
@@ -58,10 +58,10 @@ export default function Home() {
   // Whether this tab already had a chat in progress (page refresh / same
   // session) vs. a genuinely brand-new visit — decides whether we show the
   // name-ask / personalized-return greeting or leave an in-progress chat alone.
-  const isFreshSession = useRef(!sessionStorage.getItem('chatMessages'));
+  const isFreshSession = useRef(!localStorage.getItem('chatMessages'));
 
   const [messages, setMessages] = useState<Message[]>(() => {
-    const saved = sessionStorage.getItem('chatMessages');
+    const saved = localStorage.getItem('chatMessages');
     return saved ? JSON.parse(saved) : [
       {
         id: '1',
@@ -73,13 +73,13 @@ export default function Home() {
   });
 
   const [currentStep, setCurrentStep] = useState<'name' | 'persona' | 'destination' | 'dates' | 'chatting' | 'generating'>(() => {
-    const saved = sessionStorage.getItem('chatStep');
+    const saved = localStorage.getItem('chatStep');
     const step = saved ? JSON.parse(saved) : 'name';
     return step === 'generating' ? 'chatting' : step;
   });
 
   const [plan, setPlan] = useState<Partial<TravelPlan>>(() => {
-    const saved = sessionStorage.getItem('chatPlan');
+    const saved = localStorage.getItem('chatPlan');
     return saved ? JSON.parse(saved) : {};
   });
 
@@ -134,10 +134,10 @@ export default function Home() {
   }, [user]);
 
   // Clicking a saved trip previously just navigated to /itinerary, which
-  // reads whatever itinerary happens to already be cached in sessionStorage —
+  // reads whatever itinerary happens to already be cached in localStorage —
   // so every trip in the list opened the same (usually most-recently-
   // generated) plan instead of the one actually clicked. Fetch that trip's
-  // real saved itinerary first and load it into sessionStorage before navigating.
+  // real saved itinerary first and load it into localStorage before navigating.
   const openTrip = async (trip: any) => {
     setLoadingTripId(trip.id);
     try {
@@ -158,16 +158,16 @@ export default function Home() {
         hotelRecommendation: itinerary?.hotel_recommendation || undefined,
         insights: itinerary?.insights || undefined,
       };
-      sessionStorage.setItem('generatedItinerary', JSON.stringify(generated));
-      sessionStorage.setItem('travelPlan', JSON.stringify(generated.plan));
-      sessionStorage.setItem('viewingPastTrip', JSON.stringify(new Date(tripRow.leave_date) < new Date()));
+      localStorage.setItem('generatedItinerary', JSON.stringify(generated));
+      localStorage.setItem('travelPlan', JSON.stringify(generated.plan));
+      localStorage.setItem('viewingPastTrip', JSON.stringify(new Date(tripRow.leave_date) < new Date()));
       // Each trip needs its own chat transcript — but only reset it when
       // switching to a genuinely different trip than whatever is cached,
       // otherwise reopening the SAME trip (e.g. tab away and back) would
       // wipe out a chat that's still in progress for it.
-      if (sessionStorage.getItem('itineraryChatTripId') !== String(trip.id)) {
-        sessionStorage.removeItem('itineraryChatMessages');
-        sessionStorage.setItem('itineraryChatTripId', String(trip.id));
+      if (localStorage.getItem('itineraryChatTripId') !== String(trip.id)) {
+        localStorage.removeItem('itineraryChatMessages');
+        localStorage.setItem('itineraryChatTripId', String(trip.id));
       }
       navigate('/itinerary');
     } catch (e) {
@@ -217,9 +217,9 @@ export default function Home() {
   }, [user]);
 
   useEffect(() => {
-    sessionStorage.setItem('chatMessages', JSON.stringify(messages));
-    sessionStorage.setItem('chatStep', JSON.stringify(currentStep));
-    sessionStorage.setItem('chatPlan', JSON.stringify(plan));
+    localStorage.setItem('chatMessages', JSON.stringify(messages));
+    localStorage.setItem('chatStep', JSON.stringify(currentStep));
+    localStorage.setItem('chatPlan', JSON.stringify(plan));
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, currentStep, plan]);
 
@@ -279,8 +279,8 @@ export default function Home() {
     const finalPlan = { ...plan, hobbies: [], favoriteFood: [], restaurantPreferences: [], placePreferences: [] } as TravelPlan;
     try {
       const generated = await generateItinerary(finalPlan, customMessages || messages);
-      sessionStorage.setItem('travelPlan', JSON.stringify(finalPlan));
-      sessionStorage.setItem('generatedItinerary', JSON.stringify(generated));
+      localStorage.setItem('travelPlan', JSON.stringify(finalPlan));
+      localStorage.setItem('generatedItinerary', JSON.stringify(generated));
 
       // Save immediately so it shows up in My Plan / trip history even if the
       // user never comes back before the trip ends.

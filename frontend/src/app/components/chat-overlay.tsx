@@ -37,7 +37,7 @@ function buildItineraryContext(itinerary: GeneratedItinerary): string {
 export function ChatOverlay({ itinerary, prefill, isPastTrip, onClose, onReplaceActivity }: ChatOverlayProps) {
   const region = itinerary.plan.region;
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
-    const saved = sessionStorage.getItem('itineraryChatMessages');
+    const saved = localStorage.getItem('itineraryChatMessages');
     return saved ? JSON.parse(saved) : [
       isPastTrip
         ? { id: '1', role: 'ai', text: `Good to see you! Want to relive some highlights from your ${region.split(',')[0]} trip? Ask me anything about how it went! ✨` }
@@ -50,7 +50,7 @@ export function ChatOverlay({ itinerary, prefill, isPastTrip, onClose, onReplace
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    sessionStorage.setItem('itineraryChatMessages', JSON.stringify(messages));
+    localStorage.setItem('itineraryChatMessages', JSON.stringify(messages));
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 

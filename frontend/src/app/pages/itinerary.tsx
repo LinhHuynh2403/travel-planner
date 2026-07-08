@@ -32,11 +32,11 @@ export default function Itinerary() {
   const scrollPositions = useRef<Record<TabId, number>>({ today: 0, plan: 0, packing: 0, tips: 0 });
 
   useEffect(() => {
-    const itineraryData = sessionStorage.getItem('generatedItinerary');
+    const itineraryData = localStorage.getItem('generatedItinerary');
     if (!itineraryData) { navigate('/'); return; }
     try {
       setItinerary(JSON.parse(itineraryData));
-      setIsPastTrip(sessionStorage.getItem('viewingPastTrip') === 'true');
+      setIsPastTrip(localStorage.getItem('viewingPastTrip') === 'true');
     } catch (e) {
       navigate('/');
     }
@@ -47,14 +47,14 @@ export default function Itinerary() {
   // whatever was last in progress gets resumed instead of a fresh "plan a
   // new trip" conversation (this was the "JourZy cannot plan a new trip" bug).
   const startNewTrip = () => {
-    sessionStorage.removeItem('chatMessages');
-    sessionStorage.removeItem('chatStep');
-    sessionStorage.removeItem('chatPlan');
-    sessionStorage.removeItem('travelPlan');
-    sessionStorage.removeItem('generatedItinerary');
-    sessionStorage.removeItem('itineraryChatMessages');
-    sessionStorage.removeItem('itineraryChatTripId');
-    sessionStorage.removeItem('viewingPastTrip');
+    localStorage.removeItem('chatMessages');
+    localStorage.removeItem('chatStep');
+    localStorage.removeItem('chatPlan');
+    localStorage.removeItem('travelPlan');
+    localStorage.removeItem('generatedItinerary');
+    localStorage.removeItem('itineraryChatMessages');
+    localStorage.removeItem('itineraryChatTripId');
+    localStorage.removeItem('viewingPastTrip');
     navigate('/?view=chat');
   };
 
@@ -121,7 +121,7 @@ export default function Itinerary() {
         return { ...day, activities: updatedActivities };
       });
       const updated = { ...prev, days: updatedDays };
-      sessionStorage.setItem('generatedItinerary', JSON.stringify(updated));
+      localStorage.setItem('generatedItinerary', JSON.stringify(updated));
       return updated;
     });
   };
