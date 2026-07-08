@@ -44,6 +44,7 @@ export default function Home() {
   const [user, setUser] = useState<User | null>(null);
   const [inputValue, setInputValue] = useState('');
   const [savedTrips, setSavedTrips] = useState<any[]>([]);
+  const [loadingTripId, setLoadingTripId] = useState<string | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const activeView = searchParams.get('view') || 'chat';
 
@@ -131,6 +132,45 @@ export default function Home() {
       fetchTrips();
     }
   }, [user]);
+
+  // Clicking a saved trip previously just navigated to /itinerary, which
+  // reads whatever itinerary happens to already be cached in sessionStorage —
+  // so every trip in the list opened the same (usually most-recently-
+  // generated) plan instead of the one actually clicked. Fetch that trip's
+  // real saved itinerary first and load it into sessionStorage before navigating.
+  const openTrip = async (trip: any) => {
+    setLoadingTripId(trip.id);
+    try {
+      const resp = await apiFetch(`/api/trips/${trip.id}`);
+      if (!resp.ok) throw new Error('Failed to load trip');
+      const { trip: tripRow, itinerary } = await resp.json();
+      const generated = {
+        plan: {
+          region: tripRow.region,
+          arrivalDate: tripRow.arrival_date,
+          leaveDate: tripRow.leave_date,
+          budget: tripRow.budget,
+          whoTraveling: tripRow.who_traveling,
+          hobbies: [], favoriteFood: [], restaurantPreferences: [], placePreferences: [],
+        },
+        days: itinerary?.days || [],
+        packingList: itinerary?.packing_list || undefined,
+        hotelRecommendation: itinerary?.hotel_recommendation || undefined,
+        insights: itinerary?.insights || undefined,
+      };
+      sessionStorage.setItem('generatedItinerary', JSON.stringify(generated));
+      sessionStorage.setItem('travelPlan', JSON.stringify(generated.plan));
+      navigate('/itinerary');
+    } catch (e) {
+      console.error('Failed to open trip:', e);
+    } finally {
+      setLoadingTripId(null);
+    }
+  };
+
+  const today = new Date();
+  const upcomingTrips = savedTrips.filter(t => new Date(t.leave_date) >= today);
+  const historyTrips = savedTrips.filter(t => new Date(t.leave_date) < today);
 
   useEffect(() => {
     if (user?.id) {
@@ -436,18 +476,45 @@ export default function Home() {
               {savedTrips.length === 0 ? (
                 <p className="text-jz-soft font-bold text-jz-body bg-white p-5 rounded-jz-card border border-jz-line text-center">No saved trips yet — plan one in Chat! ✈️</p>
               ) : (
-                <div className="space-y-3">
-                  {savedTrips.map((trip: any) => (
-                    <button
-                      key={trip.id}
-                      onClick={() => navigate('/itinerary')}
-                      className="w-full text-left bg-white border-[1.5px] border-jz-line rounded-jz-card p-5 hover:border-jz-teal transition-all shadow-sm"
-                    >
-                      <p className="font-black text-jz-title text-jz-ink capitalize">{trip.region}</p>
-                      <p className="text-jz-label font-extrabold text-jz-soft mt-1">Tailored Plan — click to launch</p>
-                    </button>
-                  ))}
-                </div>
+                <>
+                  {upcomingTrips.length > 0 && (
+                    <div className="space-y-3">
+                      <p className="text-xs font-extrabold text-jz-soft uppercase tracking-wide">Upcoming</p>
+                      {upcomingTrips.map((trip: any) => (
+                        <button
+                          key={trip.id}
+                          onClick={() => openTrip(trip)}
+                          disabled={loadingTripId === trip.id}
+                          className="w-full text-left bg-white border-[1.5px] border-jz-line rounded-jz-card p-5 hover:border-jz-teal transition-all shadow-sm disabled:opacity-60"
+                        >
+                          <p className="font-black text-jz-title text-jz-ink capitalize">{trip.region}</p>
+                          <p className="text-jz-label font-extrabold text-jz-soft mt-1">
+                            {loadingTripId === trip.id ? 'Loading…' : `${new Date(trip.arrival_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} – ${new Date(trip.leave_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} — click to launch`}
+                          </p>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {historyTrips.length > 0 && (
+                    <div className="space-y-3 !mt-6">
+                      <p className="text-xs font-extrabold text-jz-soft uppercase tracking-wide">History</p>
+                      {historyTrips.map((trip: any) => (
+                        <button
+                          key={trip.id}
+                          onClick={() => openTrip(trip)}
+                          disabled={loadingTripId === trip.id}
+                          className="w-full text-left bg-white border-[1.5px] border-jz-line rounded-jz-card p-5 hover:border-jz-teal transition-all shadow-sm opacity-80 disabled:opacity-60"
+                        >
+                          <p className="font-black text-jz-title text-jz-ink capitalize">{trip.region}</p>
+                          <p className="text-jz-label font-extrabold text-jz-soft mt-1">
+                            {loadingTripId === trip.id ? 'Loading…' : `${new Date(trip.arrival_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} – ${new Date(trip.leave_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} — trip ended`}
+                          </p>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}
