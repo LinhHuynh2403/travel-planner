@@ -66,6 +66,12 @@ export function ChatOverlay({ itinerary, prefill, onClose, onReplaceActivity }: 
           text,
           mode: 'itinerary',
           itineraryContext: buildItineraryContext(itinerary),
+          // Authoritative "City, Country" for resolving <<SUGGEST>> place
+          // lookups — the model's own city guess inside the tag is sometimes
+          // too vague (just "Nha Trang", no country) for Google's text search
+          // to disambiguate, which has resolved suggestions to same-named
+          // places in the US instead of the actual destination.
+          region: itinerary.plan.region,
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         }),
       });

@@ -132,6 +132,44 @@ function extractJson(text) {
   return text.slice(start, end + 1);
 }
 
+// SAFETY NET: never trust the model's own date arithmetic — it has
+// repeatedly hallucinated wrong years (e.g. "2024" for a 2026 trip) and, for
+// long trips, sampled a handful of representative days (day 1, 8, 15) instead
+// of enumerating every day. Deterministically overwrite each day's "date"
+// from the validated arrivalDate + dayNumber offset, so the displayed dates
+// are always correct even when the model's day count or math is wrong. This
+// can't fabricate missing days' activities, so a day-count mismatch is only
+// logged for visibility — the actual fix for that lives in the prompt.
+function normalizeItineraryDates(itinerary, plan, durationDays) {
+  if (!itinerary?.days || !Array.isArray(itinerary.days)) return itinerary;
+
+  const arrival = new Date(plan.arrivalDate + "T00:00:00Z");
+  itinerary.days = itinerary.days
+    .slice()
+    .sort((a, b) => (a.dayNumber || 0) - (b.dayNumber || 0))
+    .map(day => {
+      if (!day.dayNumber) return day;
+      const real = new Date(arrival);
+      real.setUTCDate(real.getUTCDate() + (day.dayNumber - 1));
+      return { ...day, date: real.toISOString().split("T")[0] };
+    });
+
+  if (itinerary.days.length !== durationDays) {
+    console.warn(
+      `Itinerary day-count mismatch for ${plan.region}: requested ${durationDays} days, model returned ${itinerary.days.length}.`
+    );
+  }
+
+  // The plan echo is meant to mirror the validated request, not whatever the
+  // model may have drifted to while reasoning about dates.
+  if (itinerary.plan) {
+    itinerary.plan.arrivalDate = plan.arrivalDate;
+    itinerary.plan.leaveDate = plan.leaveDate;
+  }
+
+  return itinerary;
+}
+
 const tools = [
   {
     functionDeclarations: [
@@ -595,7 +633,13 @@ app.post("/api/itinerary", expensiveLimiter, optionalAuth, async (req, res) => {
             contents: [{ parts: [{ text: prompt }] }],
             generationConfig: {
               temperature: 0.4,
-              responseMimeType: "application/json"
+              responseMimeType: "application/json",
+              // Unset previously — for multi-week trips (days x activities x
+              // 3 alternatives each, all with full place metadata) this can
+              // run past the model's implicit default and get cut off, which
+              // reads as the model "sampling" a few days instead of writing
+              // every one. Gemini 2.5 Flash supports up to 65536.
+              maxOutputTokens: 32768
             }
           })
         });
@@ -673,6 +717,8 @@ app.post("/api/itinerary", expensiveLimiter, optionalAuth, async (req, res) => {
       console.error("All LLM pipelines failed or key was invalid.");
       return res.status(500).json({ error: "Failed to generate itinerary. No active LLM pipeline succeeded." });
     }
+
+    itinerary = normalizeItineraryDates(itinerary, plan, durationDays);
 
     // Enrich itinerary activities and alternatives with real Google Places coordinates/addresses
     console.log("Enriching itinerary with verified coordinates and locations...");
@@ -759,7 +805,7 @@ app.post("/api/itinerary", expensiveLimiter, optionalAuth, async (req, res) => {
 });
 
 app.post("/api/chat", expensiveLimiter, optionalAuth, async (req, res) => {
-  const { messages, text, sessionId, mode, itineraryContext, timezone } = req.body;
+  const { messages, text, sessionId, mode, itineraryContext, region, timezone } = req.body;
   let chatHistory = messages || [];
   let dbAvailable = false;
 
@@ -887,7 +933,11 @@ Model reply:`;
             },
             generationConfig: {
               temperature: 0.7,
-              maxOutputTokens: 250
+              // Was 250 — too tight even for a compliant 2-4 sentence reply
+              // plus a <<SUGGEST>> tag, and silently truncated mid-word
+              // whenever the model ran long. The prompt now hard-bans
+              // multi-day dumps, so this only needs to cover a normal reply.
+              maxOutputTokens: 600
             }
           })
         });
@@ -936,7 +986,11 @@ Model reply:`;
             model: "qwen/qwen-2.5-72b-instruct",
             messages: orMessages,
             temperature: 0.7,
-            max_tokens: 400
+            // Was 400 — silently truncated mid-word on longer replies (e.g.
+            // Qwen ignoring the "one place only" instruction). The prompt
+            // now hard-bans multi-day dumps, so this only needs to cover a
+            // normal single-suggestion reply with headroom to spare.
+            max_tokens: 600
           })
         });
 
@@ -972,6 +1026,23 @@ Model reply:`;
       }
     }
 
+    // SAFETY NET (defense in depth beyond the prompt wording): the itinerary
+    // chat must never write out a multi-day/multi-stop plan — this chat can
+    // only ever attach ONE verified place via <<SUGGEST>>, so a dump of
+    // several days' worth of invented activities is unverified, made-up info
+    // slipping past the prompt instructions, plus it silently updates
+    // nothing in the traveler's real schedule. Model compliance with the
+    // prompt alone has proven unreliable (esp. on the OpenRouter fallback
+    // model), so detect the pattern and override deterministically.
+    if (mode === "itinerary" && success) {
+      const dayHeaders = new Set((replyText.match(/\bday\s+\d+\b/gi) || []).map(m => m.toLowerCase()));
+      const timeBullets = replyText.match(/^[-•]\s*\d{1,2}:\d{2}\s*(AM|PM)/gim) || [];
+      if (dayHeaders.size >= 2 || timeBullets.length >= 4) {
+        console.warn("Itinerary chat produced a multi-day dump — overriding with a safe redirect.", { dayHeaders: dayHeaders.size, timeBullets: timeBullets.length });
+        replyText = "I can only swap in one real, verified place at a time, so I can't lay out several days at once here — which single day or stop would you like to start with?";
+      }
+    }
+
     // In itinerary-chat mode, the model may end its reply with a hidden
     // <<SUGGEST: query | city>> tag instead of naming a specific place itself.
     // Strip that tag and resolve it to one REAL, verified place via Google
@@ -982,7 +1053,11 @@ Model reply:`;
       if (suggestMatch) {
         replyText = replyText.replace(suggestMatch[0], "").trim();
         try {
-          const results = await searchPlaces(suggestMatch[1].trim(), suggestMatch[2].trim());
+          // Prefer the authoritative trip region over the model's own city
+          // guess in the tag — the model sometimes writes just "Nha Trang"
+          // with no country, which Google's text search can resolve to a
+          // same-named place in the wrong country entirely.
+          const results = await searchPlaces(suggestMatch[1].trim(), (region || suggestMatch[2]).trim());
           const top = Array.isArray(results) ? results[0] : null;
           if (top) {
             suggestion = {
