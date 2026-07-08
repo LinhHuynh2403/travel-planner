@@ -1,7 +1,11 @@
 export interface TravelPlan {
   region: string;
-  arrivalDate: Date;
-  leaveDate: Date;
+  // Left unset from onboarding — the backend derives the real dates from the
+  // free-text chat history (see extractPlanFromChatHistory), since users type
+  // relative dates like "next Thursday for a week" that a fixed offset can't
+  // capture. Only ever a plain string once resolved.
+  arrivalDate?: Date | string;
+  leaveDate?: Date | string;
   hobbies: string[];
   favoriteFood: string[];
   restaurantPreferences: string[];

@@ -209,12 +209,10 @@ export default function Home() {
   };
 
   const handleDatesSelect = (datesText: string) => {
-    const arrivalDate = new Date();
-    arrivalDate.setDate(arrivalDate.getDate() + 30);
-    const leaveDate = new Date(arrivalDate);
-    leaveDate.setDate(leaveDate.getDate() + 7);
-
-    setPlan({ ...plan, arrivalDate, leaveDate });
+    // Don't fabricate arrivalDate/leaveDate here — whatever the traveler typed
+    // (e.g. "next Thursday for a week") stays in the chat transcript, and the
+    // backend resolves the real dates from that full conversation at
+    // generation time (extractPlanFromChatHistory), same as free-typed dates.
     setMessages(prev => [
       ...prev,
       { id: Date.now().toString(), role: 'user', text: datesText },
@@ -239,12 +237,15 @@ export default function Home() {
       // user never comes back before the trip ends.
       if (user?.id) {
         try {
+          // Use the itinerary's own resolved plan (dates were extracted
+          // server-side from the chat transcript), not finalPlan — the
+          // traveler's client-side plan never carried real dates.
           await apiFetch('/api/trips', {
             method: 'POST',
             body: JSON.stringify({
-              region: finalPlan.region,
-              arrivalDate: finalPlan.arrivalDate,
-              leaveDate: finalPlan.leaveDate,
+              region: generated.plan?.region || finalPlan.region,
+              arrivalDate: generated.plan?.arrivalDate,
+              leaveDate: generated.plan?.leaveDate,
               budget: finalPlan.budget || 'moderate',
               whoTraveling: finalPlan.whoTraveling || 'solo',
               itinerary: generated

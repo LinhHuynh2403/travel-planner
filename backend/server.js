@@ -632,7 +632,16 @@ app.post("/api/itinerary", expensiveLimiter, optionalAuth, async (req, res) => {
             model: "google/gemini-2.5-flash",
             messages: [{ role: "user", content: prompt }],
             temperature: 0.4,
-            max_tokens: 4000
+            // Full itinerary JSON (days, activities, alternatives x3 each,
+            // packing list, insights) regularly runs past 4000 tokens — that
+            // cap was silently truncating the JSON mid-document and causing
+            // "Failed to parse itinerary" 500s on this fallback path. NOTE:
+            // the configured OpenRouter account currently has very little
+            // balance (observed 402 "requires more credits" around ~8-10k
+            // tokens) — top up at openrouter.ai/settings/credits, since this
+            // whole fallback silently can't run at all on an empty balance.
+            max_tokens: 6000,
+            response_format: { type: "json_object" }
           })
         });
 
@@ -643,6 +652,8 @@ app.post("/api/itinerary", expensiveLimiter, optionalAuth, async (req, res) => {
             success = true;
             console.log("Successfully generated itinerary via OpenRouter API!");
           }
+        } else {
+          console.warn(`OpenRouter API itinerary generation responded with status ${orRes.status}.`, await orRes.text());
         }
       } catch (orError) {
         console.warn("OpenRouter API itinerary generation failed.", orError.message);
@@ -848,7 +859,57 @@ Model reply:`;
       console.warn("Local Ollama chat failed or not running:", ollamaError.message);
     }
 
-    // 1.5 Try OpenRouter API if Ollama fails
+    // 1.5 Try Gemini API next — tried before OpenRouter because the itinerary-chat
+    // flow depends on strict adherence to the "<<SUGGEST: ... >>" tag format
+    // (see getItineraryChatInstruction), and Gemini has proven far more reliable
+    // at following that exact structured-output contract than the OpenRouter
+    // Qwen model, which would often describe an alternative in prose without
+    // ever emitting the tag — silently breaking the real-place lookup + replace
+    // flow the whole in-trip chat depends on.
+    if (!success && process.env.GEMINI_API_KEY) {
+      try {
+        console.log("Sending chat prompt to Gemini API...");
+        const geminiKey = process.env.GEMINI_API_KEY;
+        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`;
+
+        const contents = chatHistory.filter(m => m).map(m => ({
+          role: (m.role || 'user') === 'ai' ? 'model' : 'user',
+          parts: [{ text: m.text || '' }]
+        }));
+
+        const geminiRes = await fetch(geminiUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: contents,
+            systemInstruction: {
+              parts: [{ text: `${systemInstruction}\nCurrent Date: ${currentDateTime}` }]
+            },
+            generationConfig: {
+              temperature: 0.7,
+              maxOutputTokens: 250
+            }
+          })
+        });
+
+        if (geminiRes.ok) {
+          const geminiData = await geminiRes.json();
+          if (geminiData.candidates && geminiData.candidates[0].content?.parts?.[0]?.text) {
+            replyText = geminiData.candidates[0].content.parts[0].text.trim();
+            success = true;
+            console.log("Successfully generated chat response via Gemini API!");
+          }
+        } else {
+          console.warn(`Gemini API responded with status ${geminiRes.status}.`);
+          const errText = await geminiRes.text();
+          console.warn("Gemini API Error Detail:", errText);
+        }
+      } catch (geminiError) {
+        console.warn("Gemini API chat failed.", geminiError.message);
+      }
+    }
+
+    // 1.7 Try OpenRouter API if Ollama and Gemini fail
     if (!success && process.env.OPENROUTER_API_KEY) {
       try {
         console.log("Sending chat prompt to OpenRouter API (Qwen)...");
@@ -891,50 +952,6 @@ Model reply:`;
         }
       } catch (orError) {
         console.warn("OpenRouter API chat failed.", orError.message);
-      }
-    }
-
-    // 1.7 Try Gemini API if OpenRouter and Ollama fail
-    if (!success && process.env.GEMINI_API_KEY) {
-      try {
-        console.log("Sending chat prompt to Gemini API...");
-        const geminiKey = process.env.GEMINI_API_KEY;
-        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`;
-
-        const contents = chatHistory.filter(m => m).map(m => ({
-          role: (m.role || 'user') === 'ai' ? 'model' : 'user',
-          parts: [{ text: m.text || '' }]
-        }));
-
-        const geminiRes = await fetch(geminiUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: contents,
-            systemInstruction: {
-              parts: [{ text: `${systemInstruction}\nCurrent Date: ${currentDateTime}` }]
-            },
-            generationConfig: {
-              temperature: 0.7,
-              maxOutputTokens: 250
-            }
-          })
-        });
-
-        if (geminiRes.ok) {
-          const geminiData = await geminiRes.json();
-          if (geminiData.candidates && geminiData.candidates[0].content?.parts?.[0]?.text) {
-            replyText = geminiData.candidates[0].content.parts[0].text.trim();
-            success = true;
-            console.log("Successfully generated chat response via Gemini API!");
-          }
-        } else {
-          console.warn(`Gemini API responded with status ${geminiRes.status}.`);
-          const errText = await geminiRes.text();
-          console.warn("Gemini API Error Detail:", errText);
-        }
-      } catch (geminiError) {
-        console.warn("Gemini API chat failed.", geminiError.message);
       }
     }
 
@@ -1031,11 +1048,13 @@ app.get("/api/weather", async (req, res) => {
   const key = process.env.OPENWEATHER_API_KEY;
   if (!key) return res.status(503).json({ error: "Weather service not configured" });
 
+  // imperial (°F) — the frontend renders these raw with no unit conversion,
+  // matching the °F convention used by the AI-fallback weatherWeek insights.
   let url;
   if (lat && lng) {
-    url = `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lng}&units=metric&appid=${key}`;
+    url = `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lng}&units=imperial&appid=${key}`;
   } else if (q) {
-    url = `https://api.openweathermap.org/data/2.5/forecast?q=${encodeURIComponent(q)}&units=metric&appid=${key}`;
+    url = `https://api.openweathermap.org/data/2.5/forecast?q=${encodeURIComponent(q)}&units=imperial&appid=${key}`;
   } else {
     return res.status(400).json({ error: "Missing coordinates or location query" });
   }
