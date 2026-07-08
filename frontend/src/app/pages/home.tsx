@@ -333,8 +333,13 @@ export default function Home() {
       if (response.ok) {
         const data = await response.json();
         setMessages(prev => [...prev, { id: Date.now().toString(), role: 'ai', text: data.text, step: 'chatting' }]);
+      } else {
+        setMessages(prev => [...prev, { id: Date.now().toString(), role: 'ai', text: "Sorry, I couldn't connect just now — try again in a moment.", step: 'chatting' }]);
       }
-    } catch (e) { console.error(e); } finally { setIsThinking(false); }
+    } catch (e) {
+      console.error(e);
+      setMessages(prev => [...prev, { id: Date.now().toString(), role: 'ai', text: "Sorry, I couldn't connect just now — try again in a moment.", step: 'chatting' }]);
+    } finally { setIsThinking(false); }
   };
 
   const submitInput = (text: string) => {
