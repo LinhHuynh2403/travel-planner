@@ -816,7 +816,7 @@ app.post("/api/chat", expensiveLimiter, optionalAuth, async (req, res) => {
   // of an empty conversation (Gemini/OpenRouter both require at least one
   // turn). This is never shown to the traveler or stored as their message.
   if (chatHistory.length === 0 && mode !== "itinerary" && mode !== "pastTrip") {
-    chatHistory = [{ role: "user", text: "(The traveler just opened the app for the first time. Greet them warmly as JourZy in 1-2 sentences and ask your first question to start planning their trip.)" }];
+    chatHistory = [{ role: "user", text: "(The traveler just opened the app for the first time. Greet them warmly as JourZy, then ask for everything you need to start planning their trip, per your instructions.)" }];
   }
 
   // Cap history so a hostile payload can't inflate the LLM prompt
