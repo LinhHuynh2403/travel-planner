@@ -1,14 +1,106 @@
 import express from "express";
 import cors from "cors";
 import "dotenv/config";
+import rateLimit from "express-rate-limit";
 import { supabase } from "./db.js";
 import fetch from "node-fetch";
-import { SYSTEM_CHAT_INSTRUCTION, getDeterministicGeneratorPrompt } from "./prompts.js";
+import { SYSTEM_CHAT_INSTRUCTION, getDeterministicGeneratorPrompt, getItineraryChatInstruction } from "./prompts.js";
 import { REGIONAL_LOGISTICS } from "./logisticsData.js"; // Added Missing Import
 
 const app = express();
-app.use(cors());
+
+// Needed so express-rate-limit sees the real client IP behind Render/Railway/Vercel proxies
+app.set("trust proxy", 1);
+
+// ── SECURITY: CORS locked to known frontend origins ──────────────────────────
+// Set ALLOWED_ORIGINS in .env, comma-separated, e.g.:
+// ALLOWED_ORIGINS=https://travel-planner-theta-teal.vercel.app,http://localhost:5173
+const allowedOrigins = (process.env.ALLOWED_ORIGINS ||
+  "http://localhost:5173,http://localhost:4173")
+  .split(",")
+  .map(o => o.trim())
+  .filter(Boolean);
+
+app.use(cors({
+  origin(origin, callback) {
+    // Allow non-browser tools / same-origin requests with no Origin header
+    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error("Not allowed by CORS"));
+  },
+  credentials: true,
+}));
+
 app.use(express.json({ limit: "1mb" }));
+
+// ── SECURITY: rate limiting ───────────────────────────────────────────────────
+// Global limiter: generous, protects every endpoint from hammering.
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 300,                 // 300 requests / 15 min / IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests. Please slow down." },
+});
+app.use(globalLimiter);
+
+// Strict limiter for endpoints that trigger paid LLM / Places calls.
+const expensiveLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 20,                  // 20 generations or chats / hour / IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Rate limit reached for AI features. Try again in a bit." },
+});
+
+// ── SECURITY: Supabase JWT auth middleware ────────────────────────────────────
+// The frontend must send the logged-in user's access token:
+//   headers: { Authorization: `Bearer ${session.access_token}` }
+// We derive the user id from the verified token — NEVER from the request body.
+async function verifyToken(req) {
+  const authHeader = req.headers.authorization || "";
+  const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  if (!token) return null;
+  try {
+    const { data, error } = await supabase.auth.getUser(token);
+    if (error || !data?.user) return null;
+    return data.user;
+  } catch {
+    return null;
+  }
+}
+
+// Hard requirement: rejects the request if not logged in.
+async function requireAuth(req, res, next) {
+  const user = await verifyToken(req);
+  if (!user) return res.status(401).json({ error: "Authentication required" });
+  req.user = user;
+  next();
+}
+
+// Soft: attaches req.user if a valid token is present, continues either way.
+async function optionalAuth(req, res, next) {
+  req.user = await verifyToken(req);
+  next();
+}
+
+// ── Input validation helpers ──────────────────────────────────────────────────
+const MAX_TRIP_DAYS = 30;
+const MAX_CHAT_MESSAGES = 60;
+
+function isValidDateStr(s) {
+  return typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(new Date(s));
+}
+
+function validatePlanDates(plan) {
+  if (!isValidDateStr(plan.arrivalDate) || !isValidDateStr(plan.leaveDate)) {
+    return "arrivalDate and leaveDate must be valid YYYY-MM-DD dates";
+  }
+  const days =
+    Math.floor((new Date(plan.leaveDate) - new Date(plan.arrivalDate)) / (1000 * 60 * 60 * 24)) + 1;
+  if (days < 1) return "leaveDate must be on or after arrivalDate";
+  if (days > MAX_TRIP_DAYS) return `Trips longer than ${MAX_TRIP_DAYS} days are not supported`;
+  return null;
+}
 
 function buildPrompt(plan, chatHistory, realPlaces = {}, memoryProfile = null) {
   const durationDays =
@@ -21,28 +113,8 @@ function buildPrompt(plan, chatHistory, realPlaces = {}, memoryProfile = null) {
   return getDeterministicGeneratorPrompt(plan, durationDays, chatContext, realPlaces, memoryProfile);
 }
 
-async function getUserLocation() {
-  try {
-    const res = await fetch("http://ip-api.com/json");
-    if (res.ok) {
-      const data = await res.json();
-      if (data && data.status === "success") {
-        return {
-          city: data.city || "San Jose",
-          country: data.country || "United States",
-          timezone: data.timezone || "America/Los_Angeles"
-        };
-      }
-    }
-  } catch (err) {
-    console.warn("Could not geolocate user via IP:", err.message);
-  }
-  return {
-    city: "San Jose",
-    country: "United States",
-    timezone: "America/Los_Angeles"
-  };
-}
+// NOTE: removed getUserLocation() — it was unused and geolocated the SERVER's IP
+// (not the user's) via ip-api.com, whose free tier prohibits commercial use.
 
 function capitalizeRegion(region) {
   if (!region) return "";
@@ -156,7 +228,10 @@ async function runAgent(plan, chatHistory) {
     }
   ];
 
-  while (true) {
+  // SECURITY: cap agent iterations — an unbounded loop here means unbounded
+  // paid Gemini + Places calls if the model keeps requesting tools.
+  const MAX_AGENT_ITERATIONS = 6;
+  for (let iteration = 0; iteration < MAX_AGENT_ITERATIONS; iteration++) {
     const response = await fetch(GEMINI_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -211,6 +286,8 @@ async function runAgent(plan, chatHistory) {
 
     contents.push({ role: 'user', parts: toolResultParts });
   }
+
+  throw new Error("Agent exceeded maximum tool-call iterations without producing an answer");
 }
 
 async function getBestOllamaModel(preferredModel) {
@@ -344,44 +421,6 @@ async function fetchRealPlaces(plan) {
   return results;
 }
 
-async function calculateTravelTime(origin, destination, key) {
-  if (!origin || !origin.lat || !origin.lng || !destination || !destination.lat || !destination.lng) return null;
-
-  const distEst = Math.sqrt(Math.pow(origin.lat - destination.lat, 2) + Math.pow(origin.lng - destination.lng, 2));
-  const mode = distEst < 0.015 ? "walking" : "driving"; // roughly ~1.5km threshold
-
-  const url = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${origin.lat},${origin.lng}&destinations=${destination.lat},${destination.lng}&mode=${mode}&key=${key}`;
-  try {
-    const resp = await fetch(url);
-    const data = await resp.json();
-    const element = data.rows?.[0]?.elements?.[0];
-    if (element && element.status === "OK") {
-      const durationText = element.duration?.text || "";
-      return `${durationText} ${mode === "walking" ? "walk" : "drive"}`;
-    }
-  } catch (e) {
-    console.warn("Distance Matrix API call failed:", e.message);
-  }
-  return null;
-}
-
-async function fetchTimezone(lat, lng, key) {
-  const timestamp = Math.floor(Date.now() / 1000);
-  const url = `https://maps.googleapis.com/maps/api/timezone/json?location=${lat},${lng}&timestamp=${timestamp}&key=${key}`;
-  try {
-    const resp = await fetch(url);
-    const data = await resp.json();
-    if (data && data.status === "OK") {
-      return {
-        timezoneId: data.timeZoneId,
-        timezoneName: data.timeZoneName,
-      };
-    }
-  } catch (e) {
-    console.warn("Time Zone API call failed:", e.message);
-  }
-  return null;
-}
 async function extractPlanFromChatHistory(chatHistory) {
   const currentDateTime = new Date();
   const defaultArrival = new Date(currentDateTime);
@@ -467,10 +506,15 @@ ${chatHistory.filter(m => m).map(m => `${(m.role || 'user').toUpperCase()}: ${m.
   };
 }
 
-app.post("/api/itinerary", async (req, res) => {
+app.post("/api/itinerary", expensiveLimiter, optionalAuth, async (req, res) => {
   const payload = req.body;
   let plan = payload.plan || payload || {};
-  const chatHistory = payload.chatHistory || [];
+  let chatHistory = payload.chatHistory || [];
+
+  // Cap chat history size so a hostile payload can't inflate the LLM prompt (token cost)
+  if (Array.isArray(chatHistory) && chatHistory.length > MAX_CHAT_MESSAGES) {
+    chatHistory = chatHistory.slice(-MAX_CHAT_MESSAGES);
+  }
 
   if (!plan?.region || !plan?.arrivalDate || !plan?.leaveDate) {
     console.log("Missing plan details, extracting from chat history...");
@@ -478,7 +522,13 @@ app.post("/api/itinerary", async (req, res) => {
     plan = { ...plan, ...extractedPlan };
   }
 
-  plan.region = capitalizeRegion(plan.region || "Tokyo, Japan");
+  plan.region = capitalizeRegion(String(plan.region || "Tokyo, Japan").slice(0, 100));
+
+  // Validate dates BEFORE spending money on Places/LLM calls
+  const dateError = validatePlanDates(plan);
+  if (dateError) {
+    return res.status(400).json({ error: dateError });
+  }
 
   try {
     const durationDays =
@@ -492,8 +542,10 @@ app.post("/api/itinerary", async (req, res) => {
     const realPlaces = await fetchRealPlaces(plan);
 
     // Fetch user memory profile to inject into AI prompt
+    // SECURITY: user id comes from the verified JWT (req.user), never the payload —
+    // otherwise anyone could pull another user's stored preferences into their prompt.
     let memoryProfile = null;
-    const userId = payload.userId;
+    const userId = req.user?.id || null;
     if (userId) {
       try {
         const { data: memData } = await supabase
@@ -510,8 +562,10 @@ app.post("/api/itinerary", async (req, res) => {
     let raw = "";
     let success = false;
 
-    // 1. Fire generation pipelines (Ollama falling back to OpenRouter/Mock)
-    try {
+    // 1. Fire generation pipelines (Ollama falling back to Gemini/OpenRouter)
+    // Only attempt Ollama when explicitly enabled — in production there is no
+    // localhost:11434, and probing it on every request just adds latency.
+    if (process.env.USE_OLLAMA === "true") try {
       const bestModel = await getBestOllamaModel("qwen3:8b");
       const ollamaRes = await fetch("http://localhost:11434/api/generate", {
         method: "POST",
@@ -602,7 +656,7 @@ app.post("/api/itinerary", async (req, res) => {
         itinerary = JSON.parse(jsonText);
       } catch (parseErr) {
         console.error("Model JSON parse failed:", parseErr);
-        return res.status(500).json({ error: "Failed to parse itinerary generated by AI. Please try again.", details: String(parseErr) });
+        return res.status(500).json({ error: "Failed to parse itinerary generated by AI. Please try again." });
       }
     } else {
       console.error("All LLM pipelines failed or key was invalid.");
@@ -686,20 +740,23 @@ app.post("/api/itinerary", async (req, res) => {
       };
     }
 
-    // ... Keep your final pipeline components: coordinate validation matrix, timezone resolution logic, and final returns intact ...
     return res.json(itinerary);
   } catch (e) {
     console.error("Critical failure in itinerary route:", e);
-    return res.status(500).json({ error: "Server failed", details: String(e) });
+    return res.status(500).json({ error: "Failed to generate itinerary. Please try again." });
   }
 });
 
-app.post("/api/chat", async (req, res) => {
-  const { messages, text, sessionId, userId } = req.body;
+app.post("/api/chat", expensiveLimiter, optionalAuth, async (req, res) => {
+  const { messages, text, sessionId, mode, itineraryContext, timezone } = req.body;
   let chatHistory = messages || [];
   let dbAvailable = false;
 
-  // If frontend is sending the new DB payload format:
+  // SECURITY: user id comes ONLY from the verified JWT. Previously the client
+  // sent userId in the body, letting anyone write chat rows into any account.
+  const userId = req.user?.id || null;
+
+  // Persist to DB only for authenticated users with a session id
   if (text && sessionId && userId) {
     try {
       // 1. Save the incoming user message to the Database first
@@ -733,15 +790,32 @@ app.post("/api/chat", async (req, res) => {
     return res.status(400).json({ error: "Missing chat context" });
   }
 
+  // Cap history so a hostile payload can't inflate the LLM prompt
+  if (chatHistory.length > MAX_CHAT_MESSAGES) {
+    chatHistory = chatHistory.slice(-MAX_CHAT_MESSAGES);
+  }
+
   try {
-    const currentDateTime = new Date().toLocaleString("en-US", { timeZone: "America/Los_Angeles" });
+    // Use the traveler's actual device timezone when provided, instead of a
+    // hardcoded one — JourZy should know what time it really is for them.
+    let currentDateTime;
+    try {
+      currentDateTime = new Date().toLocaleString("en-US", { timeZone: timezone || "UTC" });
+    } catch (e) {
+      currentDateTime = new Date().toLocaleString("en-US", { timeZone: "UTC" });
+    }
+
+    const systemInstruction = mode === "itinerary"
+      ? getItineraryChatInstruction(itineraryContext || "(no trip details provided)")
+      : SYSTEM_CHAT_INSTRUCTION;
+
     let replyText = "";
     let success = false;
 
-    // 1. Try Local Ollama first (prioritizing qwen3:8b)
-    try {
+    // 1. Try Local Ollama first (prioritizing qwen3:8b) — only when enabled
+    if (process.env.USE_OLLAMA === "true") try {
       const bestModel = await getBestOllamaModel("qwen3:8b");
-      const prompt = `${SYSTEM_CHAT_INSTRUCTION}
+      const prompt = `${systemInstruction}
 
 [Current Date and Time: ${currentDateTime}]
 
@@ -782,7 +856,7 @@ Model reply:`;
         const OR_URL = "https://openrouter.ai/api/v1/chat/completions";
 
         const orMessages = [
-          { role: 'system', content: `${SYSTEM_CHAT_INSTRUCTION}\nCurrent Date: ${currentDateTime}` },
+          { role: 'system', content: `${systemInstruction}\nCurrent Date: ${currentDateTime}` },
           ...chatHistory.filter(m => m).map(m => ({
             role: (m.role || 'user') === 'ai' ? 'assistant' : 'user',
             content: m.text || ''
@@ -801,7 +875,7 @@ Model reply:`;
             model: "qwen/qwen-2.5-72b-instruct",
             messages: orMessages,
             temperature: 0.7,
-            max_tokens: 150
+            max_tokens: 400
           })
         });
 
@@ -838,7 +912,7 @@ Model reply:`;
           body: JSON.stringify({
             contents: contents,
             systemInstruction: {
-              parts: [{ text: `${SYSTEM_CHAT_INSTRUCTION}\nCurrent Date: ${currentDateTime}` }]
+              parts: [{ text: `${systemInstruction}\nCurrent Date: ${currentDateTime}` }]
             },
             generationConfig: {
               temperature: 0.7,
@@ -868,12 +942,45 @@ Model reply:`;
     if (!success) {
       console.warn("Using canned response fallback for chat.");
       const lastUserText = (chatHistory[chatHistory.length - 1]?.text || "").toLowerCase();
-      replyText = "Got it! What other activities, hobbies, or food preferences do you have? Or just type 'good to go' when you're ready to generate the schedule!";
 
-      if (lastUserText.includes("yes") || lastUserText.includes("flight") || lastUserText.includes("arrive") || lastUserText.includes("leave") || /\b\d{1,2}(:\d{2})?\s*(am|pm)?\b/i.test(lastUserText)) {
-        replyText = "Awesome, noted! Let me know if there are any specific activities, restaurants, or sights you'd like to include, or say 'good to go' to build your schedule!";
-      } else if (lastUserText.includes("no") || lastUserText.includes("haven't") || lastUserText.includes("not yet")) {
-        replyText = "No problem! You can check the flights page using the menu on the left. Once you're ready to plan your activities, what other hobbies or preferences do you have? Or say 'good to go' to build the itinerary!";
+      if (mode === "itinerary") {
+        replyText = "Sorry, I'm having trouble connecting right now — mind trying that again in a moment?";
+      } else {
+        replyText = "Got it! What other activities, hobbies, or food preferences do you have? Or just type 'good to go' when you're ready to generate the schedule!";
+        if (lastUserText.includes("yes") || lastUserText.includes("flight") || lastUserText.includes("arrive") || lastUserText.includes("leave") || /\b\d{1,2}(:\d{2})?\s*(am|pm)?\b/i.test(lastUserText)) {
+          replyText = "Awesome, noted! Let me know if there are any specific activities, restaurants, or sights you'd like to include, or say 'good to go' to build your schedule!";
+        } else if (lastUserText.includes("no") || lastUserText.includes("haven't") || lastUserText.includes("not yet")) {
+          replyText = "No problem! You can check the flights page using the menu on the left. Once you're ready to plan your activities, what other hobbies or preferences do you have? Or say 'good to go' to build the itinerary!";
+        }
+      }
+    }
+
+    // In itinerary-chat mode, the model may end its reply with a hidden
+    // <<SUGGEST: query | city>> tag instead of naming a specific place itself.
+    // Strip that tag and resolve it to one REAL, verified place via Google
+    // Places, so the traveler never sees an AI-hallucinated name/rating.
+    let suggestion = null;
+    if (mode === "itinerary") {
+      const suggestMatch = replyText.match(/<<SUGGEST:\s*(.+?)\s*\|\s*(.+?)\s*>>/i);
+      if (suggestMatch) {
+        replyText = replyText.replace(suggestMatch[0], "").trim();
+        try {
+          const results = await searchPlaces(suggestMatch[1].trim(), suggestMatch[2].trim());
+          const top = Array.isArray(results) ? results[0] : null;
+          if (top) {
+            suggestion = {
+              placeId: top.place_id,
+              title: top.name,
+              address: top.formatted_address || "",
+              rating: top.rating || undefined,
+              lat: top.geometry?.location?.lat,
+              lng: top.geometry?.location?.lng,
+              mapsUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((top.name || "") + " " + (top.formatted_address || ""))}&query_place_id=${top.place_id}`,
+            };
+          }
+        } catch (e) {
+          console.warn("Failed to resolve suggested place:", e.message);
+        }
       }
     }
 
@@ -887,35 +994,42 @@ Model reply:`;
       }
     }
 
-    return res.json({ text: replyText });
+    return res.json({ text: replyText, suggestion });
   } catch (e) {
     console.error("Chat route critical failure:", e);
-    return res.status(500).json({ error: String(e) });
+    return res.status(500).json({ error: "Chat failed. Please try again." });
   }
 });
 
-app.get("/api/chat/history", async (req, res) => {
+app.get("/api/chat/history", requireAuth, async (req, res) => {
   const { sessionId } = req.query;
   if (!sessionId) return res.status(400).json({ error: "Missing sessionId" });
 
   try {
+    // SECURITY: filter by BOTH session id and the authenticated user's id,
+    // so users can't read other people's conversations by guessing session ids.
     const { data, error } = await supabase
       .from('chat_histories')
       .select('role, text, id')
       .eq('session_id', sessionId)
+      .eq('user_id', req.user.id)
       .order('created_at', { ascending: true });
 
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) {
+      console.error("Chat history fetch error:", error);
+      return res.status(500).json({ error: "Failed to load chat history" });
+    }
     return res.json({ messages: data });
   } catch (e) {
-    return res.status(500).json({ error: String(e) });
+    console.error("Chat history route failure:", e);
+    return res.status(500).json({ error: "Failed to load chat history" });
   }
 });
 
 app.get("/api/weather", async (req, res) => {
   const { lat, lng, q } = req.query;
   const key = process.env.OPENWEATHER_API_KEY;
-  if (!key) return res.status(400).json({ error: "Missing OPENWEATHER_API_KEY" });
+  if (!key) return res.status(503).json({ error: "Weather service not configured" });
 
   let url;
   if (lat && lng) {
@@ -931,7 +1045,8 @@ app.get("/api/weather", async (req, res) => {
     const data = await resp.json();
     return res.json(data);
   } catch (e) {
-    return res.status(500).json({ error: String(e) });
+    console.error("Weather fetch failed:", e);
+    return res.status(500).json({ error: "Failed to fetch weather" });
   }
 });
 
@@ -959,7 +1074,8 @@ app.get("/api/nearby", async (req, res) => {
     }));
     return res.json({ places });
   } catch (e) {
-    return res.status(500).json({ error: String(e) });
+    console.error("Nearby search failed:", e);
+    return res.status(500).json({ error: "Failed to fetch nearby places" });
   }
 });
 
@@ -978,24 +1094,31 @@ app.get("/api/photo", async (req, res) => {
     const buffer = await resp.arrayBuffer();
     return res.send(Buffer.from(buffer));
   } catch (e) {
-    return res.status(500).send(String(e));
+    console.error("Photo proxy failed:", e);
+    return res.status(500).send("Failed to fetch photo");
   }
 });
 
 app.get("/api/place-lookup", async (req, res) => {
   const { query, region } = req.query;
+  if (!query || typeof query !== "string") {
+    return res.status(400).json({ error: "Missing query" });
+  }
   try {
-    const place = await lookupPlace(query, region || "");
+    const place = await lookupPlace(String(query).slice(0, 200), String(region || "").slice(0, 100));
     return res.json({ place });
   } catch (e) {
-    return res.status(500).json({ error: String(e) });
+    console.error("Place lookup failed:", e);
+    return res.status(500).json({ error: "Place lookup failed" });
   }
 });
 
-app.post("/api/trips", async (req, res) => {
-  const { userId, region, arrivalDate, leaveDate, budget, whoTraveling, itinerary } = req.body;
+app.post("/api/trips", requireAuth, async (req, res) => {
+  const { region, arrivalDate, leaveDate, budget, whoTraveling, itinerary } = req.body;
+  // SECURITY: user id comes from the verified JWT, never the request body
+  const userId = req.user.id;
 
-  if (!userId || !region || !arrivalDate || !leaveDate || !itinerary) {
+  if (!region || !arrivalDate || !leaveDate || !itinerary) {
     return res.status(400).json({ error: "Missing required fields for saving trip" });
   }
 
@@ -1034,40 +1157,42 @@ app.post("/api/trips", async (req, res) => {
     return res.json({ success: true, tripId });
   } catch (e) {
     console.error("Error saving trip:", e);
-    return res.status(500).json({ error: e.message || String(e) });
+    return res.status(500).json({ error: "Failed to save trip" });
   }
 });
 
-app.get("/api/trips", async (req, res) => {
-  const { userId } = req.query;
-  if (!userId) return res.status(400).json({ error: "Missing userId" });
-
+app.get("/api/trips", requireAuth, async (req, res) => {
   try {
+    // SECURITY: list only the authenticated user's trips
     const { data, error } = await supabase
       .from("trips")
       .select("*, itineraries(*)")
-      .eq("user_id", userId)
+      .eq("user_id", req.user.id)
       .order("created_at", { ascending: false });
 
     if (error) throw error;
     return res.json({ trips: data });
   } catch (e) {
     console.error("Error fetching trips:", e);
-    return res.status(500).json({ error: e.message || String(e) });
+    return res.status(500).json({ error: "Failed to fetch trips" });
   }
 });
 
-app.get("/api/trips/:tripId", async (req, res) => {
+app.get("/api/trips/:tripId", requireAuth, async (req, res) => {
   const { tripId } = req.params;
 
   try {
+    // SECURITY: ownership check — the trip must belong to the authenticated user
     const { data: trip, error: tripError } = await supabase
       .from("trips")
       .select("*")
       .eq("id", tripId)
+      .eq("user_id", req.user.id)
       .single();
 
-    if (tripError) throw tripError;
+    if (tripError || !trip) {
+      return res.status(404).json({ error: "Trip not found" });
+    }
 
     const { data: itinerary, error: itineraryError } = await supabase
       .from("itineraries")
@@ -1080,31 +1205,41 @@ app.get("/api/trips/:tripId", async (req, res) => {
     return res.json({ trip, itinerary });
   } catch (e) {
     console.error("Error fetching trip details:", e);
-    return res.status(500).json({ error: e.message || String(e) });
+    return res.status(500).json({ error: "Failed to fetch trip details" });
   }
 });
 
-app.delete("/api/trips/:tripId", async (req, res) => {
+app.delete("/api/trips/:tripId", requireAuth, async (req, res) => {
   const { tripId } = req.params;
 
   try {
-    const { error } = await supabase
+    // SECURITY: previously ANYONE could delete ANY trip by guessing its id.
+    // The delete is now scoped to the authenticated owner, and we verify a
+    // row was actually removed.
+    const { data, error } = await supabase
       .from("trips")
       .delete()
-      .eq("id", tripId);
+      .eq("id", tripId)
+      .eq("user_id", req.user.id)
+      .select();
 
     if (error) throw error;
+    if (!data || data.length === 0) {
+      return res.status(404).json({ error: "Trip not found" });
+    }
     return res.json({ success: true });
   } catch (e) {
     console.error("Error deleting trip:", e);
-    return res.status(500).json({ error: e.message || String(e) });
+    return res.status(500).json({ error: "Failed to delete trip" });
   }
 });
 
 // ─── MILESTONE 7: EVENT DISCOVERY ─────────────────────────────────────────────
 app.get("/api/events", async (req, res) => {
   const { region, arrivalDate, leaveDate } = req.query;
-  const GOOGLE_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
+  // BUG FIX: was process.env.GOOGLE_MAPS_API_KEY — a variable that doesn't exist
+  // in your .env — so events ALWAYS fell back to mock data even with a valid key.
+  const GOOGLE_API_KEY = process.env.GOOGLE_MAPS_KEY;
 
   if (!region) return res.status(400).json({ error: "region is required" });
 
@@ -1162,9 +1297,12 @@ app.get("/api/events", async (req, res) => {
 });
 
 // ─── MILESTONE 7: USER MEMORY (preferences) ───────────────────────────────────
-app.post("/api/memory", async (req, res) => {
-  const { userId, preferences } = req.body;
-  if (!userId || !preferences) return res.status(400).json({ error: "userId and preferences required" });
+app.post("/api/memory", requireAuth, async (req, res) => {
+  const { preferences } = req.body;
+  // SECURITY: user id from verified JWT — previously anyone could overwrite
+  // any user's stored preference profile by sending an arbitrary userId.
+  const userId = req.user.id;
+  if (!preferences) return res.status(400).json({ error: "preferences required" });
   try {
     const { data, error } = await supabase
       .from("user_memory")
@@ -1175,27 +1313,32 @@ app.post("/api/memory", async (req, res) => {
     return res.json({ success: true, memory: data });
   } catch (e) {
     console.error("Save memory error:", e);
-    return res.status(500).json({ error: e.message });
+    return res.status(500).json({ error: "Failed to save preferences" });
   }
 });
 
-app.get("/api/memory", async (req, res) => {
-  const { userId } = req.query;
-  if (!userId) return res.status(400).json({ error: "userId required" });
+app.get("/api/memory", requireAuth, async (req, res) => {
   try {
     const { data, error } = await supabase
       .from("user_memory")
       .select("*")
-      .eq("user_id", userId)
+      .eq("user_id", req.user.id)
       .single();
     if (error && error.code !== "PGRST116") throw error;
     return res.json({ memory: data || null });
   } catch (e) {
-    return res.status(500).json({ error: e.message });
+    console.error("Fetch memory error:", e);
+    return res.status(500).json({ error: "Failed to fetch preferences" });
   }
 });
 
-app.listen(8888, () => console.log("API running at http://localhost:8888"));
+// Simple health check for uptime monitors and deployment platforms
+app.get("/api/health", (req, res) => res.json({ status: "ok" }));
+
+// DEPLOYMENT FIX: hosts like Render/Railway assign the port via process.env.PORT.
+// Hardcoding 8888 (as before) breaks production deploys.
+const PORT = process.env.PORT || 8888;
+app.listen(PORT, () => console.log(`API is running on port ${PORT}`));
 
 
 function findMatchingPreFetchedPlace(title, category, realPlaces) {
@@ -1272,6 +1415,7 @@ async function enrichItineraryPlaces(itinerary, realPlaces) {
             address: match.address,
             lat: match.lat,
             lng: match.lng,
+            rating: match.rating || undefined,
             mapsUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(match.name + " " + match.address)}&query_place_id=${match.placeId}`
           };
           act.title = match.name;
@@ -1310,6 +1454,7 @@ async function enrichItineraryPlaces(itinerary, realPlaces) {
               address: altMatch.address,
               lat: altMatch.lat,
               lng: altMatch.lng,
+              rating: altMatch.rating || undefined,
               mapsUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(altMatch.name + " " + altMatch.address)}&query_place_id=${altMatch.placeId}`
             };
             alt.title = altMatch.name;
@@ -1364,7 +1509,7 @@ async function lookupPlace(query, regionHint) {
   // 2. Place Details to get Real-Time Opening Hours
   const detailsUrl =
     "https://maps.googleapis.com/maps/api/place/details/json" +
-    `?place_id=${placeId}&fields=name,formatted_address,geometry,opening_hours&key=${key}`;
+    `?place_id=${placeId}&fields=name,formatted_address,geometry,opening_hours,rating&key=${key}`;
 
   const detailsResp = await fetch(detailsUrl);
   const detailsData = await detailsResp.json();
@@ -1373,6 +1518,7 @@ async function lookupPlace(query, regionHint) {
   const address = details.formatted_address || top.formatted_address;
   const lat = details.geometry?.location?.lat || top.geometry?.location?.lat;
   const lng = details.geometry?.location?.lng || top.geometry?.location?.lng;
+  const rating = details.rating || top.rating || undefined;
 
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
     query + " " + address
@@ -1383,10 +1529,9 @@ async function lookupPlace(query, regionHint) {
     address,
     lat,
     lng,
+    rating,
     mapsUrl,
     isOpenNow: details.opening_hours?.open_now,
     weekdayText: details.opening_hours?.weekday_text
   };
 }
-
-
