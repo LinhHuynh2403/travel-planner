@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Sparkles, X, Send, User as UserIcon, Star, MapPin, RefreshCw } from 'lucide-react';
 import { apiFetch } from '../utils/api';
 import { GeneratedItinerary } from '../types/travel';
+import { ChatText } from './chat-text';
 
 interface PlaceSuggestion {
   placeId?: string;
@@ -127,11 +128,11 @@ export function ChatOverlay({ itinerary, prefill, isPastTrip, onClose, onReplace
               {m.role === 'ai' ? <Sparkles className="w-4 h-4" /> : <UserIcon className="w-4 h-4" />}
             </div>
             <div className={`max-w-[85%] flex flex-col gap-2.5 ${m.role === 'user' ? 'items-end' : 'items-start'}`}>
-              <div className={`border-[1.5px] p-4 text-jz-body-big shadow-sm leading-relaxed whitespace-pre-wrap ${m.role === 'ai'
+              <div className={`border-[1.5px] p-4 text-jz-body-big shadow-sm leading-relaxed ${m.role === 'ai'
                 ? 'bg-white border-jz-line rounded-[22px] rounded-bl-[6px] text-jz-ink'
                 : 'bg-jz-teal border-jz-teal rounded-[22px] rounded-tr-[6px] text-white font-bold'
                 }`}>
-                {m.text}
+                <ChatText text={m.text} />
               </div>
 
               {m.suggestion && (

@@ -5,6 +5,7 @@ import { TravelPlan } from '../types/travel';
 import { generateItinerary } from '../utils/generate-itinerary';
 import { supabase } from '../utils/supabaseClient';
 import { apiFetch } from '../utils/api';
+import { ChatText } from '../components/chat-text';
 type Message = {
   id: string;
   role: 'ai' | 'user';
@@ -391,7 +392,7 @@ export default function Home() {
                         ? 'bg-white border-jz-line rounded-[22px] rounded-bl-[6px] text-jz-ink'
                         : 'bg-white border-jz-teal text-jz-teal rounded-[22px] rounded-tr-[6px] font-bold'
                     }`}>
-                      <div className="whitespace-pre-wrap leading-relaxed">{msg.text}</div>
+                      <div className="leading-relaxed"><ChatText text={msg.text} /></div>
 
                       {/* Floating Prompt Suggestion Pills */}
                       {msg.role === 'ai' && msg.step === 'destination' && currentStep === 'destination' && (
