@@ -17,8 +17,16 @@ const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!supabaseUrl || !supabaseKey) {
-  // Fail fast with a clear message instead of letting createClient throw a
-  // confusing error (or every DB call fail) at request time.
+  // NOTE: createClient() throws synchronously on an empty/missing URL
+  // ("supabaseUrl is required."), which — despite this being top-level
+  // module code — crashes the ENTIRE process on startup (Node exits with
+  // status 1 before the Express server ever binds a port), taking down
+  // weather, chat, and itinerary generation too even though none of those
+  // need Supabase. This previously caused Render deploys to fail outright
+  // whenever these two vars weren't set there. A placeholder URL below keeps
+  // client construction from crashing; any actual Supabase call still fails
+  // gracefully at request time (every call site is already wrapped in
+  // try/catch or gated by requireAuth).
     console.error(
         "[db] Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in backend/.env.\n" +
         "[db] Trips, chat history, and memory features will not work until these are set.\n" +
@@ -26,7 +34,7 @@ if (!supabaseUrl || !supabaseKey) {
     );
 }
 
-export const supabase = createClient(supabaseUrl || "", supabaseKey || "", {
+export const supabase = createClient(supabaseUrl || "https://placeholder.supabase.co", supabaseKey || "placeholder-key", {
     auth: {
     // This is a server, not a browser session — no token persistence needed.
     autoRefreshToken: false,
