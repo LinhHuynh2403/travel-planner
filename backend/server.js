@@ -490,7 +490,7 @@ ${chatHistory.filter(m => m).map(m => `${(m.role || 'user').toUpperCase()}: ${m.
     const geminiKey = process.env.GEMINI_API_KEY;
     if (geminiKey) {
       const resp = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${geminiKey}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -624,7 +624,7 @@ app.post("/api/itinerary", expensiveLimiter, optionalAuth, async (req, res) => {
       try {
         console.log("Sending itinerary generation prompt to Gemini API...");
         const geminiKey = process.env.GEMINI_API_KEY;
-        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`;
+        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${geminiKey}`;
 
         const geminiRes = await fetch(geminiUrl, {
           method: "POST",
@@ -939,7 +939,7 @@ Model reply:`;
       try {
         console.log("Sending chat prompt to Gemini API...");
         const geminiKey = process.env.GEMINI_API_KEY;
-        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`;
+        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${geminiKey}`;
 
         const contents = chatHistory.filter(m => m).map(m => ({
           role: (m.role || 'user') === 'ai' ? 'model' : 'user',
