@@ -1,139 +1,161 @@
 import { useState } from 'react';
-import { PackingItem } from '../types/travel';
-import { Briefcase } from 'lucide-react';
+import { PackingItem, PackingEntry, WeatherDay } from '../types/travel';
+import { useLiveWeatherWeek } from '../utils/live-weather';
 
 interface PackingTabProps {
   packingList?: PackingItem[];
   region: string;
+  weatherWeek?: WeatherDay[];
+  weatherOverview?: string;
+  onOpenChat: () => void;
 }
 
-export function PackingTab({ packingList, region }: PackingTabProps) {
-  const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set());
+/* Backend may send items as plain strings (older trips) or as
+   { name, why } objects (new prompt). Normalize both. */
+function normalize(entry: PackingEntry): { name: string; why?: string } {
+  return typeof entry === 'string' ? { name: entry } : entry;
+}
 
-  const toggleItem = (item: string) => {
+const WEATHER_EMOJI: Record<string, string> = {
+  sunny: '☀️', partly: '⛅', cloudy: '☁️', rainy: '🌧️', snowy: '❄️', stormy: '⛈️',
+};
+
+export function PackingTab({ packingList, region, weatherWeek, weatherOverview, onOpenChat }: PackingTabProps) {
+  const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set());
+  const liveWeatherWeek = useLiveWeatherWeek(region);
+  const displayWeatherWeek = liveWeatherWeek || weatherWeek;
+
+  const toggleItem = (key: string) => {
     const next = new Set(checkedItems);
-    if (next.has(item)) next.delete(item);
-    else next.add(item);
+    next.has(key) ? next.delete(key) : next.add(key);
     setCheckedItems(next);
   };
 
-  // Base essentials that are ALWAYS required regardless of destination or AI output
-  const essentials = [
-    {
-      category: "Travel Essentials & Docs",
-      items: ["Passport & travel insurance", "Credit cards & some local cash", "Universal travel adapter", "Phone, charger & cables"]
-    }
-  ];
+  const list = packingList && packingList.length > 0 ? packingList : [];
 
-  const defaultList = [
-    {
-      category: "Documents & ID",
-      items: ["Passport (check expiry date)", "Visa / eVisa printout (if required)", "Travel insurance documents", "Hotel & flight confirmations", "Emergency contact list"]
-    },
-    {
-      category: "Clothing",
-      items: ["Light breathable shirts (5)", "Walking shorts / pants (3)", "Light jacket or hoodie", "Sleepwear", "Underwear & socks (7 sets)", "Swimwear", "One smart-casual outfit for dining"]
-    },
-    {
-      category: "Footwear",
-      items: ["Comfortable walking shoes / sneakers", "Flip-flops or sandals", "Dress shoes (if needed)"]
-    },
-    {
-      category: "Toiletries",
-      items: ["Toothbrush & toothpaste", "Shampoo & conditioner (travel size)", "Deodorant", "Sunscreen SPF 50+", "Lip balm with SPF", "Skincare essentials", "Razor & shaving cream"]
-    },
-    {
-      category: "Electronics",
-      items: ["Phone charger & cable", "Portable power bank", "Universal travel adapter", "Headphones / earbuds", "Camera (optional)"]
-    },
-    {
-      category: "Health & Medication",
-      items: ["Prescription medications", "Pain relievers (ibuprofen / paracetamol)", "Antihistamines", "Band-aids & blister plasters", "Insect repellent", "Hand sanitizer", "Motion sickness pills"]
-    },
-    {
-      category: "Money & Finance",
-      items: ["Credit / debit cards (notify your bank)", "Some local currency cash", "Money belt or hidden pouch"]
-    },
-    {
-      category: "Comfort & In-Flight",
-      items: ["Neck pillow", "Eye mask & earplugs", "Compression socks (for long flights)", "Snacks & empty water bottle", "Entertainment (book, tablet, downloaded shows)"]
-    },
-    {
-      category: "Safety & Security",
-      items: ["Luggage locks (TSA-approved)", "Copies of passport & ID (separate from originals)", "Waterproof phone pouch"]
-    },
-    {
-      category: "Optional Items",
-      items: ["Compact umbrella", "Reusable water bottle", "Travel journal & pen", "Laundry bag", "Daypack / foldable backpack"]
-    }
-  ];
+  // "Leave these at home" renders as gold cards at the bottom, prototype-style
+  const isLeaveGroup = (c: string) => c.toLowerCase().includes('leave');
+  const packGroups = list.filter(g => !isLeaveGroup(g.category));
+  const leaveGroups = list.filter(g => isLeaveGroup(g.category));
 
-  // Merge the AI packing list with the base essentials
-  // If the AI list is empty, we fall back to defaults merged with essentials
-  const aiListClean = packingList && packingList.length > 0
-    ? packingList.filter(group => {
-      return (
-        group &&
-        typeof group.category === 'string' &&
-        Array.isArray(group.items) &&
-        !group.category.toLowerCase().includes('essential') &&
-        !group.category.toLowerCase().includes('doc')
-      );
-    })
-    : defaultList;
-
-  const listToRender = [
-    ...essentials,
-    ...aiListClean
-  ];
+  const cityName = region.split(',')[0];
 
   return (
-    <div className="flex-1 overflow-y-auto p-8 pb-32">
-      <div className="max-w-2xl mx-auto">
-        <h2 className="text-xl font-semibold text-white mb-6 flex items-center gap-2">
-          <Briefcase className="size-5 text-emerald-400" />
-          Packing list — {region.split(',')[0]}
-        </h2>
+    <div className="space-y-1">
+      {/* Header */}
+      <h1 className="text-jz-screen font-black text-jz-ink leading-tight">
+        Pack for {cityName}
+      </h1>
+      <p className="text-jz-body text-jz-soft font-bold">
+        Every item has a reason — no mystery checklists.
+      </p>
 
-        <div className="space-y-8">
-          {listToRender.map((group, i) => (
-            <div key={i}>
-              <h3 className="text-sm font-semibold text-zinc-300 flex items-center gap-2 mb-3">
-                <svg className="size-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                </svg>
-                {group.category}
-              </h3>
-              <ul className="space-y-2">
-                {group.items.map((item, j) => {
-                  const id = `${i}-${j}`;
-                  const isChecked = checkedItems.has(id);
-                  return (
-                    <li key={j} className="flex items-center gap-3 py-1 border-b border-zinc-800/50">
-                      <button
-                        onClick={() => toggleItem(id)}
-                        className={`size-4 rounded flex items-center justify-center border transition-colors ${isChecked
-                          ? 'bg-emerald-500 border-emerald-500 text-zinc-950'
-                          : 'border-zinc-600 hover:border-emerald-500'
-                          }`}
-                      >
-                        {isChecked && (
-                          <svg className="size-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                          </svg>
-                        )}
-                      </button>
-                      <span className={`text-sm select-none cursor-pointer ${isChecked ? 'text-zinc-500 line-through' : 'text-zinc-300'}`} onClick={() => toggleItem(id)}>
-                        {item}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ))}
-        </div>
+      {/* A caring heads-up about medicine (50+ traveler care) */}
+      <div className="bg-jz-goldTint rounded-jz-card p-[18px] !mt-4">
+        <p className="text-jz-body-big font-black text-jz-goldInk">
+          💊 A caring heads-up about medicine
+        </p>
+        <p className="text-jz-label font-bold text-jz-goldSoft leading-relaxed mt-1.5 mb-3">
+          {cityName} doesn't allow some common medicines in without notice. Tell
+          me what you take and I'll check each one against local rules.
+        </p>
+        <button
+          onClick={onOpenChat}
+          className="w-full min-h-jz-touch rounded-jz-btn bg-white border-2 border-jz-gold text-jz-goldInk font-extrabold text-[17.5px]"
+        >
+          Check my medicines with JourZy
+        </button>
       </div>
+
+      {/* The week's weather */}
+      {(displayWeatherWeek && displayWeatherWeek.length > 0) ? (
+        <>
+          <h2 className="text-jz-title font-black text-jz-ink !mt-6 mb-3">The week's weather</h2>
+          <div className="flex gap-2 overflow-x-auto pb-1.5 -mx-1 px-1 [scrollbar-width:none]">
+            {displayWeatherWeek.map(w => (
+              <div key={w.d} className="shrink-0 w-24 bg-white border-[1.5px] border-jz-line rounded-jz-card px-1.5 py-3 text-center">
+                <p className="text-[14.5px] font-extrabold text-jz-soft">{w.d}</p>
+                <p className="text-3xl my-1.5 leading-none">{WEATHER_EMOJI[w.icon] || '🌤️'}</p>
+                <p className="text-[16.5px] font-black text-jz-ink">
+                  {w.hi}°<span className="text-jz-soft font-bold">/{w.lo}°</span>
+                </p>
+                <p className="text-[13.5px] font-bold text-jz-soft mt-0.5">{w.note}</p>
+              </div>
+            ))}
+          </div>
+        </>
+      ) : weatherOverview ? (
+        <div className="bg-jz-mist rounded-jz-card p-[18px] !mt-4">
+          <p className="text-jz-body font-bold text-jz-ink leading-relaxed">
+            🌦️ {weatherOverview}
+          </p>
+        </div>
+      ) : null}
+
+      {/* Packing groups */}
+      {packGroups.map((group, gi) => (
+        <div key={group.category}>
+          <h2 className="text-jz-title font-black text-jz-ink !mt-6 mb-3">{group.category}</h2>
+          <div className="space-y-2.5">
+            {group.items.map((raw, ii) => {
+              const item = normalize(raw);
+              const key = `${gi}-${ii}-${item.name}`;
+              const done = checkedItems.has(key);
+              return (
+                <button
+                  key={key}
+                  onClick={() => toggleItem(key)}
+                  aria-pressed={done}
+                  className={`w-full text-left flex gap-3.5 bg-white border-[1.5px] rounded-jz-card p-4 transition-colors ${done ? 'border-jz-teal' : 'border-jz-line'}`}
+                >
+                  <span
+                    aria-hidden
+                    className={`w-[34px] h-[34px] rounded-xl border-2 flex items-center justify-center shrink-0 mt-0.5 text-white font-black transition-colors ${done ? 'bg-jz-teal border-jz-teal' : 'bg-jz-bg border-[#CFC7BA]'}`}
+                  >
+                    {done && '✓'}
+                  </span>
+                  <span className="flex-1 min-w-0">
+                    <span className={`block text-jz-body-big font-black text-jz-ink ${done ? 'line-through opacity-50' : ''}`}>
+                      {item.name}
+                    </span>
+                    {item.why && (
+                      <span className="block text-[16px] leading-snug font-semibold text-jz-teal mt-1">
+                        <span className="font-extrabold">Because · </span>{item.why}
+                      </span>
+                    )}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+
+      {/* Leave these at home */}
+      {leaveGroups.length > 0 && (
+        <div>
+          <h2 className="text-jz-title font-black text-jz-ink !mt-6 mb-3">Leave these at home</h2>
+          <div className="space-y-2.5">
+            {leaveGroups.flatMap(g => g.items).map((raw, i) => {
+              const item = normalize(raw);
+              return (
+                <div key={`${i}-${item.name}`} className="bg-jz-goldTint rounded-jz-card p-[18px]">
+                  <p className="text-jz-body-big font-black text-jz-goldInk">✋ {item.name}</p>
+                  {item.why && (
+                    <p className="text-[16px] leading-snug font-bold text-jz-goldSoft mt-1">{item.why}</p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {list.length === 0 && (
+        <p className="text-jz-body text-jz-soft font-bold !mt-6">
+          Your packing list will appear here once JourZy builds your trip. ✨
+        </p>
+      )}
     </div>
   );
 }

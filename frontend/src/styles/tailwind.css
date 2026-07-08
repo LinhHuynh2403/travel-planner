@@ -2,3 +2,39 @@
 @source '../**/*.{js,ts,jsx,tsx}';
 
 @import 'tw-animate-css';
+
+@theme {
+  /* JourZy Custom Color Architecture Palette Configuration */
+  --color-jz-bg: #FAF7F1;
+  --color-jz-card: #FFFFFF;
+  --color-jz-ink: #26333B;
+  --color-jz-soft: #5C6B74;
+  --color-jz-teal: #0F6E64;
+  --color-jz-tealDark: #0A544D;
+  --color-jz-tealTint: #E4F0EE;
+  --color-jz-gold: #F0A742;
+  --color-jz-goldTint: #FCF1DE;
+  --color-jz-goldInk: #6d4a10;
+  --color-jz-goldSoft: #8a5a12;
+  --color-jz-mist: #E7F0F2;
+  --color-jz-line: #E8E2D8;
+
+  /* Form Factor Layout Primitives */
+  --radius-jz-card: 22px;
+  --radius-jz-btn: 18px;
+
+  /* Sizing extensions to prevent shell collapse */
+  --max-width-430: 430px;
+  --min-height-jz-touch: 56px;
+
+  /* High-Contrast Typographic Hierarchy Scaling System
+     NOTE: Tailwind v4's font-size namespace is --text-*, not --font-size-*.
+     The latter generates no utility classes at all — every text-jz-* class
+     was silently a no-op until this was fixed. */
+  --text-jz-label: 15px;
+  --text-jz-body: 17px;
+  --text-jz-body-big: 18.5px;
+  --text-jz-title: 21px;
+  --text-jz-screen: 28px;
+  --text-jz-hero: 30px;
+}

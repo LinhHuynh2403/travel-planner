@@ -1,0 +1,130 @@
+/* ═══════════════════════════════════════════════════════════════
+    JourZy theme layer — loaded AFTER theme.css so it wins.
+    Warm paper + teal + marigold, Nunito, big friendly type.
+    ═══════════════════════════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,500;0,600;0,700;0,800;0,900;1,600&display=swap');
+
+    /* ── Tailwind v4 theme tokens ─────────────────────────────────────
+    These generate the jz-* utility classes used across the app:
+    bg-jz-bg, text-jz-ink, border-jz-line, rounded-jz-card,
+    text-jz-screen, min-h-jz-touch, etc. Without this block those
+    classes silently do nothing. */
+    @theme {
+    --color-jz-bg: #FAF7F1;
+    --color-jz-card: #FFFFFF;
+    --color-jz-ink: #26333B;
+    --color-jz-soft: #5C6B74;
+    --color-jz-teal: #0F6E64;
+    --color-jz-tealDark: #0A544D;
+    --color-jz-tealTint: #E4F0EE;
+    --color-jz-gold: #F0A742;
+    --color-jz-goldTint: #FCF1DE;
+    --color-jz-goldInk: #6d4a10;
+    --color-jz-goldSoft: #8a5a12;
+    --color-jz-mist: #E7F0F2;
+    --color-jz-line: #E8E2D8;
+
+    --radius-jz-card: 22px;
+    --radius-jz-btn: 18px;
+    --radius-jz-chip: 999px;
+
+    --text-jz-label: 15px;
+    --text-jz-body: 17px;
+    --text-jz-body-big: 18.5px;
+    --text-jz-title: 21px;
+    --text-jz-screen: 28px;
+    --text-jz-hero: 30px;
+
+    --spacing-jz-touch: 56px;
+}
+
+:root {
+  /* Bump the whole app's base type for readability (was 16px) */
+    --font-size: 17px;
+
+  /* JourZy palette, available as CSS vars anywhere */
+    --jz-paper: #FAF7F1;
+    --jz-card: #FFFFFF;
+    --jz-ink: #26333B;
+    --jz-soft: #5C6B74;
+    --jz-teal: #0F6E64;
+    --jz-teal-dark: #0A544D;
+    --jz-teal-tint: #E4F0EE;
+    --jz-gold: #F0A742;
+    --jz-gold-tint: #FCF1DE;
+    --jz-gold-ink: #6d4a10;
+    --jz-mist: #E7F0F2;
+    --jz-line: #E8E2D8;
+
+    /* Point the shadcn/ui primitives at the warm palette so Buttons,
+        Badges, Dialogs etc. match without editing components/ui */
+    --background: var(--jz-paper);
+    --foreground: var(--jz-ink);
+    --card: var(--jz-card);
+    --card-foreground: var(--jz-ink);
+    --popover: var(--jz-card);
+    --popover-foreground: var(--jz-ink);
+    --primary: var(--jz-teal);
+    --primary-foreground: #ffffff;
+    --secondary: var(--jz-teal-tint);
+    --secondary-foreground: var(--jz-teal-dark);
+    --muted: #F1EDE5;
+    --muted-foreground: var(--jz-soft);
+    --accent: var(--jz-teal-tint);
+    --accent-foreground: var(--jz-teal-dark);
+    --border: var(--jz-line);
+    --input-background: #ffffff;
+    --ring: var(--jz-teal);
+    --radius: 1rem;
+}
+
+html, body {
+  font-family: 'Nunito', -apple-system, 'Segoe UI', system-ui, sans-serif;
+  background: var(--jz-paper);
+  color: var(--jz-ink);
+}
+
+/* Nunito reads best a touch heavier */
+body { font-weight: 600; }
+strong, b { font-weight: 800; }
+h1, h2, h3, h4 { font-weight: 900; }
+
+/* Big, obvious focus for keyboard users — accessibility requirement */
+button:focus-visible, a:focus-visible, input:focus-visible {
+    outline: 3px solid var(--jz-gold);
+    outline-offset: 2px;
+}
+
+/* Warm scrollbars instead of dark ones */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #DDD5C8; border-radius: 8px; }
+::-webkit-scrollbar-thumb:hover { background: #C9BFAE; }
+
+/* ── Reusable JourZy pieces ─────────────────────────────────── */
+
+/* The signature: every recommendation explains itself */
+.jz-why {
+    margin-top: 6px;
+    font-size: 0.95rem;
+    line-height: 1.45;
+    color: var(--jz-teal);
+    font-weight: 600;
+}
+    .jz-why::before {
+    content: "Because · ";
+    font-weight: 800;
+}
+
+/* Memory chips — "JourZy remembers you", no login needed */
+.jz-chip {
+    display: inline-flex;
+    align-items: center;
+    background: var(--jz-gold-tint);
+    color: var(--jz-gold-ink);
+    font-size: 0.9rem;
+    font-weight: 800;
+    padding: 5px 12px;
+    border-radius: 999px;
+}
