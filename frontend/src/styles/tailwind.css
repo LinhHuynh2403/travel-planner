@@ -30,11 +30,16 @@
   /* High-Contrast Typographic Hierarchy Scaling System
      NOTE: Tailwind v4's font-size namespace is --text-*, not --font-size-*.
      The latter generates no utility classes at all — every text-jz-* class
-     was silently a no-op until this was fixed. */
-  --text-jz-label: 15px;
-  --text-jz-body: 17px;
-  --text-jz-body-big: 18.5px;
-  --text-jz-title: 21px;
-  --text-jz-screen: 28px;
-  --text-jz-hero: 30px;
+     was silently a no-op until this was fixed.
+     Sizes below were originally tuned assuming the Nunito font (see
+     jourzy.css), which never actually got wired into main.tsx — on the
+     system sans-serif font that's actually active, those pixel values read
+     noticeably larger/heavier than intended. Scaled down to read like a
+     normal native mobile app on the font that's really rendering. */
+  --text-jz-label: 13px;
+  --text-jz-body: 15px;
+  --text-jz-body-big: 16px;
+  --text-jz-title: 18px;
+  --text-jz-screen: 22px;
+  --text-jz-hero: 24px;
 }

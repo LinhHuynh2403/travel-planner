@@ -464,10 +464,18 @@ async function extractPlanFromChatHistory(chatHistory) {
   defaultArrival.setDate(defaultArrival.getDate() + 30);
   const defaultLeave = new Date(defaultArrival);
   defaultLeave.setDate(defaultLeave.getDate() + 7);
+  // Without an explicit "today" anchor the model has no real reference point
+  // for relative phrases like "next week" or "in 2 months" — it was
+  // silently guessing (e.g. producing a May date for a trip discussed in
+  // July), since only a fallback DEFAULT date was given, never today's
+  // actual date. Same fix already applied to the chat route's prompt.
+  const todayLabel = currentDateTime.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
 
-  const prompt = `Analyze this travel planner conversation history and extract the core details:
+  const prompt = `Today's actual date is ${todayLabel} (${currentDateTime.toISOString().split('T')[0]}). Use this as the reference point for any relative date the traveler mentioned (e.g. "next week", "in 2 months", "this weekend") — do not guess or use your own assumed date.
+
+Analyze this travel planner conversation history and extract the core details:
 1. Region/Destination (e.g. "Tokyo, Japan" or "Paris, France").
-2. Arrival Date (format YYYY-MM-DD. If year is omitted, assume the next occurrence. Default to: ${defaultArrival.toISOString().split('T')[0]}).
+2. Arrival Date (format YYYY-MM-DD, computed from today's actual date above. If year is omitted, assume the next occurrence. Default to: ${defaultArrival.toISOString().split('T')[0]}).
 3. Leave Date (format YYYY-MM-DD. Default to: ${defaultLeave.toISOString().split('T')[0]}).
 4. Budget level (e.g. "budget", "moderate", "luxury"). Ask thoroughly to determine the user's budget level (e.g: under $1000, under $2000, under $3000, etc)
 5. Travel Group / Who is traveling (e.g. "solo", "couple", "group of 3").
