@@ -4,7 +4,7 @@ import "dotenv/config";
 import rateLimit from "express-rate-limit";
 import { supabase } from "./db.js";
 import fetch from "node-fetch";
-import { SYSTEM_CHAT_INSTRUCTION, getDeterministicGeneratorPrompt, getItineraryChatInstruction } from "./prompts.js";
+import { SYSTEM_CHAT_INSTRUCTION, getDeterministicGeneratorPrompt, getItineraryChatInstruction, getPastTripChatInstruction } from "./prompts.js";
 import { REGIONAL_LOGISTICS } from "./logisticsData.js"; // Added Missing Import
 
 const app = express();
@@ -864,6 +864,8 @@ app.post("/api/chat", expensiveLimiter, optionalAuth, async (req, res) => {
 
     const systemInstruction = mode === "itinerary"
       ? getItineraryChatInstruction(itineraryContext || "(no trip details provided)")
+      : mode === "pastTrip"
+      ? getPastTripChatInstruction(itineraryContext || "(no trip details provided)")
       : SYSTEM_CHAT_INSTRUCTION;
 
     let replyText = "";
@@ -1014,7 +1016,7 @@ Model reply:`;
       console.warn("Using canned response fallback for chat.");
       const lastUserText = (chatHistory[chatHistory.length - 1]?.text || "").toLowerCase();
 
-      if (mode === "itinerary") {
+      if (mode === "itinerary" || mode === "pastTrip") {
         replyText = "Sorry, I'm having trouble connecting right now — mind trying that again in a moment?";
       } else {
         replyText = "Got it! What other activities, hobbies, or food preferences do you have? Or just type 'good to go' when you're ready to generate the schedule!";

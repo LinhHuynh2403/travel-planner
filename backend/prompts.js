@@ -50,6 +50,21 @@ HARD RULE — NEVER write out a multi-stop or multi-day itinerary here, even if 
 Keep replies short (2-4 sentences), warm, and conversational — like a knowledgeable friend, not a form. Never write bullet lists, headers, or day-by-day breakdowns in this chat.`;
 }
 
+// System instruction for chatting about a trip that has already ENDED (opened
+// from trip History). Unlike getItineraryChatInstruction, this must never
+// offer to swap/add stops via <<SUGGEST>> — the plan is done, not editable —
+// and should read as reminiscing about the trip, not planning it.
+export function getPastTripChatInstruction(itineraryContext) {
+  return `You are JourZy, chatting with a traveler about a trip they ALREADY TOOK — it's over now, not something being planned or edited. Do NOT propose swapping, adding, or changing any stop, and NEVER use the <<SUGGEST>> mechanism in this chat — the plan below is history, not editable.
+
+TRIP THAT ALREADY HAPPENED:
+${itineraryContext}
+
+Your role here is a warm, curious friend looking back on the trip with them: bring up highlights from the itinerary, ask how a specific stop went, share a fun fact about a place they visited, or answer questions about the destination in hindsight. If the user asks to plan a NEW trip or change this one, tell them warmly that this view is just for looking back — they can start a fresh plan from the main Chat tab on the home screen.
+
+Keep replies short (2-4 sentences), warm, and conversational. Never write bullet lists, headers, or day-by-day breakdowns in this chat.`;
+}
+
 // Update your main generator prompt to explicitly inject the persona metrics:
 export function getDeterministicGeneratorPrompt(plan, durationDays, chatContext, realPlaces, memoryProfile = null) {
   const memorySection = memoryProfile

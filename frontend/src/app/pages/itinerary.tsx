@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Home, Map, Backpack, Lightbulb, MessageCircle } from 'lucide-react';
+import { Home, Map, Backpack, Lightbulb, MessageCircle, ArrowLeft } from 'lucide-react';
 import { GeneratedItinerary } from '../types/travel';
 import { apiFetch } from '../utils/api';
 import { TodayTab } from '../components/today-tab';
@@ -21,6 +21,7 @@ const TABS: { id: TabId; label: string; icon: typeof Home }[] = [
 export default function Itinerary() {
   const navigate = useNavigate();
   const [itinerary, setItinerary] = useState<GeneratedItinerary | null>(null);
+  const [isPastTrip, setIsPastTrip] = useState(false);
   const [tab, setTab] = useState<TabId>('today');
   const [planDayNumber, setPlanDayNumber] = useState<number | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
@@ -35,10 +36,27 @@ export default function Itinerary() {
     if (!itineraryData) { navigate('/'); return; }
     try {
       setItinerary(JSON.parse(itineraryData));
+      setIsPastTrip(sessionStorage.getItem('viewingPastTrip') === 'true');
     } catch (e) {
       navigate('/');
     }
   }, [navigate]);
+
+  // Leaving a past trip's read-only view must fully reset the planning chat
+  // session — otherwise the stale chatMessages/chatStep/chatPlan from
+  // whatever was last in progress gets resumed instead of a fresh "plan a
+  // new trip" conversation (this was the "JourZy cannot plan a new trip" bug).
+  const startNewTrip = () => {
+    sessionStorage.removeItem('chatMessages');
+    sessionStorage.removeItem('chatStep');
+    sessionStorage.removeItem('chatPlan');
+    sessionStorage.removeItem('travelPlan');
+    sessionStorage.removeItem('generatedItinerary');
+    sessionStorage.removeItem('itineraryChatMessages');
+    sessionStorage.removeItem('itineraryChatTripId');
+    sessionStorage.removeItem('viewingPastTrip');
+    navigate('/?view=chat');
+  };
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -112,6 +130,18 @@ export default function Itinerary() {
     <div className="min-h-screen bg-[#EFE9DF] text-jz-ink flex items-center justify-center sm:p-4 selection:bg-jz-tealTint">
       <div className="relative w-full max-w-[430px] h-[100dvh] sm:h-[min(920px,94vh)] bg-jz-bg sm:rounded-[36px] overflow-hidden sm:border-[10px] sm:border-jz-ink sm:shadow-2xl flex flex-col">
 
+        {isPastTrip && (
+          <div className="flex items-center gap-3 px-4 py-3 bg-white border-b-[1.5px] border-jz-line shrink-0">
+            <button
+              onClick={startNewTrip}
+              className="flex items-center gap-1.5 text-jz-teal font-extrabold text-jz-body-big"
+            >
+              <ArrowLeft className="w-5 h-5" /> Plan a new trip
+            </button>
+            <span className="ml-auto text-xs font-extrabold text-jz-soft uppercase tracking-wide">Past trip</span>
+          </div>
+        )}
+
         <main
           ref={mainRef}
           onScroll={(e) => { scrollPositions.current[tab] = e.currentTarget.scrollTop; }}
@@ -174,6 +204,7 @@ export default function Itinerary() {
           <ChatOverlay
             itinerary={itinerary}
             prefill={chatPrefill}
+            isPastTrip={isPastTrip}
             onClose={() => setChatOpen(false)}
             onReplaceActivity={handleReplaceActivity}
           />

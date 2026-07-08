@@ -160,6 +160,15 @@ export default function Home() {
       };
       sessionStorage.setItem('generatedItinerary', JSON.stringify(generated));
       sessionStorage.setItem('travelPlan', JSON.stringify(generated.plan));
+      sessionStorage.setItem('viewingPastTrip', JSON.stringify(new Date(tripRow.leave_date) < new Date()));
+      // Each trip needs its own chat transcript — but only reset it when
+      // switching to a genuinely different trip than whatever is cached,
+      // otherwise reopening the SAME trip (e.g. tab away and back) would
+      // wipe out a chat that's still in progress for it.
+      if (sessionStorage.getItem('itineraryChatTripId') !== String(trip.id)) {
+        sessionStorage.removeItem('itineraryChatMessages');
+        sessionStorage.setItem('itineraryChatTripId', String(trip.id));
+      }
       navigate('/itinerary');
     } catch (e) {
       console.error('Failed to open trip:', e);
@@ -450,7 +459,7 @@ export default function Home() {
                     }}
                     disabled={currentStep === 'generating'}
                     placeholder={currentStep === 'generating' ? "JourZy is building your itinerary..." : currentStep === 'name' ? "Type your name..." : "Ask anything about your trip..."}
-                    className="w-full bg-transparent py-4 pl-5 pr-14 text-jz-body-big text-jz-ink placeholder-jz-soft/60 focus:outline-none min-h-jz-touch font-semibold disabled:opacity-60"
+                    className="w-full bg-transparent py-4 pl-5 pr-20 text-jz-body-big text-jz-ink placeholder-jz-soft/60 focus:outline-none min-h-jz-touch font-semibold disabled:opacity-60"
                   />
                   <button
                     onClick={() => { if (inputValue.trim() && currentStep !== 'generating') { submitInput(inputValue.trim()); setInputValue(''); } }}

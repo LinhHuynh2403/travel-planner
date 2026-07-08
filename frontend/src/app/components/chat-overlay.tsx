@@ -18,6 +18,7 @@ type ChatMessage = { id: string; role: 'ai' | 'user'; text: string; suggestion?:
 interface ChatOverlayProps {
   itinerary: GeneratedItinerary;
   prefill?: string;
+  isPastTrip?: boolean;
   onClose: () => void;
   onReplaceActivity: (dayNumber: number, activityIdx: number, newData: { title: string; location: string; description: string; place: PlaceSuggestion }) => void;
 }
@@ -33,12 +34,14 @@ function buildItineraryContext(itinerary: GeneratedItinerary): string {
   return `Destination: ${region}\nDates: ${arrival} to ${leave}\n${days}`;
 }
 
-export function ChatOverlay({ itinerary, prefill, onClose, onReplaceActivity }: ChatOverlayProps) {
+export function ChatOverlay({ itinerary, prefill, isPastTrip, onClose, onReplaceActivity }: ChatOverlayProps) {
   const region = itinerary.plan.region;
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
     const saved = sessionStorage.getItem('itineraryChatMessages');
     return saved ? JSON.parse(saved) : [
-      { id: '1', role: 'ai', text: `Good to see you! Want to tweak something in your ${region.split(',')[0]} plan, or just have a question?` },
+      isPastTrip
+        ? { id: '1', role: 'ai', text: `Good to see you! Want to relive some highlights from your ${region.split(',')[0]} trip? Ask me anything about how it went! ✨` }
+        : { id: '1', role: 'ai', text: `Good to see you! Want to tweak something in your ${region.split(',')[0]} plan, or just have a question?` },
     ];
   });
   const [inputValue, setInputValue] = useState(prefill || '');
@@ -64,7 +67,7 @@ export function ChatOverlay({ itinerary, prefill, onClose, onReplaceActivity }: 
         body: JSON.stringify({
           messages: updated,
           text,
-          mode: 'itinerary',
+          mode: isPastTrip ? 'pastTrip' : 'itinerary',
           itineraryContext: buildItineraryContext(itinerary),
           // Authoritative "City, Country" for resolving <<SUGGEST>> place
           // lookups — the model's own city guess inside the tag is sometimes
@@ -214,7 +217,7 @@ export function ChatOverlay({ itinerary, prefill, onClose, onReplaceActivity }: 
             onChange={e => setInputValue(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleSend()}
             placeholder="Ask anything about your trip..."
-            className="w-full bg-transparent py-4 pl-5 pr-14 text-jz-body-big text-jz-ink placeholder-jz-soft/60 focus:outline-none min-h-jz-touch font-semibold"
+            className="w-full bg-transparent py-4 pl-5 pr-20 text-jz-body-big text-jz-ink placeholder-jz-soft/60 focus:outline-none min-h-jz-touch font-semibold"
           />
           <button
             onClick={handleSend}
