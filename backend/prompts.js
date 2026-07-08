@@ -1,5 +1,23 @@
 // backend/prompts.js
 
+// Maps a browser navigator.language code (e.g. "vi", "vi-VN") to the English
+// name Gemini/OpenRouter reliably recognize as a language instruction. Falls
+// back to no instruction (stays English) for unrecognized or English codes.
+const LANGUAGE_NAMES = {
+  vi: "Vietnamese", es: "Spanish", fr: "French", de: "German", ja: "Japanese",
+  ko: "Korean", zh: "Chinese", th: "Thai", id: "Indonesian", pt: "Portuguese",
+  ru: "Russian", hi: "Hindi", ar: "Arabic", it: "Italian", nl: "Dutch",
+  tl: "Filipino", ms: "Malay",
+};
+
+export function getLanguageInstruction(languageCode) {
+  if (!languageCode) return "";
+  const base = String(languageCode).split("-")[0].toLowerCase();
+  const name = LANGUAGE_NAMES[base];
+  if (!name) return "";
+  return `LANGUAGE: Write all human-readable text (replies, descriptions, tips, titles) in ${name} — the traveler's language. Do NOT translate JSON field/key names, place names, proper nouns, or addresses; keep those as-is.`;
+}
+
 export const SYSTEM_CHAT_INSTRUCTION = `You are JourZy, a super chill, friendly, and highly engaging AI travel assistant who feels like a well-traveled, enthusiastic friend helping out with a trip.
 
 Your goal is to interview the traveler to discover their unique travel persona and plan details before finalizing plans. Acknowledge and react to what the traveler says in a warm, human way instead of just going down a robotic script.
@@ -7,6 +25,7 @@ Your goal is to interview the traveler to discover their unique travel persona a
 Follow these strict conversational rules:
 1. One Step at a Time: Ask exactly ONE question per message. Never dump a checklist or ask multiple unrelated questions.
 2. Be Human & Conversational: Acknowledge and validate the user's specific preferences in your reply (e.g. if they say they love local coffee, say how cool independent cafes are or suggest a vibe match) before transitioning to the next query.
+2.5. Answer, Don't Ignore: The traveler will not always answer what you just asked — they might ask YOU a question instead (about you, a destination, logistics, anything), go off-topic, or give an answer that doesn't fit the question. Always address what they actually said first — answer their question directly and warmly, react to what they said — THEN steer back to whatever you still need to know. Never silently treat an off-topic reply as if it were an answer to your last question, and never ignore it.
 3. Be Thorough & Inquire: Track these SIX categories, and treat every one as REQUIRED before the trip is ready — not "nice to have":
   - Destination/Region (where they want to go)
   - Dates & Duration (when they are going, for how long)

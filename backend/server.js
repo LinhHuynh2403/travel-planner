@@ -4,8 +4,7 @@ import "dotenv/config";
 import rateLimit from "express-rate-limit";
 import { supabase } from "./db.js";
 import fetch from "node-fetch";
-import { SYSTEM_CHAT_INSTRUCTION, getDeterministicGeneratorPrompt, getItineraryChatInstruction, getPastTripChatInstruction } from "./prompts.js";
-import { REGIONAL_LOGISTICS } from "./logisticsData.js"; // Added Missing Import
+import { SYSTEM_CHAT_INSTRUCTION, getDeterministicGeneratorPrompt, getItineraryChatInstruction, getPastTripChatInstruction, getLanguageInstruction } from "./prompts.js";
 
 const app = express();
 
@@ -490,13 +489,13 @@ ${chatHistory.filter(m => m).map(m => `${(m.role || 'user').toUpperCase()}: ${m.
     const geminiKey = process.env.GEMINI_API_KEY;
     if (geminiKey) {
       const resp = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${geminiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${geminiKey}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { responseMimeType: "application/json" }
+            generationConfig: { responseMimeType: "application/json", thinkingConfig: { thinkingBudget: 0 } }
           })
         }
       );
@@ -548,6 +547,7 @@ app.post("/api/itinerary", expensiveLimiter, optionalAuth, async (req, res) => {
   const payload = req.body;
   let plan = payload.plan || payload || {};
   let chatHistory = payload.chatHistory || [];
+  const language = payload.language;
 
   // Cap chat history size so a hostile payload can't inflate the LLM prompt (token cost)
   if (Array.isArray(chatHistory) && chatHistory.length > MAX_CHAT_MESSAGES) {
@@ -595,7 +595,9 @@ app.post("/api/itinerary", expensiveLimiter, optionalAuth, async (req, res) => {
       } catch (_) { }
     }
 
-    const prompt = getDeterministicGeneratorPrompt(plan, durationDays, chatContext, realPlaces, memoryProfile);
+    const languageInstruction = getLanguageInstruction(language);
+    const prompt = getDeterministicGeneratorPrompt(plan, durationDays, chatContext, realPlaces, memoryProfile)
+      + (languageInstruction ? `\n\n${languageInstruction}` : "");
 
     let raw = "";
     let success = false;
@@ -624,7 +626,10 @@ app.post("/api/itinerary", expensiveLimiter, optionalAuth, async (req, res) => {
       try {
         console.log("Sending itinerary generation prompt to Gemini API...");
         const geminiKey = process.env.GEMINI_API_KEY;
-        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${geminiKey}`;
+        // gemini-3.1-flash-lite — higher daily request quota than
+        // 2.5-flash-lite, and tested to handle this structured JSON task
+        // cleanly (no implicit thinking-token consumption observed).
+        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${geminiKey}`;
 
         const geminiRes = await fetch(geminiUrl, {
           method: "POST",
@@ -745,77 +750,14 @@ app.post("/api/itinerary", expensiveLimiter, optionalAuth, async (req, res) => {
     console.log("Enriching itinerary with verified coordinates and locations...");
     itinerary = await enrichItineraryPlaces(itinerary, realPlaces);
 
-    // Standardize baseline fallback insights configurations...
-    const regionName = itinerary.plan?.region || plan.region;
-
-    // 2. FEATURE INTEGRATION: Enforce Automated SIM and Transit Card Processing Mechanics
-    const matchedCountryKey = Object.keys(REGIONAL_LOGISTICS).find(country =>
-      regionName.toLowerCase().includes(country.toLowerCase())
-    );
-
+    // The generator prompt already asks the model for emergencyNumbers,
+    // safeNeighborhoods, commonScams, and logisticsGuide directly (see
+    // prompts.js) — trust that instead of a hardcoded fallback that only
+    // covered 4 countries and fell back to near-useless generic text
+    // ("Check Local Directory") for everywhere else. Keep only a minimal
+    // null-safety guard so the frontend never crashes on a missing object.
     if (!itinerary.insights) {
       itinerary.insights = { weatherOverview: "", culturalTips: [], safetyTips: [], customsRestrictions: [] };
-    }
-
-    // Safety Assistant enrichment
-    if (!itinerary.insights.emergencyNumbers) {
-      if (regionName.toLowerCase().includes("japan") || regionName.toLowerCase().includes("tokyo")) {
-        itinerary.insights.emergencyNumbers = { police: "110", ambulance: "119", fire: "119", touristPolice: "03-3501-0110 (Met Police)" };
-      } else if (regionName.toLowerCase().includes("korea") || regionName.toLowerCase().includes("seoul")) {
-        itinerary.insights.emergencyNumbers = { police: "112", ambulance: "119", fire: "119", touristPolice: "1330 (Tourist Hotline)" };
-      } else if (regionName.toLowerCase().includes("singapore")) {
-        itinerary.insights.emergencyNumbers = { police: "999", ambulance: "995", fire: "995", touristPolice: "1800 255 0000" };
-      } else if (regionName.toLowerCase().includes("france") || regionName.toLowerCase().includes("paris")) {
-        itinerary.insights.emergencyNumbers = { police: "17", ambulance: "15", fire: "18", touristPolice: "112 (European Emergency)" };
-      } else {
-        itinerary.insights.emergencyNumbers = { police: "112", ambulance: "112", fire: "112", touristPolice: "Check Local Directory" };
-      }
-    }
-
-    if (!itinerary.insights.safeNeighborhoods || itinerary.insights.safeNeighborhoods.length === 0) {
-      if (regionName.toLowerCase().includes("japan") || regionName.toLowerCase().includes("tokyo")) {
-        itinerary.insights.safeNeighborhoods = ["Chiyoda", "Minato", "Meguro", "Setagaya", "Shibuya (most areas)"];
-      } else if (regionName.toLowerCase().includes("korea") || regionName.toLowerCase().includes("seoul")) {
-        itinerary.insights.safeNeighborhoods = ["Mapo-gu", "Jongno-gu", "Seocho-gu", "Gangnam-gu", "Songpa-gu"];
-      } else if (regionName.toLowerCase().includes("singapore")) {
-        itinerary.insights.safeNeighborhoods = ["Marina Bay", "Orchard", "Tiong Bahru", "Tampines", "Queenstown"];
-      } else if (regionName.toLowerCase().includes("france") || regionName.toLowerCase().includes("paris")) {
-        itinerary.insights.safeNeighborhoods = ["1st Arr. (Louvre)", "4th Arr. (Marais)", "5th Arr. (Latin Quarter)", "6th Arr. (St. Germain)", "7th Arr. (Eiffel Tower)"];
-      } else {
-        itinerary.insights.safeNeighborhoods = ["City Center", "Tourist Safe Zones", "Central Business District"];
-      }
-    }
-
-    if (!itinerary.insights.commonScams || itinerary.insights.commonScams.length === 0) {
-      if (regionName.toLowerCase().includes("japan") || regionName.toLowerCase().includes("tokyo")) {
-        itinerary.insights.commonScams = ["Nightclub cover charge tricks in Kabukicho", "Fake charity petition signing", "Overpriced bar recommendations from street touts"];
-      } else if (regionName.toLowerCase().includes("korea") || regionName.toLowerCase().includes("seoul")) {
-        itinerary.insights.commonScams = ["Traditional tea ceremony invitation scam (cult-run)", "Overcharging by unregistered orange airport taxis", "High-pressure sales at unauthorized herbal shops"];
-      } else if (regionName.toLowerCase().includes("singapore")) {
-        itinerary.insights.commonScams = ["Sim card overcharging at unlicensed retail shops", "Rental deposit scams on social media", "Pre-payment demand for unregistered private sightseeing tours"];
-      } else if (regionName.toLowerCase().includes("france") || regionName.toLowerCase().includes("paris")) {
-        itinerary.insights.commonScams = ["The gold ring scam around Jardin des Tuileries", "Friendship bracelet scams around Sacré-Cœur steps", "Distraction pickpocketing near major subway gates"];
-      } else {
-        itinerary.insights.commonScams = ["Unlicensed airport taxi overcharging", "High-pressure local souvenir pricing", "Pickpocketing in crowded markets"];
-      }
-    }
-
-    if (matchedCountryKey) {
-      const logisticsData = REGIONAL_LOGISTICS[matchedCountryKey];
-
-      // Inject safety instructions and connectivity tips straight into our runtime payload
-      itinerary.insights.culturalTips.unshift(`Logistics Tip: ${logisticsData.connectivity}`);
-      itinerary.insights.safetyTips.unshift(`Transit Notice: ${logisticsData.transit}`);
-
-      itinerary.logisticsGuide = {
-        connectivity: logisticsData.connectivity,
-        transitCards: logisticsData.transit
-      };
-    } else if (!itinerary.logisticsGuide) {
-      itinerary.logisticsGuide = {
-        connectivity: "Pre-book a local eSIM (like Airalo) or pick up a data SIM at the airport arrival terminal counters.",
-        transitCards: "Look up standard regional tap-and-go cards or contactless mobile payment turnstiles."
-      };
     }
 
     return res.json(itinerary);
@@ -826,7 +768,7 @@ app.post("/api/itinerary", expensiveLimiter, optionalAuth, async (req, res) => {
 });
 
 app.post("/api/chat", expensiveLimiter, optionalAuth, async (req, res) => {
-  const { messages, text, sessionId, mode, itineraryContext, region, timezone } = req.body;
+  const { messages, text, sessionId, mode, itineraryContext, region, timezone, language } = req.body;
   let chatHistory = messages || [];
   let dbAvailable = false;
 
@@ -868,6 +810,15 @@ app.post("/api/chat", expensiveLimiter, optionalAuth, async (req, res) => {
     return res.status(400).json({ error: "Missing chat context" });
   }
 
+  // The frontend no longer ships any hardcoded opening line — even JourZy's
+  // first "hello" is AI-generated — so on a genuinely empty transcript, give
+  // the model a synthetic, never-displayed kickoff turn to react to instead
+  // of an empty conversation (Gemini/OpenRouter both require at least one
+  // turn). This is never shown to the traveler or stored as their message.
+  if (chatHistory.length === 0 && mode !== "itinerary" && mode !== "pastTrip") {
+    chatHistory = [{ role: "user", text: "(The traveler just opened the app for the first time. Greet them warmly as JourZy in 1-2 sentences and ask your first question to start planning their trip.)" }];
+  }
+
   // Cap history so a hostile payload can't inflate the LLM prompt
   if (chatHistory.length > MAX_CHAT_MESSAGES) {
     chatHistory = chatHistory.slice(-MAX_CHAT_MESSAGES);
@@ -883,11 +834,13 @@ app.post("/api/chat", expensiveLimiter, optionalAuth, async (req, res) => {
       currentDateTime = new Date().toLocaleString("en-US", { timeZone: "UTC" });
     }
 
-    const systemInstruction = mode === "itinerary"
+    const baseInstruction = mode === "itinerary"
       ? getItineraryChatInstruction(itineraryContext || "(no trip details provided)")
       : mode === "pastTrip"
       ? getPastTripChatInstruction(itineraryContext || "(no trip details provided)")
       : SYSTEM_CHAT_INSTRUCTION;
+    const languageInstruction = getLanguageInstruction(language);
+    const systemInstruction = languageInstruction ? `${baseInstruction}\n\n${languageInstruction}` : baseInstruction;
 
     let replyText = "";
     let success = false;
@@ -939,7 +892,11 @@ Model reply:`;
       try {
         console.log("Sending chat prompt to Gemini API...");
         const geminiKey = process.env.GEMINI_API_KEY;
-        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${geminiKey}`;
+        // gemini-3.5-flash specifically for chat (not itinerary generation) —
+        // tested to give noticeably more fluent, natural non-English replies
+        // (Vietnamese especially) than 2.5-flash-lite, which matters most
+        // right where the traveler is actually reading prose.
+        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${geminiKey}`;
 
         const contents = chatHistory.filter(m => m).map(m => ({
           role: (m.role || 'user') === 'ai' ? 'model' : 'user',
@@ -960,7 +917,15 @@ Model reply:`;
               // plus a <<SUGGEST>> tag, and silently truncated mid-word
               // whenever the model ran long. The prompt now hard-bans
               // multi-day dumps, so this only needs to cover a normal reply.
-              maxOutputTokens: 600
+              maxOutputTokens: 600,
+              // gemini-3.5-flash "thinks" before answering by default, same
+              // as 2.5 did, and those tokens draw from this SAME budget —
+              // tested empirically and it consumed 572/600 tokens on
+              // thinking alone, cutting the actual reply off mid-sentence
+              // (finishReason MAX_TOKENS after only 24 usable tokens). This
+              // is a short conversational reply, not a task that benefits
+              // from visible reasoning, so disable thinking entirely.
+              thinkingConfig: { thinkingBudget: 0 }
             }
           })
         });

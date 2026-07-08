@@ -48,7 +48,7 @@ export async function generateItinerary(
   const resp = await fetch(`${API_BASE}/api/itinerary`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ plan: normalizedPlan, chatHistory }),
+    body: JSON.stringify({ plan: normalizedPlan, chatHistory, language: navigator.language }),
   });
 
   if (!resp.ok) {

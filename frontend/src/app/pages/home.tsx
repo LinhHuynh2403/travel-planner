@@ -10,13 +10,8 @@ type Message = {
   id: string;
   role: 'ai' | 'user';
   text: string;
-  step?: 'name' | 'persona' | 'destination' | 'dates' | 'chatting' | 'generating';
+  step?: 'chatting' | 'generating';
 };
-
-function timeGreeting(): string {
-  const hour = new Date().getHours();
-  return hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
-}
 
 /* If the trip we were last chatting about has already ended, clear the
  * cached conversation so JourZy starts a fresh "plan a new trip" chat
@@ -54,32 +49,24 @@ export default function Home() {
   const [vibeSettings, setVibeSettings] = useState<string[]>([]);
   const [foodPreferences, setFoodPreferences] = useState<string[]>([]);
   const [isThinking, setIsThinking] = useState(false);
-  const [userName, setUserName] = useState<string | null>(null);
 
-  // Whether this tab already had a chat in progress (page refresh / same
-  // session) vs. a genuinely brand-new visit — decides whether we show the
-  // name-ask / personalized-return greeting or leave an in-progress chat alone.
-  const isFreshSession = useRef(!localStorage.getItem('chatMessages'));
-
+  // Empty on a genuinely fresh visit — the bootstrap effect below fires the
+  // very first message request so even JourZy's opening line is AI-generated,
+  // not a hardcoded greeting.
   const [messages, setMessages] = useState<Message[]>(() => {
     const saved = localStorage.getItem('chatMessages');
-    return saved ? JSON.parse(saved) : [
-      {
-        id: '1',
-        role: 'ai',
-        text: "Hello, welcome for the first time using JourZy! 👋\n\nWhat should I call you?",
-        step: 'name'
-      }
-    ];
+    return saved ? JSON.parse(saved) : [];
   });
+  const hasBootstrapped = useRef(false);
 
-  const [currentStep, setCurrentStep] = useState<'name' | 'persona' | 'destination' | 'dates' | 'chatting' | 'generating'>(() => {
-    const saved = localStorage.getItem('chatStep');
-    const step = saved ? JSON.parse(saved) : 'name';
-    return step === 'generating' ? 'chatting' : step;
-  });
+  const [currentStep, setCurrentStep] = useState<'chatting' | 'generating'>('chatting');
 
-  const [plan, setPlan] = useState<Partial<TravelPlan>>(() => {
+  // No longer written to anywhere client-side — the backend's
+  // extractPlanFromChatHistory derives region/dates/etc. straight from the
+  // conversation transcript instead, same as it already does as a fallback.
+  // Kept for backward-compat with any localStorage value from before this
+  // change, and to preserve budget/whoTraveling if a future feature sets them.
+  const [plan] = useState<Partial<TravelPlan>>(() => {
     const saved = localStorage.getItem('chatPlan');
     return saved ? JSON.parse(saved) : {};
   });
@@ -194,21 +181,6 @@ export default function Home() {
               setTravelPersonaArchetype(prefs.travelPersonaArchetype || []);
               setVibeSettings(prefs.vibeSettings || []);
               setFoodPreferences(prefs.foodPreferences || []);
-
-              if (prefs.userName) {
-                setUserName(prefs.userName);
-                // Only overwrite the greeting if this is a brand-new tab visit —
-                // never clobber a chat the user is already mid-conversation in.
-                if (isFreshSession.current) {
-                  setMessages([{
-                    id: '1',
-                    role: 'ai',
-                    text: `${timeGreeting()}, ${prefs.userName}! 👋\n\nWould you like to look at a saved trip, or dream up a new one? Where would you like to go? (e.g., "Paris, France" or "Tokyo, Japan")`,
-                    step: 'destination'
-                  }]);
-                  setCurrentStep('destination');
-                }
-              }
             }
           }
         } catch (e) { console.error(e); }
@@ -224,52 +196,32 @@ export default function Home() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, currentStep, plan]);
 
-  const handleNameSubmit = async (rawName: string) => {
-    const name = rawName.trim().replace(/[^\p{L}\p{N} '.-]/gu, '').slice(0, 40);
-    if (!name) return;
-    setUserName(name);
-    setMessages(prev => [
-      ...prev,
-      { id: Date.now().toString(), role: 'user', text: rawName },
-      { id: (Date.now() + 1).toString(), role: 'ai', text: `Great to meet you, ${name}! 🌍\n\nWhere would you like to go first? (e.g., "Paris, France" or "Tokyo, Japan")`, step: 'destination' }
-    ]);
-    setCurrentStep('destination');
-
-    if (user?.id) {
+  // Even JourZy's opening line is AI-generated now — no hardcoded greeting.
+  // On a genuinely fresh session (nothing in localStorage), ask the backend
+  // for the first message instead of scripting one client-side.
+  useEffect(() => {
+    if (messages.length > 0 || hasBootstrapped.current) return;
+    hasBootstrapped.current = true;
+    (async () => {
+      setIsThinking(true);
       try {
-        const existingResp = await apiFetch('/api/memory');
-        const existingPrefs = existingResp.ok ? (await existingResp.json())?.memory?.preferences || {} : {};
-        await apiFetch('/api/memory', {
+        const response = await apiFetch('/api/chat', {
           method: 'POST',
-          body: JSON.stringify({ preferences: { ...existingPrefs, userName: name } })
+          body: JSON.stringify({ messages: [], timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, language: navigator.language }),
         });
-      } catch (e) { console.error('Failed to save name:', e); }
-    }
-  };
-
-  const handleDestinationSelect = (region: string) => {
-    const formattedRegion = region.replace(/[🇲🇽🇫🇷🇮🇩🗽🇯🇵]/g, '').trim();
-    setPlan({ ...plan, region: formattedRegion });
-    setMessages(prev => [
-      ...prev,
-      { id: Date.now().toString(), role: 'user', text: region },
-      { id: (Date.now() + 1).toString(), role: 'ai', text: `Awesome! ${formattedRegion} is a fantastic choice. ✈️\n\nWhen are you planning to travel and for how long?`, step: 'dates' }
-    ]);
-    setCurrentStep('dates');
-  };
-
-  const handleDatesSelect = (datesText: string) => {
-    // Don't fabricate arrivalDate/leaveDate here — whatever the traveler typed
-    // (e.g. "next Thursday for a week") stays in the chat transcript, and the
-    // backend resolves the real dates from that full conversation at
-    // generation time (extractPlanFromChatHistory), same as free-typed dates.
-    setMessages(prev => [
-      ...prev,
-      { id: Date.now().toString(), role: 'user', text: datesText },
-      { id: (Date.now() + 1).toString(), role: 'ai', text: `Got it! Marked your calendar. 📅\n\nWhat kind of accommodation are you looking for based on your budget?`, step: 'chatting' }
-    ]);
-    setCurrentStep('chatting');
-  };
+        if (response.ok) {
+          const data = await response.json();
+          setMessages([{ id: '1', role: 'ai', text: data.text }]);
+        } else {
+          setMessages([{ id: '1', role: 'ai', text: "Hey, I'm JourZy! ✈️ Where are you dreaming of going?" }]);
+        }
+      } catch (e) {
+        setMessages([{ id: '1', role: 'ai', text: "Hey, I'm JourZy! ✈️ Where are you dreaming of going?" }]);
+      } finally {
+        setIsThinking(false);
+      }
+    })();
+  }, []);
 
   const handleGenerateItinerary = async (customMessages?: Message[]) => {
     setCurrentStep('generating');
@@ -328,7 +280,7 @@ export default function Home() {
     try {
       const response = await apiFetch(`/api/chat`, {
         method: "POST",
-        body: JSON.stringify({ messages: updatedMessages, text, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
+        body: JSON.stringify({ messages: updatedMessages, text, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, language: navigator.language }),
       });
       if (response.ok) {
         const data = await response.json();
@@ -343,11 +295,7 @@ export default function Home() {
   };
 
   const submitInput = (text: string) => {
-    if (currentStep === 'name') {
-      handleNameSubmit(text);
-    } else {
-      handleChattingInput(text);
-    }
+    handleChattingInput(text);
   };
 
   return (
@@ -398,36 +346,6 @@ export default function Home() {
                         : 'bg-white border-jz-teal text-jz-teal rounded-[22px] rounded-tr-[6px] font-bold'
                     }`}>
                       <div className="leading-relaxed"><ChatText text={msg.text} /></div>
-
-                      {/* Floating Prompt Suggestion Pills */}
-                      {msg.role === 'ai' && msg.step === 'destination' && currentStep === 'destination' && (
-                        <div className="mt-4 flex flex-col gap-2">
-                          <p className="text-xs font-bold text-jz-soft">Just tap an answer — no typing needed:</p>
-                          {["Tokyo, Japan 🇯🇵", "Paris, France 🇫🇷", "Bali, Indonesia 🇮🇩", "New York, USA 🗽"].map(dest => (
-                            <button
-                              key={dest}
-                              onClick={() => handleDestinationSelect(dest)}
-                              className="w-full text-center py-3.5 rounded-xl border-2 border-jz-teal bg-white hover:bg-jz-tealTint text-jz-body-big font-extrabold text-jz-teal transition-all min-h-jz-touch"
-                            >
-                              {dest}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-
-                      {msg.role === 'ai' && msg.step === 'dates' && currentStep === 'dates' && (
-                        <div className="mt-4 flex flex-col gap-2">
-                          {["Jul 14 to Jul 21", "Next week for 5 days", "In September for 2 weeks"].map(dates => (
-                            <button
-                              key={dates}
-                              onClick={() => handleDatesSelect(dates)}
-                              className="w-full text-center py-3.5 rounded-xl border-2 border-jz-teal bg-white hover:bg-jz-tealTint text-jz-body-big font-extrabold text-jz-teal transition-all min-h-jz-touch"
-                            >
-                              {dates}
-                            </button>
-                          ))}
-                        </div>
-                      )}
                     </div>
                   </div>
                 ))}
@@ -464,7 +382,7 @@ export default function Home() {
                       }
                     }}
                     disabled={currentStep === 'generating'}
-                    placeholder={currentStep === 'generating' ? "JourZy is building your itinerary..." : currentStep === 'name' ? "Type your name..." : "Ask anything about your trip..."}
+                    placeholder={currentStep === 'generating' ? "JourZy is building your itinerary..." : "Ask anything about your trip..."}
                     className="w-full bg-transparent py-4 pl-5 pr-20 text-jz-body-big text-jz-ink placeholder-jz-soft/60 focus:outline-none min-h-jz-touch font-semibold disabled:opacity-60"
                   />
                   <button

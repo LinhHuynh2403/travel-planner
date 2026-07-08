@@ -77,6 +77,7 @@ export function ChatOverlay({ itinerary, prefill, isPastTrip, onClose, onReplace
           // places in the US instead of the actual destination.
           region: itinerary.plan.region,
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          language: navigator.language,
         }),
       });
       if (resp.ok) {
