@@ -94,12 +94,25 @@ export interface HotelRecommendation {
   reasoning: string;
   alternatives?: HotelAlternative[];
   pricePerNight?: number;
+  place?: {
+    placeId: string;
+    address: string;
+    lat: number;
+    lng: number;
+    rating?: number;
+    mapsUrl: string;
+  };
 }
 
 export interface ExpandedLogisticsGuide {
   connectivity: string;
   transitCards: string;
   bookingTips?: string;
+  airportToStay?: string;
+  gettingAround?: string;
+  luggageStorage?: string;
+  mobilityNotes?: string;
+  airlinePoints?: string;
 }
 
 export interface GeneratedItinerary {
@@ -128,6 +141,7 @@ export interface GeneratedItinerary {
     commonScams?: string[];
     currency?: { name: string; why: string };
     keyPhrases?: { en: string; local: string; say: string }[];
+    timezoneNote?: string;
     budgetSummary?: {
       totalEstimatedCost: number;
       breakdown: { category: string; amount: number }[];
