@@ -4,7 +4,7 @@ import "dotenv/config";
 import rateLimit from "express-rate-limit";
 import { supabase } from "./db.js";
 import fetch from "node-fetch";
-import { SYSTEM_CHAT_INSTRUCTION, getDeterministicGeneratorPrompt, getItineraryChatInstruction, getPastTripChatInstruction, getLanguageInstruction } from "./prompts.js";
+import { SYSTEM_CHAT_INSTRUCTION, getDeterministicGeneratorPrompt, getItineraryChatInstruction, getPastTripChatInstruction, getRescheduleChatInstruction, getLanguageInstruction, BOOKING_GUIDANCE } from "./prompts.js";
 
 const app = express();
 
@@ -843,7 +843,11 @@ app.post("/api/chat", expensiveLimiter, optionalAuth, async (req, res) => {
   // of an empty conversation (Gemini/OpenRouter both require at least one
   // turn). This is never shown to the traveler or stored as their message.
   if (chatHistory.length === 0 && mode !== "itinerary" && mode !== "pastTrip") {
-    chatHistory = [{ role: "user", text: "(The traveler just opened the app for the first time. Greet them warmly as JourZy and start the conversation, per your instructions.)" }];
+    chatHistory = [{
+      role: "user", text: mode === "reschedule"
+        ? "(The traveler just opened the Reschedule tab for this trip. Greet them warmly as JourZy and ask what they'd like to change, per your instructions.)"
+        : "(The traveler just opened the app for the first time. Greet them warmly as JourZy and start the conversation, per your instructions.)"
+    }];
   }
 
   // Cap history so a hostile payload can't inflate the LLM prompt
@@ -865,9 +869,11 @@ app.post("/api/chat", expensiveLimiter, optionalAuth, async (req, res) => {
       ? getItineraryChatInstruction(itineraryContext || "(no trip details provided)")
       : mode === "pastTrip"
       ? getPastTripChatInstruction(itineraryContext || "(no trip details provided)")
+      : mode === "reschedule"
+      ? getRescheduleChatInstruction(itineraryContext || "(no trip details provided)")
       : SYSTEM_CHAT_INSTRUCTION;
     const languageInstruction = getLanguageInstruction(language);
-    const systemInstruction = languageInstruction ? `${baseInstruction}\n\n${languageInstruction}` : baseInstruction;
+    const systemInstruction = [baseInstruction, BOOKING_GUIDANCE, languageInstruction].filter(Boolean).join("\n\n");
 
     let replyText = "";
     let success = false;
@@ -1146,7 +1152,7 @@ Model reply:`;
     // rule 1.5) — strip it from the visible reply and persist it to their
     // memory profile (same table/shape as POST /api/memory) so future visits
     // can greet them by name, same as the old scripted name-capture step did.
-    if (mode !== "itinerary" && mode !== "pastTrip") {
+    if (mode !== "itinerary" && mode !== "pastTrip" && mode !== "reschedule") {
       const nameMatch = replyText.match(/<<NAME:\s*(.+?)\s*>>/i);
       if (nameMatch) {
         replyText = replyText.replace(nameMatch[0], "").trim();
