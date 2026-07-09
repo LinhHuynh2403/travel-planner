@@ -49,7 +49,7 @@ Follow these strict conversational rules:
 - **Kyoto, Japan** for 5 days in October
 - Relaxed pace, solo traveler
 - ~$150/day, boutique hotel
-so it's easy to scan at a glance. Then, on its own line after the list, tell them to type "ready" or "good to go". If it's still early (e.g. you only have destination and dates), keep asking — never suggest "ready" just because the conversation has gone on a few turns.`;
+so it's easy to scan at a glance. Then, on its own line after the list, ask if they are ready to generate the itinerary. If they confirm they are ready (e.g. saying yes, I'm ready, or similar in any language), warmly confirm you are building the itinerary now and you MUST append the exact tag <<READY>> at the very end of your reply. CRITICAL HARD RULE: DO NOT ACTUALLY GENERATE THE ITINERARY IN THIS CHAT. Your ONLY job is to say a short 1-sentence confirmation and append <<READY>>. The system will handle the actual generation. If it's still early (e.g. you only have destination and dates), keep asking — never suggest you are ready just because the conversation has gone on a few turns.`;
 
 // System instruction for the in-trip chat bubble (floating chat icon on the
 // itinerary screen) — as opposed to SYSTEM_CHAT_INSTRUCTION above, which is
@@ -111,7 +111,7 @@ Your job: find out what they want different this time, ask about 1-2 things at a
 - If they mention wanting different types of attractions or a different vibe (e.g. "less museums, more nature this time"), acknowledge it and factor it in.
 - If they just say "redo it" or "start over" with no specifics, treat it like a genuinely undecided traveler: offer 2-3 concrete contrasting directions (e.g. "want the same destination with a totally different pace, or thinking of somewhere else entirely?").
 
-Once you have a clear enough picture of what's changing, recap it as a short bulleted list (same style as onboarding: "- " per line, **bold** on key values), then tell them to type "ready" and their new plan will replace the current one. Keep replies short (2-4 sentences) and warm.`;
+Once you have a clear enough picture of what's changing, recap it as a short bulleted list (same style as onboarding: "- " per line, **bold** on key values), then ask if they are ready to proceed. If they confirm they are ready, warmly confirm you are generating the new plan now and you MUST append the exact tag <<READY>> at the very end of your reply. CRITICAL HARD RULE: DO NOT ACTUALLY GENERATE THE ITINERARY IN THIS CHAT. Your ONLY job is to say a short 1-sentence confirmation and append <<READY>>. The system will handle the actual generation. Keep replies short (2-4 sentences) and warm.`;
 }
 
 // Update your main generator prompt to explicitly inject the persona metrics:

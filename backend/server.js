@@ -1178,6 +1178,13 @@ Model reply:`;
       }
     }
 
+    let isReady = false;
+    const readyMatch = replyText.match(/<<READY>>/i);
+    if (readyMatch) {
+      isReady = true;
+      replyText = replyText.replace(readyMatch[0], "").trim();
+    }
+
     if (success && sessionId && userId && replyText && dbAvailable) {
       try {
         await supabase.from('chat_histories').insert([
@@ -1188,7 +1195,7 @@ Model reply:`;
       }
     }
 
-    return res.json({ text: replyText, suggestion });
+    return res.json({ text: replyText, suggestion, isReady });
   } catch (e) {
     console.error("Chat route critical failure:", e);
     return res.status(500).json({ error: "Chat failed. Please try again." });
