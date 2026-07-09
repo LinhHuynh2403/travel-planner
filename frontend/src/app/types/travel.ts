@@ -29,7 +29,12 @@ export interface ActivityAlternative {
 }
 
 export interface ItineraryActivity {
-  time: string;
+  // No longer a scheduled clock time — JourZy suggests an unordered checklist
+  // of things to do per day (see prompts.js "Suggestion List, Not A Fixed
+  // Schedule" rule) rather than a fixed morning-to-evening timeline. Kept
+  // optional only for backward-compat with trips generated before this
+  // change, which still carry an "h:mm AM/PM" string.
+  time?: string;
   title: string;
   description: string;
   category: "food" | "museum" | "exhibition" | "nature" | "activity" | "rest";

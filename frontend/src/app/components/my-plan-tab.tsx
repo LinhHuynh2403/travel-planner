@@ -19,20 +19,6 @@ interface MyPlanTabProps {
   onOpenChat: () => void;
 }
 
-function getPeriodLabel(timeStr: string, t: (k: string) => string): string {
-  const match = (timeStr || '').match(/(\d+):(\d+)\s*(AM|PM)/i);
-  if (!match) return '';
-  let hours = parseInt(match[1]);
-  const period = match[3].toUpperCase();
-  if (period === 'PM' && hours !== 12) hours += 12;
-  if (period === 'AM' && hours === 12) hours = 0;
-  if (hours < 11) return t('ui.morning') || 'Morning';
-  if (hours < 12) return t('ui.lateMorning') || 'Late Morning';
-  if (hours < 17) return t('ui.afternoon') || 'Afternoon';
-  if (hours < 21) return t('ui.evening') || 'Evening';
-  return t('ui.night') || 'Night';
-}
-
 function getDayTitle(day: DayItinerary, region: string, t: (k: string) => string): string {
   const counts: Record<string, number> = {};
   for (const act of day.activities) {
@@ -71,13 +57,12 @@ function parseLegacyBreakdown(text: string): { category: string; amount: number 
   return rows;
 }
 
-function paceDescription(itinerary: GeneratedItinerary, t: (k: string) => string): string {
+function suggestionsSummary(itinerary: GeneratedItinerary, t: (k: string) => string): string {
   const days = itinerary.days || [];
-  if (days.length === 0) return '';
-  const avg = days.reduce((s, d) => s + d.activities.length, 0) / days.length;
-  const pace = avg <= 3 ? t('ui.paceRelaxed') || 'relaxed pace: 2–3 stops a day' : avg <= 5 ? t('ui.paceBalanced') || 'balanced pace: 3–5 stops a day' : t('ui.paceActive') || 'active pace: 5+ stops a day';
-  const pacePicked = t('ui.pacePicked') || 'your {{pace}}, picked from top-rated places on Google Maps';
-  return pacePicked.replace('{{pace}}', pace);
+  const count = days.reduce((s, d) => s + d.activities.length, 0);
+  if (count === 0) return '';
+  const template = t('ui.suggestionsPicked') || '{{count}} curated suggestions, picked from top-rated places on Google Maps';
+  return template.replace('{{count}}', String(count));
 }
 
 export function MyPlanTab({ itinerary, initialDayNumber, onOpenChat }: MyPlanTabProps) {
@@ -85,6 +70,18 @@ export function MyPlanTab({ itinerary, initialDayNumber, onOpenChat }: MyPlanTab
   const days = itinerary.days || [];
   const [dayNumber, setDayNumber] = useState<number>(initialDayNumber || days[0]?.dayNumber || 1);
   const [showBudget, setShowBudget] = useState(false);
+  // Checked-off suggestions per day — an unordered checklist the traveler
+  // picks from, not a fixed schedule, so this only ever needs to live in
+  // memory for the current session (same as the Packing tab's checklist).
+  const [checkedByDay, setCheckedByDay] = useState<Record<number, Set<number>>>({});
+
+  const toggleActivity = (dNum: number, idx: number) => {
+    setCheckedByDay(prev => {
+      const current = new Set(prev[dNum] || []);
+      current.has(idx) ? current.delete(idx) : current.add(idx);
+      return { ...prev, [dNum]: current };
+    });
+  };
 
   useEffect(() => {
     if (initialDayNumber) setDayNumber(initialDayNumber);
@@ -120,7 +117,7 @@ export function MyPlanTab({ itinerary, initialDayNumber, onOpenChat }: MyPlanTab
   return (
     <div>
       <h1 className="text-jz-screen font-black text-jz-ink leading-tight">{region}</h1>
-      <p className="mt-0.5 text-[17px] font-bold text-jz-soft">{dateRange} · {paceDescription(itinerary, t)}</p>
+      <p className="mt-0.5 text-[17px] font-bold text-jz-soft">{dateRange} · {suggestionsSummary(itinerary, t)}</p>
 
       {budgetSummary ? (
         <Card tint="bg-jz-tealTint" className="mt-3.5 border-none">
@@ -187,27 +184,41 @@ export function MyPlanTab({ itinerary, initialDayNumber, onOpenChat }: MyPlanTab
           <div className="space-y-0">
             {day.activities.map((act: ItineraryActivity, i) => {
               const next = day.activities[i + 1];
+              const done = checkedByDay[day.dayNumber]?.has(i) ?? false;
               return (
                 <div key={i}>
                   <Card className="space-y-0">
-                    <p className="text-[15px] font-extrabold text-jz-gold uppercase tracking-wide">{getPeriodLabel(act.time, t)}</p>
-                    <p className="mt-1 text-jz-title font-black text-jz-ink">{act.title}</p>
-                    <Why>{act.description}</Why>
-                    <div className="flex justify-between items-center mt-3 gap-2.5">
-                      {act.place?.rating ? (
-                        <span className="flex items-center gap-1.5 text-[16px] font-extrabold text-jz-ink">
-                          <Star className="w-[18px] h-[18px]" fill="#F0A742" stroke="#F0A742" /> {act.place.rating.toFixed(1)}{' '}
-                          <span className="text-jz-soft font-bold">{t('ui.onGoogle')}</span>
-                        </span>
-                      ) : <span />}
-                      <a
-                        href={act.place?.mapsUrl || mapsSearchUrl(act.title, act.location)}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex items-center gap-1.5 no-underline bg-jz-tealTint text-jz-tealDark font-extrabold text-[16px] px-4 py-2.5 rounded-jz-btn min-h-[44px]"
+                    <div className="flex gap-3.5">
+                      <button
+                        onClick={() => toggleActivity(day.dayNumber, i)}
+                        aria-pressed={done}
+                        className={`w-[30px] h-[30px] rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 text-white font-black transition-colors ${done ? 'bg-jz-teal border-jz-teal' : 'bg-jz-bg border-jz-line'}`}
                       >
-                        <MapPin className="w-[18px] h-[18px]" /> {t('ui.directions')}
-                      </a>
+                        {done && '✓'}
+                      </button>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[13.5px] font-extrabold text-jz-gold uppercase tracking-wide">
+                          {act.category === 'food' ? t('ui.meal') : act.category}
+                        </p>
+                        <p className={`mt-0.5 text-jz-title font-black text-jz-ink ${done ? 'line-through opacity-50' : ''}`}>{act.title}</p>
+                        <Why>{act.description}</Why>
+                        <div className="flex justify-between items-center mt-3 gap-2.5">
+                          {act.place?.rating ? (
+                            <span className="flex items-center gap-1.5 text-[16px] font-extrabold text-jz-ink">
+                              <Star className="w-[18px] h-[18px]" fill="#F0A742" stroke="#F0A742" /> {act.place.rating.toFixed(1)}{' '}
+                              <span className="text-jz-soft font-bold">{t('ui.onGoogle')}</span>
+                            </span>
+                          ) : <span />}
+                          <a
+                            href={act.place?.mapsUrl || mapsSearchUrl(act.title, act.location)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex items-center gap-1.5 no-underline bg-jz-tealTint text-jz-tealDark font-extrabold text-[16px] px-4 py-2.5 rounded-jz-btn min-h-[44px]"
+                          >
+                            <MapPin className="w-[18px] h-[18px]" /> {t('ui.directions')}
+                          </a>
+                        </div>
+                      </div>
                     </div>
                   </Card>
                   {next?.travelTimeFromPrevious && (() => {

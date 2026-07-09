@@ -120,7 +120,7 @@ export default function Itinerary() {
       const updatedDays = prev.days.map(day => {
         if (day.dayNumber !== dayNumber) return day;
         const updatedActivities = day.activities.map((act, idx) =>
-          idx === activityIdx ? { ...act, ...newData, time: act.time } : act
+          idx === activityIdx ? { ...act, ...newData } : act
         );
         return { ...day, activities: updatedActivities };
       });

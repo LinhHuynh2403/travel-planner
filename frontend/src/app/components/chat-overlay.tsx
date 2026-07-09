@@ -32,7 +32,7 @@ function buildItineraryContext(itinerary: GeneratedItinerary): string {
   const arrival = new Date(itinerary.plan.arrivalDate).toDateString();
   const leave = new Date(itinerary.plan.leaveDate).toDateString();
   const days = (itinerary.days || []).map(d => {
-    const stops = d.activities.map(a => `${a.time} ${a.title} (${a.category})`).join('; ');
+    const stops = d.activities.map(a => `${a.title} (${a.category})`).join('; ');
     return `Day ${d.dayNumber} (${new Date(d.date).toDateString()}): ${stops}`;
   }).join('\n');
   return `Destination: ${region}\nDates: ${arrival} to ${leave}\n${days}`;
@@ -207,7 +207,7 @@ export function ChatOverlay({ itinerary, prefill, isPastTrip, onClose, onReplace
                       onClick={() => confirmReplace(day.dayNumber, idx)}
                       className="w-full text-left bg-jz-bg border-[1.5px] border-jz-line rounded-jz-card p-3 hover:border-jz-teal transition-all"
                     >
-                      <span className="text-[13px] font-extrabold text-jz-gold uppercase">{act.time}</span>
+                      <span className="text-[13px] font-extrabold text-jz-gold uppercase">{act.category === 'food' ? t('ui.meal') : act.category}</span>
                       <p className="text-[16px] font-black text-jz-ink">{act.title}</p>
                     </button>
                   ))}

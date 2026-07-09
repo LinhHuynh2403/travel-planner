@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import { CloudSun, Sun, Cloud, CloudRain, CloudLightning, CloudSnow, Heart, Train, Bus, Footprints, Car, MapPin, Star, Phone, Map as MapIcon, MessageCircle } from 'lucide-react';
-import { DayItinerary, GeneratedItinerary, ItineraryActivity } from '../types/travel';
+import { DayItinerary, GeneratedItinerary } from '../types/travel';
 import { Card, Why, SectionTitle, BigButton } from './jourzy-ui';
 import { useLiveWeatherWeek } from '../utils/live-weather';
 import { useTranslation } from '../utils/translations';
@@ -35,26 +36,6 @@ function findTodayDay(days: DayItinerary[]): DayItinerary {
   return upcoming || days[days.length - 1] || days[0];
 }
 
-function parseActivityTime(timeStr: string): number | null {
-  const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
-  if (!match) return null;
-  let hours = parseInt(match[1]);
-  const mins = parseInt(match[2]);
-  const period = match[3].toUpperCase();
-  if (period === 'PM' && hours !== 12) hours += 12;
-  if (period === 'AM' && hours === 12) hours = 0;
-  return hours * 60 + mins;
-}
-
-function findUpNext(day: DayItinerary): { activity: ItineraryActivity; idx: number } {
-  const nowMinutes = new Date().getHours() * 60 + new Date().getMinutes();
-  for (let i = 0; i < day.activities.length; i++) {
-    const mins = parseActivityTime(day.activities[i].time || '');
-    if (mins === null || mins >= nowMinutes) return { activity: day.activities[i], idx: i };
-  }
-  return { activity: day.activities[day.activities.length - 1], idx: day.activities.length - 1 };
-}
-
 const WEATHER_ICON: Record<string, any> = {
   sunny: Sun, partly: CloudSun, cloudy: Cloud, rainy: CloudRain, snowy: CloudSnow, stormy: CloudLightning,
 };
@@ -65,10 +46,19 @@ function mapsSearchUrl(title: string, location: string) {
 
 export function TodayTab({ itinerary, memories, userName, onSeeWholeDay, onOpenChat }: TodayTabProps) {
   const { t } = useTranslation();
+  const [checkedItems, setCheckedItems] = useState<Set<number>>(new Set());
   const region = itinerary.plan.region;
   const cityName = region.split(',')[0];
   const days = itinerary.days || [];
   const todayDay = days.length > 0 ? findTodayDay(days) : null;
+
+  const toggleItem = (idx: number) => {
+    setCheckedItems(prev => {
+      const next = new Set(prev);
+      next.has(idx) ? next.delete(idx) : next.add(idx);
+      return next;
+    });
+  };
 
   const now = new Date();
   const hour = now.getHours();
@@ -99,9 +89,6 @@ export function TodayTab({ itinerary, memories, userName, onSeeWholeDay, onOpenC
       weatherAdvisory = t('ui.niceWeather') || 'Nice weather for exploring today.';
     }
   }
-
-  const upNext = todayDay && todayDay.activities.length > 0 ? findUpNext(todayDay) : null;
-  const nextNext = upNext && todayDay ? todayDay.activities[upNext.idx + 1] : null;
 
   const emergency = itinerary.insights?.emergencyNumbers;
 
@@ -139,42 +126,60 @@ export function TodayTab({ itinerary, memories, userName, onSeeWholeDay, onOpenC
             </div>
           </Card>
 
-          {upNext && (
+          {todayDay.activities.length > 0 && (
             <>
-              <SectionTitle>{t('ui.upNext')}</SectionTitle>
-              <Card>
-                <p className="text-[15.5px] font-extrabold text-jz-gold uppercase tracking-wide">
-                  {upNext.activity.time} · {upNext.activity.category === 'food' ? t('ui.meal') : upNext.activity.category}
-                </p>
-                <p className="mt-1 text-jz-title font-black text-jz-ink">{upNext.activity.title}</p>
-                <Why>{upNext.activity.description}</Why>
-
-                {nextNext?.travelTimeFromPrevious && (() => {
-                  const TravelIcon = getTravelIcon(nextNext.travelTimeFromPrevious);
+              <SectionTitle>{t('ui.todaysSuggestions')}</SectionTitle>
+              <div className="space-y-2.5">
+                {todayDay.activities.map((act, idx) => {
+                  const done = checkedItems.has(idx);
                   return (
-                    <div className="flex items-center gap-2 mt-3 text-jz-soft text-[16.5px] font-bold">
-                      <TravelIcon className="w-5 h-5" /> {t('ui.then')} {nextNext.travelTimeFromPrevious} {t('ui.to')} {nextNext.title}
+                    <div key={idx}>
+                      {idx > 0 && act.travelTimeFromPrevious && (() => {
+                        const TravelIcon = getTravelIcon(act.travelTimeFromPrevious);
+                        return (
+                          <div className="flex items-center gap-2 py-2 pl-1 text-jz-soft text-[15px] font-bold">
+                            <TravelIcon className="w-[17px] h-[17px]" /> {act.travelTimeFromPrevious}
+                          </div>
+                        );
+                      })()}
+                      <Card>
+                        <div className="flex gap-3.5">
+                          <button
+                            onClick={() => toggleItem(idx)}
+                            aria-pressed={done}
+                            className={`w-[30px] h-[30px] rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 text-white font-black transition-colors ${done ? 'bg-jz-teal border-jz-teal' : 'bg-jz-bg border-jz-line'}`}
+                          >
+                            {done && '✓'}
+                          </button>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[13.5px] font-extrabold text-jz-gold uppercase tracking-wide">
+                              {act.category === 'food' ? t('ui.meal') : act.category}
+                            </p>
+                            <p className={`mt-0.5 text-jz-title font-black text-jz-ink ${done ? 'line-through opacity-50' : ''}`}>{act.title}</p>
+                            <Why>{act.description}</Why>
+                            <div className="flex justify-between items-center mt-3 gap-2.5">
+                              {act.place?.rating ? (
+                                <span className="flex items-center gap-1.5 text-[16px] font-extrabold text-jz-ink">
+                                  <Star className="w-[18px] h-[18px]" fill="#F0A742" stroke="#F0A742" /> {act.place.rating.toFixed(1)}{' '}
+                                  <span className="text-jz-soft font-bold">{t('ui.onGoogle')}</span>
+                                </span>
+                              ) : <span />}
+                              <a
+                                href={act.place?.mapsUrl || mapsSearchUrl(act.title, act.location)}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="flex items-center gap-1.5 no-underline bg-jz-tealTint text-jz-tealDark font-extrabold text-[16px] px-4 py-2.5 rounded-jz-btn min-h-[44px]"
+                              >
+                                <MapPin className="w-[18px] h-[18px]" /> {t('ui.directions')}
+                              </a>
+                            </div>
+                          </div>
+                        </div>
+                      </Card>
                     </div>
                   );
-                })()}
-
-                <div className="flex justify-between items-center mt-3 gap-2.5">
-                  {upNext.activity.place?.rating ? (
-                    <span className="flex items-center gap-1.5 text-[16px] font-extrabold text-jz-ink">
-                      <Star className="w-[18px] h-[18px]" fill="#F0A742" stroke="#F0A742" /> {upNext.activity.place.rating.toFixed(1)}{' '}
-                      <span className="text-jz-soft font-bold">{t('ui.onGoogle')}</span>
-                    </span>
-                  ) : <span />}
-                  <a
-                    href={upNext.activity.place?.mapsUrl || mapsSearchUrl(upNext.activity.title, upNext.activity.location)}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center gap-1.5 no-underline bg-jz-tealTint text-jz-tealDark font-extrabold text-[16px] px-4 py-2.5 rounded-jz-btn min-h-[44px]"
-                  >
-                    <MapPin className="w-[18px] h-[18px]" /> {t('ui.directions')}
-                  </a>
-                </div>
-              </Card>
+                })}
+              </div>
             </>
           )}
 

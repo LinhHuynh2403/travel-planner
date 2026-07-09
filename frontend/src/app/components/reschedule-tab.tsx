@@ -20,7 +20,7 @@ function buildItineraryContext(itinerary: GeneratedItinerary): string {
   const arrival = new Date(itinerary.plan.arrivalDate).toDateString();
   const leave = new Date(itinerary.plan.leaveDate).toDateString();
   const days = (itinerary.days || []).map(d => {
-    const stops = d.activities.map(a => `${a.time} ${a.title} (${a.category})`).join('; ');
+    const stops = d.activities.map(a => `${a.title} (${a.category})`).join('; ');
     return `Day ${d.dayNumber} (${new Date(d.date).toDateString()}): ${stops}`;
   }).join('\n');
   return `Destination: ${region}\nDates: ${arrival} to ${leave}\nBudget: ${itinerary.plan.budget || 'not specified'}\nTraveling: ${itinerary.plan.whoTraveling || 'not specified'}\n${days}`;
