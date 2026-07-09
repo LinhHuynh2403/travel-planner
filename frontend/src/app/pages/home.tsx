@@ -4,7 +4,7 @@ import { Map, MessageCircle, Sparkles, Send, User as UserIcon } from 'lucide-rea
 import { TravelPlan } from '../types/travel';
 import { generateItinerary } from '../utils/generate-itinerary';
 import { supabase } from '../utils/supabaseClient';
-import { apiFetch } from '../utils/api';
+import { apiFetch, friendlyErrorMessage } from '../utils/api';
 import { ChatText } from '../components/chat-text';
 type Message = {
   id: string;
@@ -262,9 +262,13 @@ export default function Home() {
       navigate('/itinerary');
     } catch (e) {
       setCurrentStep('chatting');
+      // generateItinerary() already throws with the backend's actual error
+      // text (e.g. a rate-limit message) when available — show that instead
+      // of a generic "make sure the backend is running" guess.
+      const errorText = e instanceof Error && e.message ? e.message : "Sorry, I ran into a problem building your itinerary. Try typing \"ready\" again.";
       setMessages(prev => [
         ...prev,
-        { id: Date.now().toString(), role: 'ai', text: "Sorry, I ran into a problem building your itinerary. Make sure the backend is running and try typing \"ready\" again.", step: 'chatting' }
+        { id: Date.now().toString(), role: 'ai', text: errorText, step: 'chatting' }
       ]);
     }
   };
@@ -286,7 +290,8 @@ export default function Home() {
         const data = await response.json();
         setMessages(prev => [...prev, { id: Date.now().toString(), role: 'ai', text: data.text, step: 'chatting' }]);
       } else {
-        setMessages(prev => [...prev, { id: Date.now().toString(), role: 'ai', text: "Sorry, I couldn't connect just now — try again in a moment.", step: 'chatting' }]);
+        const errorText = await friendlyErrorMessage(response);
+        setMessages(prev => [...prev, { id: Date.now().toString(), role: 'ai', text: errorText, step: 'chatting' }]);
       }
     } catch (e) {
       console.error(e);

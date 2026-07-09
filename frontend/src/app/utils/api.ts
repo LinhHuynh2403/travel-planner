@@ -22,3 +22,17 @@ export async function apiFetch(path: string, options: RequestInit = {}): Promise
         },
     });
 }
+
+// Every rate limiter on the backend already sends a specific, user-readable
+// message in its JSON body (e.g. "Rate limit reached for AI features. Try
+// again in a bit.") — surface that instead of a generic "couldn't connect"
+// text that hides what actually happened (rate limited vs. a real outage).
+export async function friendlyErrorMessage(response: Response): Promise<string> {
+    try {
+        const data = await response.json();
+        if (typeof data?.error === 'string' && data.error.trim()) return data.error;
+    } catch (e) {
+        // response body wasn't JSON — fall through to the generic message
+    }
+    return "Sorry, I couldn't connect just now — try again in a moment.";
+}

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Sparkles, X, Send, User as UserIcon, Star, MapPin, RefreshCw } from 'lucide-react';
-import { apiFetch } from '../utils/api';
+import { apiFetch, friendlyErrorMessage } from '../utils/api';
 import { GeneratedItinerary } from '../types/travel';
 import { ChatText } from './chat-text';
 
@@ -84,7 +84,8 @@ export function ChatOverlay({ itinerary, prefill, isPastTrip, onClose, onReplace
         const data = await resp.json();
         setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'ai', text: data.text, suggestion: data.suggestion || undefined }]);
       } else {
-        setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'ai', text: "Sorry, I couldn't connect just now — try again in a moment." }]);
+        const errorText = await friendlyErrorMessage(resp);
+        setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'ai', text: errorText }]);
       }
     } catch (e) {
       setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'ai', text: "Sorry, I couldn't connect just now — try again in a moment." }]);
