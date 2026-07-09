@@ -61,7 +61,7 @@ export function PackingTab({ packingList, region, weatherWeek, weatherOverview, 
         </p>
         <button
           onClick={onOpenChat}
-          className="w-full min-h-jz-touch rounded-jz-btn bg-white border-2 border-jz-gold text-jz-goldInk font-extrabold text-[17.5px]"
+          className="w-full min-h-jz-touch rounded-jz-btn bg-jz-card border-2 border-jz-gold text-jz-goldInk font-extrabold text-[17.5px]"
         >
           Check my medicines with JourZy
         </button>
@@ -73,7 +73,7 @@ export function PackingTab({ packingList, region, weatherWeek, weatherOverview, 
           <h2 className="text-jz-title font-black text-jz-ink !mt-6 mb-3">The week's weather</h2>
           <div className="flex gap-2 overflow-x-auto pb-1.5 -mx-1 px-1 [scrollbar-width:none]">
             {displayWeatherWeek.map(w => (
-              <div key={w.d} className="shrink-0 w-24 bg-white border-[1.5px] border-jz-line rounded-jz-card px-1.5 py-3 text-center">
+              <div key={w.d} className="shrink-0 w-24 bg-jz-card border-[1.5px] border-jz-line rounded-jz-card px-1.5 py-3 text-center">
                 <p className="text-[14.5px] font-extrabold text-jz-soft">{w.d}</p>
                 <p className="text-3xl my-1.5 leading-none">{WEATHER_EMOJI[w.icon] || '🌤️'}</p>
                 <p className="text-[16.5px] font-black text-jz-ink">
@@ -106,11 +106,11 @@ export function PackingTab({ packingList, region, weatherWeek, weatherOverview, 
                   key={key}
                   onClick={() => toggleItem(key)}
                   aria-pressed={done}
-                  className={`w-full text-left flex gap-3.5 bg-white border-[1.5px] rounded-jz-card p-4 transition-colors ${done ? 'border-jz-teal' : 'border-jz-line'}`}
+                  className={`w-full text-left flex gap-3.5 bg-jz-card border-[1.5px] rounded-jz-card p-4 transition-colors ${done ? 'border-jz-teal' : 'border-jz-line'}`}
                 >
                   <span
                     aria-hidden
-                    className={`w-[34px] h-[34px] rounded-xl border-2 flex items-center justify-center shrink-0 mt-0.5 text-white font-black transition-colors ${done ? 'bg-jz-teal border-jz-teal' : 'bg-jz-bg border-[#CFC7BA]'}`}
+                    className={`w-[34px] h-[34px] rounded-xl border-2 flex items-center justify-center shrink-0 mt-0.5 text-white font-black transition-colors ${done ? 'bg-jz-teal border-jz-teal' : 'bg-jz-bg border-jz-line'}`}
                   >
                     {done && '✓'}
                   </span>

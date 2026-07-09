@@ -1,4 +1,5 @@
 import type { TravelPlan, GeneratedItinerary } from "../types/travel";
+import { getPreferredLanguage } from "./language";
 
 // ═══════════════════════════════════════════════════════════════
 //  EXTENDED TYPES FOR THE NEW LOGISTICS & SPONTANEITY FEATURES
@@ -6,6 +7,7 @@ import type { TravelPlan, GeneratedItinerary } from "../types/travel";
 export interface ExpandedLogisticsGuide {
   connectivity: string;  // Detailed steps for local SIM / eSIM setups
   transitCards: string;  // Explicit payment/card guidelines (T-Money, Suica, etc.)
+  bookingTips?: string;  // Real, region-appropriate flight/train/bus/SIM booking platforms
 }
 
 export interface JourZyItineraryResponse extends GeneratedItinerary {
@@ -16,6 +18,8 @@ export interface JourZyItineraryResponse extends GeneratedItinerary {
     culturalTips: string[];
     safetyTips: string[];
     customsRestrictions: string[];
+    currency?: { name: string; why: string };
+    keyPhrases?: { en: string; local: string; say: string }[];
   };
 }
 
@@ -48,7 +52,7 @@ export async function generateItinerary(
   const resp = await fetch(`${API_BASE}/api/itinerary`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ plan: normalizedPlan, chatHistory, language: navigator.language }),
+    body: JSON.stringify({ plan: normalizedPlan, chatHistory, language: getPreferredLanguage() }),
   });
 
   if (!resp.ok) {

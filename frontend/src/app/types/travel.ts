@@ -99,9 +99,15 @@ export interface HotelRecommendation {
 export interface ExpandedLogisticsGuide {
   connectivity: string;
   transitCards: string;
+  bookingTips?: string;
 }
 
 export interface GeneratedItinerary {
+  // The saved trip's backend row id — present once a trip has actually been
+  // persisted (via openTrip from History/My Plan, or right after a fresh
+  // generation saves it). Lets Reschedule replace the same trip instead of
+  // creating a duplicate. Undefined for a trip that hasn't been saved yet.
+  tripId?: string;
   plan: TravelPlan;
   days: DayItinerary[];
   packingList?: PackingItem[];
@@ -120,6 +126,8 @@ export interface GeneratedItinerary {
     };
     safeNeighborhoods?: string[];
     commonScams?: string[];
+    currency?: { name: string; why: string };
+    keyPhrases?: { en: string; local: string; say: string }[];
     budgetSummary?: {
       totalEstimatedCost: number;
       breakdown: { category: string; amount: number }[];

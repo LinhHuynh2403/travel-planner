@@ -25,7 +25,7 @@ export function Card({
   return (
     <div
       onClick={onClick}
-      className={`rounded-jz-card p-[18px] border-[1.5px] border-jz-line shadow-sm ${tint || 'bg-white'} ${className}`}
+      className={`rounded-jz-card p-[18px] border-[1.5px] border-jz-line shadow-sm ${tint || 'bg-jz-card'} ${className}`}
     >
       {children}
     </div>
@@ -51,7 +51,7 @@ export function BigButton({
     <button
       onClick={onClick}
       className={`w-full min-h-jz-touch rounded-jz-btn flex items-center justify-center gap-2.5 text-jz-body-big font-extrabold transition-all ${secondary
-        ? 'bg-white border-2 border-jz-teal text-jz-teal'
+        ? 'bg-jz-card border-2 border-jz-teal text-jz-teal'
         : 'bg-jz-teal text-white shadow-md hover:bg-jz-tealDark'
         }`}
     >

@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Home, Map, Backpack, Lightbulb, MessageCircle, ArrowLeft } from 'lucide-react';
+import { Home, Map, Backpack, Lightbulb, MessageCircle, ArrowLeft, RefreshCw } from 'lucide-react';
 import { GeneratedItinerary } from '../types/travel';
 import { apiFetch } from '../utils/api';
 import { TodayTab } from '../components/today-tab';
@@ -8,14 +8,16 @@ import { MyPlanTab } from '../components/my-plan-tab';
 import { PackingTab } from '../components/packing-tab';
 import { TipsTab } from '../components/tips-tab';
 import { ChatOverlay } from '../components/chat-overlay';
+import { RescheduleTab } from '../components/reschedule-tab';
 
-type TabId = 'today' | 'plan' | 'packing' | 'tips';
+type TabId = 'today' | 'plan' | 'packing' | 'tips' | 'reschedule';
 
 const TABS: { id: TabId; label: string; icon: typeof Home }[] = [
   { id: 'today', label: 'Today', icon: Home },
   { id: 'plan', label: 'My Plan', icon: Map },
   { id: 'packing', label: 'Packing', icon: Backpack },
   { id: 'tips', label: 'Tips', icon: Lightbulb },
+  { id: 'reschedule', label: 'Reschedule', icon: RefreshCw },
 ];
 
 export default function Itinerary() {
@@ -29,7 +31,7 @@ export default function Itinerary() {
   const [memories, setMemories] = useState<string[]>([]);
   const [userName, setUserName] = useState<string | null>(null);
   const mainRef = useRef<HTMLElement>(null);
-  const scrollPositions = useRef<Record<TabId, number>>({ today: 0, plan: 0, packing: 0, tips: 0 });
+  const scrollPositions = useRef<Record<TabId, number>>({ today: 0, plan: 0, packing: 0, tips: 0, reschedule: 0 });
 
   useEffect(() => {
     const itineraryData = localStorage.getItem('generatedItinerary');
@@ -126,12 +128,22 @@ export default function Itinerary() {
     });
   };
 
+  const handleRescheduled = (newItinerary: GeneratedItinerary) => {
+    const nowPast = !!newItinerary.plan.leaveDate && new Date(newItinerary.plan.leaveDate) < new Date();
+    setItinerary(newItinerary);
+    setIsPastTrip(nowPast);
+    localStorage.setItem('generatedItinerary', JSON.stringify(newItinerary));
+    localStorage.setItem('travelPlan', JSON.stringify(newItinerary.plan));
+    localStorage.setItem('viewingPastTrip', JSON.stringify(nowPast));
+    changeTab('today');
+  };
+
   return (
-    <div className="min-h-screen bg-[#EFE9DF] text-jz-ink flex items-center justify-center sm:p-4 selection:bg-jz-tealTint">
+    <div className="min-h-screen bg-jz-outerBg text-jz-ink flex items-center justify-center sm:p-4 selection:bg-jz-tealTint">
       <div className="relative w-full max-w-[430px] h-[100dvh] sm:h-[min(920px,94vh)] bg-jz-bg sm:rounded-[36px] overflow-hidden sm:border-[10px] sm:border-jz-ink sm:shadow-2xl flex flex-col">
 
         {isPastTrip && (
-          <div className="flex items-center gap-3 px-4 py-3 bg-white border-b-[1.5px] border-jz-line shrink-0">
+          <div className="flex items-center gap-3 px-4 py-3 bg-jz-card border-b-[1.5px] border-jz-line shrink-0">
             <button
               onClick={startNewTrip}
               className="flex items-center gap-1.5 text-jz-teal font-extrabold text-jz-body-big"
@@ -142,36 +154,42 @@ export default function Itinerary() {
           </div>
         )}
 
-        <main
-          ref={mainRef}
-          onScroll={(e) => { scrollPositions.current[tab] = e.currentTarget.scrollTop; }}
-          className="flex-1 overflow-y-auto p-4 pb-24 no-scrollbar"
-        >
-          {tab === 'today' && (
-            <TodayTab
-              itinerary={itinerary}
-              memories={memories}
-              userName={userName}
-              onSeeWholeDay={handleSeeWholeDay}
-              onOpenChat={() => openChat()}
-            />
-          )}
-          {tab === 'plan' && (
-            <MyPlanTab itinerary={itinerary} initialDayNumber={planDayNumber} onOpenChat={() => openChat()} />
-          )}
-          {tab === 'packing' && (
-            <PackingTab
-              packingList={itinerary.packingList}
-              region={itinerary.plan.region}
-              weatherWeek={itinerary.insights?.weatherWeek}
-              weatherOverview={itinerary.insights?.weatherOverview}
-              onOpenChat={() => openChat(`What medicines should I check for ${itinerary.plan.region}?`)}
-            />
-          )}
-          {tab === 'tips' && <TipsTab itinerary={itinerary} />}
-        </main>
+        {tab === 'reschedule' ? (
+          <div className="flex-1 overflow-hidden flex flex-col">
+            <RescheduleTab itinerary={itinerary} onRescheduled={handleRescheduled} />
+          </div>
+        ) : (
+          <main
+            ref={mainRef}
+            onScroll={(e) => { scrollPositions.current[tab] = e.currentTarget.scrollTop; }}
+            className="flex-1 overflow-y-auto p-4 pb-24 no-scrollbar"
+          >
+            {tab === 'today' && (
+              <TodayTab
+                itinerary={itinerary}
+                memories={memories}
+                userName={userName}
+                onSeeWholeDay={handleSeeWholeDay}
+                onOpenChat={() => openChat()}
+              />
+            )}
+            {tab === 'plan' && (
+              <MyPlanTab itinerary={itinerary} initialDayNumber={planDayNumber} onOpenChat={() => openChat()} />
+            )}
+            {tab === 'packing' && (
+              <PackingTab
+                packingList={itinerary.packingList}
+                region={itinerary.plan.region}
+                weatherWeek={itinerary.insights?.weatherWeek}
+                weatherOverview={itinerary.insights?.weatherOverview}
+                onOpenChat={() => openChat(`What medicines should I check for ${itinerary.plan.region}?`)}
+              />
+            )}
+            {tab === 'tips' && <TipsTab itinerary={itinerary} />}
+          </main>
+        )}
 
-        {tab !== 'today' && !chatOpen && (
+        {tab !== 'today' && tab !== 'reschedule' && !chatOpen && (
           <button
             onClick={() => openChat()}
             aria-label="Talk to JourZy"
@@ -181,7 +199,7 @@ export default function Itinerary() {
           </button>
         )}
 
-        <nav className="flex border-t-[1.5px] border-jz-line bg-white px-1 pt-1.5 pb-3 shrink-0 z-10">
+        <nav className="flex border-t-[1.5px] border-jz-line bg-jz-card px-1 pt-1.5 pb-3 shrink-0 z-10">
           {TABS.map(t => {
             const active = tab === t.id;
             const Icon = t.icon;

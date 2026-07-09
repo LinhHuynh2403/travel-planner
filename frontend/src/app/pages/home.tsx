@@ -1,10 +1,12 @@
 import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
-import { Map, MessageCircle, Sparkles, Send, User as UserIcon } from 'lucide-react';
+import { Map, MessageCircle, Sparkles, Send, User as UserIcon, Settings as SettingsIcon } from 'lucide-react';
 import { TravelPlan } from '../types/travel';
 import { generateItinerary } from '../utils/generate-itinerary';
 import { supabase } from '../utils/supabaseClient';
 import { apiFetch, friendlyErrorMessage } from '../utils/api';
+import { getPreferredLanguage } from '../utils/language';
+import { autoResizeTextarea } from '../utils/autoresize';
 import { ChatText } from '../components/chat-text';
 type Message = {
   id: string;
@@ -74,6 +76,7 @@ export default function Home() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const tripsScrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const scrollPositions = useRef<Record<string, number>>({ chat: 0, trips: 0 });
 
   // Restore each view's own scroll position right after it mounts (Chat and
@@ -132,7 +135,9 @@ export default function Home() {
       const resp = await apiFetch(`/api/trips/${trip.id}`);
       if (!resp.ok) throw new Error('Failed to load trip');
       const { trip: tripRow, itinerary } = await resp.json();
+      const isPast = new Date(tripRow.leave_date) < new Date();
       const generated = {
+        tripId: String(trip.id),
         plan: {
           region: tripRow.region,
           arrivalDate: tripRow.arrival_date,
@@ -148,12 +153,17 @@ export default function Home() {
       };
       localStorage.setItem('generatedItinerary', JSON.stringify(generated));
       localStorage.setItem('travelPlan', JSON.stringify(generated.plan));
-      localStorage.setItem('viewingPastTrip', JSON.stringify(new Date(tripRow.leave_date) < new Date()));
-      // Each trip needs its own chat transcript — but only reset it when
-      // switching to a genuinely different trip than whatever is cached,
-      // otherwise reopening the SAME trip (e.g. tab away and back) would
-      // wipe out a chat that's still in progress for it.
-      if (localStorage.getItem('itineraryChatTripId') !== String(trip.id)) {
+      localStorage.setItem('viewingPastTrip', JSON.stringify(isPast));
+      // Each trip needs its own chat transcript — reset when switching to a
+      // genuinely different trip than whatever is cached (otherwise
+      // reopening the SAME trip, e.g. tab away and back, would wipe out a
+      // chat still in progress for it) OR whenever the trip has ended —
+      // once a trip is over, reopening it is a fresh "look back" conversation
+      // (different mode, different tone), not a continuation of whatever
+      // tweak-chat happened while it was still upcoming. Same idea as
+      // starting a new conversation in ChatGPT/Claude rather than resuming
+      // an old one that's no longer relevant.
+      if (isPast || localStorage.getItem('itineraryChatTripId') !== String(trip.id)) {
         localStorage.removeItem('itineraryChatMessages');
         localStorage.setItem('itineraryChatTripId', String(trip.id));
       }
@@ -207,7 +217,7 @@ export default function Home() {
       try {
         const response = await apiFetch('/api/chat', {
           method: 'POST',
-          body: JSON.stringify({ messages: [], timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, language: navigator.language }),
+          body: JSON.stringify({ messages: [], timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, language: getPreferredLanguage() }),
         });
         if (response.ok) {
           const data = await response.json();
@@ -233,16 +243,17 @@ export default function Home() {
     try {
       const generated = await generateItinerary(finalPlan, customMessages || messages);
       localStorage.setItem('travelPlan', JSON.stringify(finalPlan));
-      localStorage.setItem('generatedItinerary', JSON.stringify(generated));
 
       // Save immediately so it shows up in My Plan / trip history even if the
-      // user never comes back before the trip ends.
+      // user never comes back before the trip ends. Capture the returned
+      // tripId so Reschedule can later replace this exact trip instead of
+      // creating a duplicate.
       if (user?.id) {
         try {
           // Use the itinerary's own resolved plan (dates were extracted
           // server-side from the chat transcript), not finalPlan — the
           // traveler's client-side plan never carried real dates.
-          await apiFetch('/api/trips', {
+          const saveResp = await apiFetch('/api/trips', {
             method: 'POST',
             body: JSON.stringify({
               region: generated.plan?.region || finalPlan.region,
@@ -253,10 +264,17 @@ export default function Home() {
               itinerary: generated
             })
           });
+          if (saveResp.ok) {
+            const { tripId } = await saveResp.json();
+            generated.tripId = tripId;
+          }
         } catch (saveErr) {
           console.warn('Failed to save trip to history:', saveErr);
         }
       }
+      localStorage.setItem('generatedItinerary', JSON.stringify(generated));
+      localStorage.removeItem('itineraryChatMessages');
+      if (generated.tripId) localStorage.setItem('itineraryChatTripId', String(generated.tripId));
 
       setCurrentStep('chatting');
       navigate('/itinerary');
@@ -284,7 +302,7 @@ export default function Home() {
     try {
       const response = await apiFetch(`/api/chat`, {
         method: "POST",
-        body: JSON.stringify({ messages: updatedMessages, text, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, language: navigator.language }),
+        body: JSON.stringify({ messages: updatedMessages, text, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, language: getPreferredLanguage() }),
       });
       if (response.ok) {
         const data = await response.json();
@@ -304,11 +322,11 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-[#EFE9DF] text-jz-ink flex items-center justify-center sm:p-4 selection:bg-jz-tealTint">
+    <div className="min-h-screen bg-jz-outerBg text-jz-ink flex items-center justify-center sm:p-4 selection:bg-jz-tealTint">
       <div className="relative w-full max-w-[430px] h-[100dvh] sm:h-[min(920px,94vh)] bg-jz-bg sm:rounded-[36px] overflow-hidden sm:border-[10px] sm:border-jz-ink sm:shadow-2xl flex flex-col">
         
         {/* Onboarding Identity Bar */}
-        <header className="flex items-center gap-3 px-4 py-3.5 bg-white border-b-[1.5px] border-jz-line shrink-0">
+        <header className="flex items-center gap-3 px-4 py-3.5 bg-jz-card border-b-[1.5px] border-jz-line shrink-0">
           <div className="w-11 h-11 rounded-2xl bg-jz-teal flex items-center justify-center shrink-0 shadow-inner">
             <Sparkles className="w-5 h-5 text-white animate-pulse" />
           </div>
@@ -316,11 +334,18 @@ export default function Home() {
             <p className="font-black text-jz-title tracking-tight leading-tight text-jz-ink">With JourZy</p>
             <p className="text-jz-teal text-xs font-black tracking-wide uppercase">Your travel companion</p>
           </div>
+          <button
+            onClick={() => navigate('/settings')}
+            aria-label="Settings"
+            className="w-10 h-10 rounded-xl flex items-center justify-center text-jz-soft hover:bg-jz-mist hover:text-jz-ink transition-all shrink-0"
+          >
+            <SettingsIcon className="w-5 h-5" />
+          </button>
         </header>
 
         {/* Dynamic Parameter Memory Chips */}
         {activeView === 'chat' && (travelPersonaArchetype.length + vibeSettings.length + foodPreferences.length) > 0 && (
-          <div className="flex gap-2 items-center overflow-x-auto px-4 py-2.5 bg-white border-b-[1.5px] border-jz-line shrink-0 no-scrollbar">
+          <div className="flex gap-2 items-center overflow-x-auto px-4 py-2.5 bg-jz-card border-b-[1.5px] border-jz-line shrink-0 no-scrollbar">
             <span className="text-xs font-extrabold text-jz-soft whitespace-nowrap">💛 JourZy remembers:</span>
             {[...travelPersonaArchetype, ...vibeSettings, ...foodPreferences].map(memory => (
               <span key={memory} className="jz-chip whitespace-nowrap">{memory}</span>
@@ -347,8 +372,8 @@ export default function Home() {
 
                     <div className={`relative max-w-[85%] border-[1.5px] p-[16px] text-jz-body-big shadow-sm transition-all ${
                       msg.role === 'ai'
-                        ? 'bg-white border-jz-line rounded-[22px] rounded-bl-[6px] text-jz-ink'
-                        : 'bg-white border-jz-teal text-jz-teal rounded-[22px] rounded-tr-[6px] font-bold'
+                        ? 'bg-jz-card border-jz-line rounded-[22px] rounded-bl-[6px] text-jz-ink'
+                        : 'bg-jz-card border-jz-teal text-jz-teal rounded-[22px] rounded-tr-[6px] font-bold'
                     }`}>
                       <div className="leading-relaxed"><ChatText text={msg.text} /></div>
                     </div>
@@ -360,7 +385,7 @@ export default function Home() {
                     <div className="w-9 h-9 rounded-xl flex items-center justify-center border bg-jz-tealTint text-jz-teal border-jz-teal/20">
                       <Sparkles className="w-4 h-4 animate-pulse" />
                     </div>
-                    <div className="bg-white border-[1.5px] border-jz-line rounded-[22px] rounded-tl-[6px] p-4 flex items-center gap-1">
+                    <div className="bg-jz-card border-[1.5px] border-jz-line rounded-[22px] rounded-tl-[6px] p-4 flex items-center gap-1">
                       <span className="text-jz-label font-bold text-jz-soft">typing</span>
                       <div className="flex gap-1 items-center pt-1.5">
                         <span className="h-1.5 w-1.5 rounded-full bg-jz-teal animate-bounce" style={{ animationDelay: '0ms' }} />
@@ -375,25 +400,40 @@ export default function Home() {
 
               {/* Secure Input Docking System */}
               <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-jz-bg via-jz-bg to-transparent">
-                <div className="relative flex items-center bg-white rounded-jz-card border-2 border-jz-line shadow-lg focus-within:border-jz-teal transition-all">
-                  <input
-                    type="text"
+                <div className="relative flex items-end bg-jz-card rounded-jz-card border-2 border-jz-line shadow-lg focus-within:border-jz-teal transition-all">
+                  <textarea
+                    ref={inputRef}
+                    rows={1}
                     value={inputValue}
-                    onChange={(e) => setInputValue(e.target.value)}
+                    onChange={(e) => {
+                      setInputValue(e.target.value);
+                      autoResizeTextarea(e.target);
+                    }}
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter' && inputValue.trim() && currentStep !== 'generating') {
+                      // Enter sends, Shift+Enter inserts a newline — same as
+                      // this chat box. The textarea also wraps and grows on
+                      // its own as a line fills up, no Shift needed for that.
+                      if (e.key === 'Enter' && !e.shiftKey && inputValue.trim() && currentStep !== 'generating') {
+                        e.preventDefault();
                         submitInput(inputValue.trim());
                         setInputValue('');
+                        if (inputRef.current) inputRef.current.style.height = 'auto';
                       }
                     }}
                     disabled={currentStep === 'generating'}
                     placeholder={currentStep === 'generating' ? "JourZy is building your itinerary..." : "Ask anything about your trip..."}
-                    className="w-full bg-transparent py-4 pl-5 pr-20 text-jz-body-big text-jz-ink placeholder-jz-soft/60 focus:outline-none min-h-jz-touch font-semibold disabled:opacity-60"
+                    className="w-full bg-transparent py-4 pl-5 pr-20 text-jz-body-big text-jz-ink placeholder-jz-soft/60 focus:outline-none min-h-jz-touch max-h-[120px] resize-none overflow-y-auto font-semibold disabled:opacity-60"
                   />
                   <button
-                    onClick={() => { if (inputValue.trim() && currentStep !== 'generating') { submitInput(inputValue.trim()); setInputValue(''); } }}
+                    onClick={() => {
+                      if (inputValue.trim() && currentStep !== 'generating') {
+                        submitInput(inputValue.trim());
+                        setInputValue('');
+                        if (inputRef.current) inputRef.current.style.height = 'auto';
+                      }
+                    }}
                     disabled={currentStep === 'generating'}
-                    className="absolute right-2.5 w-11 h-11 bg-jz-teal text-white rounded-xl flex items-center justify-center hover:bg-jz-tealDark transition-all disabled:opacity-50"
+                    className="absolute right-2.5 bottom-2.5 w-11 h-11 bg-jz-teal text-white rounded-xl flex items-center justify-center hover:bg-jz-tealDark transition-all disabled:opacity-50"
                   >
                     {currentStep === 'generating' ? (
                       <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
@@ -412,7 +452,7 @@ export default function Home() {
             >
               <h2 className="text-jz-screen font-black text-jz-ink tracking-tight">My Plan</h2>
               {savedTrips.length === 0 ? (
-                <p className="text-jz-soft font-bold text-jz-body bg-white p-5 rounded-jz-card border border-jz-line text-center">No saved trips yet — plan one in Chat! ✈️</p>
+                <p className="text-jz-soft font-bold text-jz-body bg-jz-card p-5 rounded-jz-card border border-jz-line text-center">No saved trips yet — plan one in Chat! ✈️</p>
               ) : (
                 <>
                   {upcomingTrips.length > 0 && (
@@ -423,7 +463,7 @@ export default function Home() {
                           key={trip.id}
                           onClick={() => openTrip(trip)}
                           disabled={loadingTripId === trip.id}
-                          className="w-full text-left bg-white border-[1.5px] border-jz-line rounded-jz-card p-5 hover:border-jz-teal transition-all shadow-sm disabled:opacity-60"
+                          className="w-full text-left bg-jz-card border-[1.5px] border-jz-line rounded-jz-card p-5 hover:border-jz-teal transition-all shadow-sm disabled:opacity-60"
                         >
                           <p className="font-black text-jz-title text-jz-ink capitalize">{trip.region}</p>
                           <p className="text-jz-label font-extrabold text-jz-soft mt-1">
@@ -442,7 +482,7 @@ export default function Home() {
                           key={trip.id}
                           onClick={() => openTrip(trip)}
                           disabled={loadingTripId === trip.id}
-                          className="w-full text-left bg-white border-[1.5px] border-jz-line rounded-jz-card p-5 hover:border-jz-teal transition-all shadow-sm opacity-80 disabled:opacity-60"
+                          className="w-full text-left bg-jz-card border-[1.5px] border-jz-line rounded-jz-card p-5 hover:border-jz-teal transition-all shadow-sm opacity-80 disabled:opacity-60"
                         >
                           <p className="font-black text-jz-title text-jz-ink capitalize">{trip.region}</p>
                           <p className="text-jz-label font-extrabold text-jz-soft mt-1">
@@ -459,7 +499,7 @@ export default function Home() {
         </main>
 
         {/* Global Bottom Navigation Shell Targets */}
-        <nav className="flex border-t-[1.5px] border-jz-line bg-white px-1 pt-1.5 pb-3 shrink-0 z-10">
+        <nav className="flex border-t-[1.5px] border-jz-line bg-jz-card px-1 pt-1.5 pb-3 shrink-0 z-10">
           {[
             { id: 'chat', label: 'Chat', icon: MessageCircle },
             { id: 'trips', label: 'My Plan', icon: Map },

@@ -1,5 +1,4 @@
 import { GeneratedItinerary } from '../types/travel';
-import { getRegionFacts } from '../utils/region-facts';
 import { Card, Why, SectionTitle } from './jourzy-ui';
 
 interface TipsTabProps {
@@ -7,12 +6,14 @@ interface TipsTabProps {
 }
 
 export function TipsTab({ itinerary }: TipsTabProps) {
-  const region = itinerary.plan.region;
   const insights = itinerary.insights;
   const emergency = insights?.emergencyNumbers;
-  const facts = getRegionFacts(region);
+  const currency = insights?.currency;
+  const keyPhrases = insights?.keyPhrases || [];
   const culturalTips = insights?.culturalTips || [];
   const commonScams = insights?.commonScams || [];
+  const customsRestrictions = insights?.customsRestrictions || [];
+  const bookingTips = itinerary.logisticsGuide?.bookingTips;
 
   return (
     <div>
@@ -38,17 +39,33 @@ export function TipsTab({ itinerary }: TipsTabProps) {
         </>
       )}
 
-      <SectionTitle>Money</SectionTitle>
-      <Card>
-        <p className="text-jz-body-big font-black text-jz-ink m-0">{facts.currency.name}</p>
-        <Why>{facts.currency.why}</Why>
-      </Card>
-
-      {facts.phrases.length > 0 && (
+      {currency && (
         <>
-          <SectionTitle>Five phrases that open doors</SectionTitle>
+          <SectionTitle>Money</SectionTitle>
+          <Card>
+            <p className="text-jz-body-big font-black text-jz-ink m-0">{currency.name}</p>
+            <Why>{currency.why}</Why>
+          </Card>
+        </>
+      )}
+
+      {bookingTips && (
+        <>
+          <SectionTitle>Booking flights, trains & SIMs</SectionTitle>
+          <Card tint="bg-jz-tealTint" className="border-none">
+            <p className="text-[17px] leading-relaxed font-semibold text-jz-tealDark">{bookingTips}</p>
+            <p className="mt-2 text-[14.5px] font-bold text-jz-teal">
+              JourZy can't book these directly — these are just the platforms travelers here actually use.
+            </p>
+          </Card>
+        </>
+      )}
+
+      {keyPhrases.length > 0 && (
+        <>
+          <SectionTitle>Phrases that open doors</SectionTitle>
           <div className="space-y-2.5">
-            {facts.phrases.map(p => (
+            {keyPhrases.map(p => (
               <Card key={p.en}>
                 <div className="flex justify-between items-baseline gap-2.5 flex-wrap">
                   <span className="text-[18.5px] font-black text-jz-ink">{p.en}</span>
@@ -68,6 +85,19 @@ export function TipsTab({ itinerary }: TipsTabProps) {
             {culturalTips.map((tip, i) => (
               <Card key={i}>
                 <p className="text-[17px] leading-relaxed font-semibold text-jz-ink">{tip}</p>
+              </Card>
+            ))}
+          </div>
+        </>
+      )}
+
+      {customsRestrictions.length > 0 && (
+        <>
+          <SectionTitle>Before you pack: restricted items</SectionTitle>
+          <div className="space-y-2.5">
+            {customsRestrictions.map((item, i) => (
+              <Card key={i} tint="bg-jz-goldTint" className="border-none">
+                <p className="text-[17px] leading-relaxed font-semibold text-jz-goldInk">{item}</p>
               </Card>
             ))}
           </div>

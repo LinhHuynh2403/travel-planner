@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Sparkles, X, Send, User as UserIcon, Star, MapPin, RefreshCw } from 'lucide-react';
 import { apiFetch, friendlyErrorMessage } from '../utils/api';
+import { getPreferredLanguage } from '../utils/language';
+import { autoResizeTextarea } from '../utils/autoresize';
 import { GeneratedItinerary } from '../types/travel';
 import { ChatText } from './chat-text';
 
@@ -49,6 +51,7 @@ export function ChatOverlay({ itinerary, prefill, isPastTrip, onClose, onReplace
   const [isThinking, setIsThinking] = useState(false);
   const [pickerFor, setPickerFor] = useState<{ suggestion: PlaceSuggestion } | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     localStorage.setItem('itineraryChatMessages', JSON.stringify(messages));
@@ -77,7 +80,7 @@ export function ChatOverlay({ itinerary, prefill, isPastTrip, onClose, onReplace
           // places in the US instead of the actual destination.
           region: itinerary.plan.region,
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-          language: navigator.language,
+          language: getPreferredLanguage(),
         }),
       });
       if (resp.ok) {
@@ -109,7 +112,7 @@ export function ChatOverlay({ itinerary, prefill, isPastTrip, onClose, onReplace
 
   return (
     <div className="absolute inset-0 bg-jz-bg flex flex-col z-30">
-      <div className="flex items-center gap-3 px-4 py-3.5 border-b-[1.5px] border-jz-line bg-white shrink-0">
+      <div className="flex items-center gap-3 px-4 py-3.5 border-b-[1.5px] border-jz-line bg-jz-card shrink-0">
         <div className="w-11 h-11 rounded-2xl bg-jz-teal flex items-center justify-center shrink-0 shadow-inner">
           <Sparkles className="w-5 h-5 text-white" />
         </div>
@@ -131,14 +134,14 @@ export function ChatOverlay({ itinerary, prefill, isPastTrip, onClose, onReplace
             </div>
             <div className={`max-w-[85%] flex flex-col gap-2.5 ${m.role === 'user' ? 'items-end' : 'items-start'}`}>
               <div className={`border-[1.5px] p-4 text-jz-body-big shadow-sm leading-relaxed ${m.role === 'ai'
-                ? 'bg-white border-jz-line rounded-[22px] rounded-bl-[6px] text-jz-ink'
+                ? 'bg-jz-card border-jz-line rounded-[22px] rounded-bl-[6px] text-jz-ink'
                 : 'bg-jz-teal border-jz-teal rounded-[22px] rounded-tr-[6px] text-white font-bold'
                 }`}>
                 <ChatText text={m.text} />
               </div>
 
               {m.suggestion && (
-                <div className="w-full bg-white border-[1.5px] border-jz-teal rounded-jz-card p-4">
+                <div className="w-full bg-jz-card border-[1.5px] border-jz-teal rounded-jz-card p-4">
                   <p className="text-jz-body-big font-black text-jz-ink">{m.suggestion.title}</p>
                   {m.suggestion.address && <p className="text-[14px] text-jz-soft font-bold mt-0.5">{m.suggestion.address}</p>}
                   <div className="flex justify-between items-center mt-3 gap-2.5">
@@ -174,7 +177,7 @@ export function ChatOverlay({ itinerary, prefill, isPastTrip, onClose, onReplace
             <div className="w-9 h-9 rounded-xl flex items-center justify-center border bg-jz-tealTint text-jz-teal border-jz-teal/20">
               <Sparkles className="w-4 h-4 animate-pulse" />
             </div>
-            <div className="bg-white border-[1.5px] border-jz-line rounded-[22px] rounded-bl-[6px] p-4 flex gap-1 items-center">
+            <div className="bg-jz-card border-[1.5px] border-jz-line rounded-[22px] rounded-bl-[6px] p-4 flex gap-1 items-center">
               <span className="h-1.5 w-1.5 rounded-full bg-jz-teal animate-bounce" style={{ animationDelay: '0ms' }} />
               <span className="h-1.5 w-1.5 rounded-full bg-jz-teal animate-bounce" style={{ animationDelay: '150ms' }} />
               <span className="h-1.5 w-1.5 rounded-full bg-jz-teal animate-bounce" style={{ animationDelay: '300ms' }} />
@@ -187,7 +190,7 @@ export function ChatOverlay({ itinerary, prefill, isPastTrip, onClose, onReplace
       {pickerFor && (
         <div className="absolute inset-0 bg-black/40 flex items-end z-40" onClick={() => setPickerFor(null)}>
           <div
-            className="w-full bg-white rounded-t-[28px] p-4 max-h-[70%] overflow-y-auto no-scrollbar"
+            className="w-full bg-jz-card rounded-t-[28px] p-4 max-h-[70%] overflow-y-auto no-scrollbar"
             onClick={e => e.stopPropagation()}
           >
             <p className="text-jz-title font-black text-jz-ink mb-3">Which stop should this replace?</p>
@@ -213,19 +216,29 @@ export function ChatOverlay({ itinerary, prefill, isPastTrip, onClose, onReplace
       )}
 
       <div className="p-3 bg-gradient-to-t from-jz-bg via-jz-bg to-transparent shrink-0">
-        <div className="relative flex items-center bg-white rounded-jz-card border-2 border-jz-line shadow-lg focus-within:border-jz-teal transition-all">
-          <input
-            type="text"
+        <div className="relative flex items-end bg-jz-card rounded-jz-card border-2 border-jz-line shadow-lg focus-within:border-jz-teal transition-all">
+          <textarea
+            ref={inputRef}
+            rows={1}
             value={inputValue}
-            onChange={e => setInputValue(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleSend()}
+            onChange={e => {
+              setInputValue(e.target.value);
+              autoResizeTextarea(e.target);
+            }}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSend();
+                if (inputRef.current) inputRef.current.style.height = 'auto';
+              }
+            }}
             placeholder="Ask anything about your trip..."
-            className="w-full bg-transparent py-4 pl-5 pr-20 text-jz-body-big text-jz-ink placeholder-jz-soft/60 focus:outline-none min-h-jz-touch font-semibold"
+            className="w-full bg-transparent py-4 pl-5 pr-20 text-jz-body-big text-jz-ink placeholder-jz-soft/60 focus:outline-none min-h-jz-touch max-h-[120px] resize-none overflow-y-auto font-semibold"
           />
           <button
-            onClick={handleSend}
+            onClick={() => { handleSend(); if (inputRef.current) inputRef.current.style.height = 'auto'; }}
             disabled={!inputValue.trim()}
-            className="absolute right-2.5 w-11 h-11 bg-jz-teal text-white rounded-xl flex items-center justify-center disabled:opacity-40"
+            className="absolute right-2.5 bottom-2.5 w-11 h-11 bg-jz-teal text-white rounded-xl flex items-center justify-center disabled:opacity-40"
           >
             <Send className="w-4 h-4" />
           </button>

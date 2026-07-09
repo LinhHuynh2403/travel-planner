@@ -162,7 +162,7 @@ export function MyPlanTab({ itinerary, initialDayNumber, onOpenChat }: MyPlanTab
             <button
               key={d.dayNumber}
               onClick={() => setDayNumber(d.dayNumber)}
-              className={`shrink-0 min-w-[74px] min-h-[58px] rounded-2xl font-extrabold text-[16px] border-[1.5px] ${active ? 'bg-jz-teal text-white border-jz-teal' : 'bg-white text-jz-ink border-jz-line'
+              className={`shrink-0 min-w-[74px] min-h-[58px] rounded-2xl font-extrabold text-[16px] border-[1.5px] ${active ? 'bg-jz-teal text-white border-jz-teal' : 'bg-jz-card text-jz-ink border-jz-line'
                 }`}
             >
               Day {d.dayNumber}<br />

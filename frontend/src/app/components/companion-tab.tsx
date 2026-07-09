@@ -31,7 +31,7 @@ export function CompanionTab({ itinerary, focusTarget }: CompanionTabProps) {
       </div>
 
       {focusTarget && (
-        <div className="bg-white border-2 border-jz-teal rounded-jz-card p-4 flex justify-between items-center animate-in fade-in">
+        <div className="bg-jz-card border-2 border-jz-teal rounded-jz-card p-4 flex justify-between items-center animate-in fade-in">
           <div>
             <span className="text-[9px] uppercase font-black text-jz-teal tracking-wider">Tracking Focused Target Stop</span>
             <p className="font-black text-jz-body-big text-jz-ink">{focusTarget.activity.title}</p>

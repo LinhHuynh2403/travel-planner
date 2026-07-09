@@ -5,6 +5,7 @@
 
 @theme {
   /* JourZy Custom Color Architecture Palette Configuration */
+  --color-jz-outerBg: #EFE9DF;
   --color-jz-bg: #FAF7F1;
   --color-jz-card: #FFFFFF;
   --color-jz-ink: #26333B;
@@ -42,4 +43,26 @@
   --text-jz-title: 18px;
   --text-jz-screen: 22px;
   --text-jz-hero: 24px;
+}
+
+/* Dark theme — redefines the same custom properties the @theme block above
+   generated utility classes from (bg-jz-bg, text-jz-ink, border-jz-line,
+   etc.), so every existing component picks this up automatically without
+   needing dark: variants sprinkled through every file. Toggled by adding
+   .dark to <html> (see app/utils/theme.ts). */
+.dark {
+  --color-jz-outerBg: #14120F;
+  --color-jz-bg: #1C1915;
+  --color-jz-card: #26221C;
+  --color-jz-ink: #EFE9DE;
+  --color-jz-soft: #A79E8F;
+  --color-jz-teal: #2BA89A;
+  --color-jz-tealDark: #1F8377;
+  --color-jz-tealTint: #163430;
+  --color-jz-gold: #F0A742;
+  --color-jz-goldTint: #3A2C13;
+  --color-jz-goldInk: #F5D9A8;
+  --color-jz-goldSoft: #D9B876;
+  --color-jz-mist: #23282A;
+  --color-jz-line: #38332B;
 }

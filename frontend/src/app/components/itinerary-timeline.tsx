@@ -14,7 +14,7 @@ export function ItineraryTimeline({ days, onViewOnMap, onSelectActivity, hotelRe
   return (
     <div className="space-y-6">
       {hotelRecommendation && (
-        <div className="bg-white border-[1.5px] border-jz-line rounded-jz-card p-5 space-y-3 shadow-sm" onClick={() => onSelectHotel(hotelRecommendation)}>
+        <div className="bg-jz-card border-[1.5px] border-jz-line rounded-jz-card p-5 space-y-3 shadow-sm" onClick={() => onSelectHotel(hotelRecommendation)}>
           <div className="flex justify-between items-start">
             <div>
               <span className="text-[10px] text-jz-teal font-black tracking-wider uppercase">Recommended Base Base</span>
@@ -33,14 +33,14 @@ export function ItineraryTimeline({ days, onViewOnMap, onSelectActivity, hotelRe
         <div key={day.dayNumber} className="space-y-3">
           <div className="px-1 flex justify-between items-baseline mt-4">
             <h3 className="text-jz-title font-black text-jz-ink">Day {day.dayNumber} Sequence</h3>
-            <span className="text-xs font-black text-jz-soft bg-white px-2 py-0.5 rounded border border-jz-line">{day.activities.length} Stops</span>
+            <span className="text-xs font-black text-jz-soft bg-jz-card px-2 py-0.5 rounded border border-jz-line">{day.activities.length} Stops</span>
           </div>
 
           {day.activities.map((activity, idx) => (
             <div
               key={idx}
               onClick={() => onSelectActivity(activity, day.dayNumber, idx)}
-              className="bg-white border-[1.5px] border-jz-line rounded-jz-card p-5 space-y-3 shadow-sm hover:border-jz-teal transition-all cursor-pointer"
+              className="bg-jz-card border-[1.5px] border-jz-line rounded-jz-card p-5 space-y-3 shadow-sm hover:border-jz-teal transition-all cursor-pointer"
             >
               <div className="flex justify-between items-start gap-2">
                 <div className="space-y-1">
