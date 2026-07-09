@@ -330,7 +330,7 @@ export default function Home() {
               <div
                 ref={chatScrollRef}
                 onScroll={(e) => { scrollPositions.current.chat = e.currentTarget.scrollTop; }}
-                className="flex-1 overflow-y-auto p-4 space-y-4 pb-28 no-scrollbar"
+                className="flex-1 overflow-y-auto p-4 space-y-6 pb-28 no-scrollbar"
               >
                 {messages.map((msg) => (
                   <div key={msg.id} className={`flex gap-3 items-start ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>

@@ -121,7 +121,7 @@ export function ChatOverlay({ itinerary, prefill, isPastTrip, onClose, onReplace
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-3 no-scrollbar">
+      <div className="flex-1 overflow-y-auto p-4 space-y-5 no-scrollbar">
         {messages.map(m => (
           <div key={m.id} className={`flex gap-3 items-start ${m.role === 'user' ? 'flex-row-reverse' : ''}`}>
             <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border ${m.role === 'ai' ? 'bg-jz-tealTint text-jz-teal border-jz-teal/20' : 'bg-jz-mist text-jz-ink border-jz-line'
