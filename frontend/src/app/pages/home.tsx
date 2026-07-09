@@ -235,10 +235,6 @@ export default function Home() {
 
   const handleGenerateItinerary = async (customMessages?: Message[]) => {
     setCurrentStep('generating');
-    setMessages(prev => [
-      ...prev,
-      { id: Date.now().toString(), role: 'ai', text: "Perfect! Let me craft your personalized itinerary — checking real places, ratings, and weather. This can take a moment... 🪄", step: 'generating' }
-    ]);
     const finalPlan = { ...plan, hobbies: [], favoriteFood: [], restaurantPreferences: [], placePreferences: [] } as TravelPlan;
     try {
       const generated = await generateItinerary(finalPlan, customMessages || messages);
@@ -283,7 +279,7 @@ export default function Home() {
       // generateItinerary() already throws with the backend's actual error
       // text (e.g. a rate-limit message) when available — show that instead
       // of a generic "make sure the backend is running" guess.
-      const errorText = e instanceof Error && e.message ? e.message : "Sorry, I ran into a problem building your itinerary. Try typing \"ready\" again.";
+      const errorText = e instanceof Error && e.message ? e.message : "Sorry, I ran into a problem building your itinerary. Try confirming you are ready again.";
       setMessages(prev => [
         ...prev,
         { id: Date.now().toString(), role: 'ai', text: errorText, step: 'chatting' }
@@ -292,12 +288,10 @@ export default function Home() {
   };
 
   const handleChattingInput = async (text: string) => {
-    const isReady = /ready|done|generate|good to go/i.test(text);
     const userMessage: Message = { id: Date.now().toString(), role: 'user', text };
     const updatedMessages = [...messages, userMessage];
     setMessages(updatedMessages);
 
-    if (isReady) { await handleGenerateItinerary(updatedMessages); return; }
     setIsThinking(true);
     try {
       const response = await apiFetch(`/api/chat`, {
@@ -306,7 +300,11 @@ export default function Home() {
       });
       if (response.ok) {
         const data = await response.json();
-        setMessages(prev => [...prev, { id: Date.now().toString(), role: 'ai', text: data.text, step: 'chatting' }]);
+        const nextMessages = [...updatedMessages, { id: Date.now().toString(), role: 'ai', text: data.text, step: 'chatting' } as Message];
+        setMessages(nextMessages);
+        if (data.isReady) {
+          await handleGenerateItinerary(nextMessages);
+        }
       } else {
         const errorText = await friendlyErrorMessage(response);
         setMessages(prev => [...prev, { id: Date.now().toString(), role: 'ai', text: errorText, step: 'chatting' }]);

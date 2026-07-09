@@ -142,17 +142,23 @@ export default function Itinerary() {
     <div className="min-h-screen bg-jz-outerBg text-jz-ink flex items-center justify-center sm:p-4 selection:bg-jz-tealTint">
       <div className="relative w-full max-w-[430px] h-[100dvh] sm:h-[min(920px,94vh)] bg-jz-bg sm:rounded-[36px] overflow-hidden sm:border-[10px] sm:border-jz-ink sm:shadow-2xl flex flex-col">
 
-        {isPastTrip && (
-          <div className="flex items-center gap-3 px-4 py-3 bg-jz-card border-b-[1.5px] border-jz-line shrink-0">
-            <button
-              onClick={startNewTrip}
-              className="flex items-center gap-1.5 text-jz-teal font-extrabold text-jz-body-big"
-            >
-              <ArrowLeft className="w-5 h-5" /> Plan a new trip
-            </button>
-            <span className="ml-auto text-xs font-extrabold text-jz-soft uppercase tracking-wide">Past trip</span>
-          </div>
-        )}
+        <div className="flex items-center gap-4 px-4 py-3 bg-jz-card border-b-[1.5px] border-jz-line shrink-0">
+          <button
+            onClick={() => navigate('/?view=trips')}
+            className="flex items-center gap-1.5 text-jz-teal font-extrabold text-jz-body-big"
+          >
+            <ArrowLeft className="w-5 h-5" /> Home
+          </button>
+          <button
+            onClick={startNewTrip}
+            className="flex items-center gap-1.5 text-jz-teal font-extrabold text-jz-body-big"
+          >
+            <MessageCircle className="w-5 h-5" /> New Trip
+          </button>
+          <span className="ml-auto text-xs font-extrabold text-jz-soft uppercase tracking-wide">
+            {isPastTrip ? 'Past trip' : 'Upcoming trip'}
+          </span>
+        </div>
 
         {tab === 'reschedule' ? (
           <div className="flex-1 overflow-hidden flex flex-col">
