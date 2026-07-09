@@ -5,9 +5,10 @@ import { Seal } from "./jourzy-seal";
 import { apiFetch, friendlyErrorMessage } from "../../utils/api";
 import { useTranslation } from "../../utils/translations";
 import { getPreferredLanguage } from "../../utils/language";
+import { FlightPicksCard, type FlightSuggestion } from "./flight-picks-card";
 
 type PlaceSuggestion = { placeId?: string; title: string; address: string; rating?: number; mapsUrl?: string; why?: string; travelTimeFromPlan?: string };
-type Msg = { role: "user" | "ai"; text: string; suggestion?: PlaceSuggestion; used?: boolean };
+type Msg = { role: "user" | "ai"; text: string; suggestion?: PlaceSuggestion; flightSuggestion?: FlightSuggestion; used?: boolean };
 
 export default function CompanionSheet({ tripId, isPast, tripData, close, onReplaceActivity }: {
   tripId: string; isPast: boolean; tripData?: any; close: () => void;
@@ -85,7 +86,7 @@ export default function CompanionSheet({ tripId, isPast, tripData, close, onRepl
       });
       if (resp.ok) {
         const data = await resp.json();
-        setMessages([...updated, { role: 'ai', text: data.text, suggestion: data.suggestion || undefined }]);
+        setMessages([...updated, { role: 'ai', text: data.text, suggestion: data.suggestion || undefined, flightSuggestion: data.flightSuggestion || undefined }]);
       } else {
         const err = await friendlyErrorMessage(resp);
         setMessages([...updated, { role: 'ai', text: err }]);
@@ -159,6 +160,7 @@ export default function CompanionSheet({ tripId, isPast, tripData, close, onRepl
                     </button>
                   </div>
                 )}
+                {m.flightSuggestion && <FlightPicksCard suggestion={m.flightSuggestion} />}
               </div>
             </div>
           ))}

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Train, Footprints, Check, Map, Send, Star, AlertTriangle, Clock, RefreshCw, X } from "lucide-react";
+import { Train, Footprints, Check, Map, Send, Star, AlertTriangle, Clock, RefreshCw, X, Wallet } from "lucide-react";
 import { C, display } from "./jourzy-theme";
 import { Seal } from "./jourzy-seal";
 import DayMap from "./day-map";
@@ -47,10 +47,11 @@ export default function PlanView({ tripData }: { tripData: any }) {
   };
 
   const swapTargetRaw = altFor ? d.activities.find((a: any, i: number) => uidFor(a, i) === altFor) : null;
+  const dayTotal = (d.activities || []).reduce((sum: number, raw: any, idx: number) => sum + (eff(raw, uidFor(raw, idx)).cost || 0), 0);
 
   return (
     <div className="px-4">
-      {day === 0 && hotel && (
+      {hotel && (
         <div className="rounded-2xl p-4 mb-3 text-white" style={{ background: C.ink }}>
           <div className="flex justify-between items-start gap-2">
             <div>
@@ -71,11 +72,13 @@ export default function PlanView({ tripData }: { tripData: any }) {
               <Clock size={12} className="shrink-0 mt-0.5" />{hotel.checkInNote}
             </p>
           )}
-          <a href={directionsUrl(airportName || `Airport near ${tripData.plan?.region}`, hotelAddr, "transit")}
+          <a href={day === 0
+              ? directionsUrl(airportName || `Airport near ${tripData.plan?.region}`, hotelAddr, "transit")
+              : `https://www.google.com/maps/search/?api=1&query=${enc(hotelAddr)}`}
             target="_blank" rel="noreferrer"
             className="mt-2.5 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5"
             style={{ background: "rgba(255,255,255,0.12)", color: "#fff" }}>
-            <Map size={12} /> Directions: {airportName || "Airport"} → hotel
+            <Map size={12} /> {day === 0 ? `Directions: ${airportName || "Airport"} → hotel` : "View hotel on map"}
           </a>
         </div>
       )}
@@ -168,6 +171,15 @@ export default function PlanView({ tripData }: { tripData: any }) {
               </div>
             );
           })}
+
+          {dayTotal > 0 && (
+            <div className="rounded-2xl p-3.5 flex items-center justify-between gap-3" style={{ background: C.ink }}>
+              <div className="flex items-center gap-2 text-xs font-medium text-white opacity-80">
+                <Wallet size={14} /> If you do everything suggested today
+              </div>
+              <div className="font-bold text-base font-serif text-white">${dayTotal}</div>
+            </div>
+          )}
         </div>
       )}
       <div className="text-center text-xs mt-3 pb-1" style={{ color: C.sub }}>

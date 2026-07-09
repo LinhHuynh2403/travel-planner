@@ -5,12 +5,14 @@ import { apiFetch, friendlyErrorMessage } from "../../utils/api";
 import { getPreferredLanguage } from "../../utils/language";
 import { useTranslation } from "../../utils/translations";
 import { generateItinerary } from "../../utils/generate-itinerary";
+import { FlightPicksCard, type FlightSuggestion } from "./flight-picks-card";
 
 type Message = {
   id: string;
   role: 'ai' | 'user';
   text: string;
   step?: 'chatting' | 'generating';
+  flightSuggestion?: FlightSuggestion;
 };
 
 export default function NewTripChat({ goTrips }: { goTrips: () => void }) {
@@ -113,7 +115,7 @@ export default function NewTripChat({ goTrips }: { goTrips: () => void }) {
       });
       if (response.ok) {
         const data = await response.json();
-        const nextMsgs = [...updated, { id: Date.now().toString(), role: 'ai', text: data.text } as Message];
+        const nextMsgs = [...updated, { id: Date.now().toString(), role: 'ai', text: data.text, flightSuggestion: data.flightSuggestion || undefined } as Message];
         setMessages(nextMsgs);
         if (data.isReady) {
           await handleGenerate(nextMsgs);
@@ -155,6 +157,7 @@ export default function NewTripChat({ goTrips }: { goTrips: () => void }) {
                 ? { background: C.green, color: "#fff", borderRadius: "18px 18px 4px 18px" }
                 : { background: C.card, color: C.ink, borderRadius: "18px 18px 18px 4px", border: `1px solid ${C.line}` }}>
               {m.text.split("**").map((tPart, j) => j % 2 ? <b key={j}>{tPart}</b> : tPart)}
+              {m.flightSuggestion && <FlightPicksCard suggestion={m.flightSuggestion} />}
             </div>
           </div>
         ))}

@@ -1038,7 +1038,21 @@ app.post("/api/chat", expensiveLimiter, optionalAuth, async (req, res) => {
         : mode === "reschedule"
           ? getRescheduleChatInstruction(itineraryContext || "(no trip details provided)")
           : SYSTEM_CHAT_INSTRUCTION;
-    const languageInstruction = getLanguageInstruction(language);
+    // The device/browser locale (navigator.language) is only a real signal
+    // before the traveler has typed anything — plenty of people (this app's
+    // own Vietnamese-locale users typing in English, for instance) chat in a
+    // language that doesn't match their OS/browser setting. Forcing the
+    // locale-based instruction on every single turn regardless of what's
+    // actually in the conversation caused the model to snap back to the
+    // device language mid-conversation (observed live: an English
+    // conversation flipped to Vietnamese right at the final <<READY>>
+    // confirmation once the free-tier fallback model — gemini-3.1-flash-lite,
+    // used after gemini-3.5-flash hit its daily quota — was handling the
+    // reply). Once the traveler has actually written something real, trust
+    // the conversation's own established language via chat history/context
+    // instead of re-asserting a possibly-wrong locale guess every turn.
+    const hasRealUserMessage = chatHistory.some(m => (m.role || "user") !== "ai" && (m.text || "").trim() && !/^\(/.test((m.text || "").trim()));
+    const languageInstruction = hasRealUserMessage ? "" : getLanguageInstruction(language);
     const flightSearchEnabled = !!process.env.TRAVELPAYOUTS_API_TOKEN;
     const systemInstruction = [baseInstruction, flightSearchEnabled ? FLIGHT_GUIDANCE : BOOKING_GUIDANCE, languageInstruction].filter(Boolean).join("\n\n");
 
