@@ -22,8 +22,8 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS ||
 
 app.use(cors({
   origin(origin, callback) {
-    // Allow non-browser tools / same-origin requests with no Origin header
-    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+    // Allow non-browser tools / same-origin requests with no Origin header, and all localhost origins
+    if (!origin || allowedOrigins.includes(origin) || origin.startsWith("http://localhost:")) return callback(null, true);
     return callback(new Error("Not allowed by CORS"));
   },
   credentials: true,
