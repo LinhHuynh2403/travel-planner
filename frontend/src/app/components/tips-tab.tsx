@@ -1,11 +1,13 @@
 import { GeneratedItinerary } from '../types/travel';
 import { Card, Why, SectionTitle } from './jourzy-ui';
+import { useTranslation } from '../utils/translations';
 
 interface TipsTabProps {
   itinerary: GeneratedItinerary;
 }
 
 export function TipsTab({ itinerary }: TipsTabProps) {
+  const { t } = useTranslation();
   const insights = itinerary.insights;
   const emergency = insights?.emergencyNumbers;
   const currency = insights?.currency;
@@ -17,31 +19,31 @@ export function TipsTab({ itinerary }: TipsTabProps) {
 
   return (
     <div>
-      <h1 className="text-jz-screen font-black text-jz-ink leading-tight">Know before you go</h1>
-      <p className="text-jz-body text-jz-soft font-bold">Friendly heads-ups — nothing to worry about.</p>
+      <h1 className="text-jz-screen font-black text-jz-ink leading-tight">{t('ui.knowBefore')}</h1>
+      <p className="text-jz-body text-jz-soft font-bold">{t('ui.knowSubtitle')}</p>
 
       {emergency && (
         <>
-          <SectionTitle>If you ever need help</SectionTitle>
+          <SectionTitle>{t('ui.ifNeedHelp')}</SectionTitle>
           <div className="grid grid-cols-2 gap-2.5">
             <Card tint="bg-jz-tealTint" className="text-center border-none">
               <p className="text-[34px] font-black text-jz-tealDark leading-none m-0">{emergency.police}</p>
-              <p className="mt-1 text-[16.5px] font-extrabold text-jz-tealDark">Police</p>
+              <p className="mt-1 text-[16.5px] font-extrabold text-jz-tealDark">{t('ui.police')}</p>
             </Card>
             <Card tint="bg-jz-tealTint" className="text-center border-none">
               <p className="text-[34px] font-black text-jz-tealDark leading-none m-0">{emergency.ambulance}</p>
-              <p className="mt-1 text-[16.5px] font-extrabold text-jz-tealDark">Ambulance{emergency.ambulance === emergency.fire ? ' & fire' : ''}</p>
+              <p className="mt-1 text-[16.5px] font-extrabold text-jz-tealDark">{t('ui.ambulance')}{emergency.ambulance === emergency.fire ? ` ${t('ui.andFire')}` : ''}</p>
             </Card>
           </div>
           <p className="mt-2 text-[15.5px] font-bold text-jz-soft">
-            Your hotel front desk can call for help for you, day or night.
+            {t('ui.helpDesk')}
           </p>
         </>
       )}
 
       {currency && (
         <>
-          <SectionTitle>Money</SectionTitle>
+          <SectionTitle>{t('ui.money')}</SectionTitle>
           <Card>
             <p className="text-jz-body-big font-black text-jz-ink m-0">{currency.name}</p>
             <Why>{currency.why}</Why>
@@ -51,11 +53,11 @@ export function TipsTab({ itinerary }: TipsTabProps) {
 
       {bookingTips && (
         <>
-          <SectionTitle>Booking flights, trains & SIMs</SectionTitle>
+          <SectionTitle>{t('ui.bookingTips')}</SectionTitle>
           <Card tint="bg-jz-tealTint" className="border-none">
             <p className="text-[17px] leading-relaxed font-semibold text-jz-tealDark">{bookingTips}</p>
             <p className="mt-2 text-[14.5px] font-bold text-jz-teal">
-              JourZy can't book these directly — these are just the platforms travelers here actually use.
+              {t('ui.bookingDisclaimer')}
             </p>
           </Card>
         </>
@@ -63,7 +65,7 @@ export function TipsTab({ itinerary }: TipsTabProps) {
 
       {keyPhrases.length > 0 && (
         <>
-          <SectionTitle>Phrases that open doors</SectionTitle>
+          <SectionTitle>{t('ui.phrases')}</SectionTitle>
           <div className="space-y-2.5">
             {keyPhrases.map(p => (
               <Card key={p.en}>
@@ -71,7 +73,7 @@ export function TipsTab({ itinerary }: TipsTabProps) {
                   <span className="text-[18.5px] font-black text-jz-ink">{p.en}</span>
                   <span className="text-[18px] font-extrabold text-jz-teal">{p.local}</span>
                 </div>
-                <p className="mt-1 text-[16px] font-bold text-jz-soft">Say it: "{p.say}"</p>
+                <p className="mt-1 text-[16px] font-bold text-jz-soft">{t('ui.sayIt')} "{p.say}"</p>
               </Card>
             ))}
           </div>
@@ -80,7 +82,7 @@ export function TipsTab({ itinerary }: TipsTabProps) {
 
       {culturalTips.length > 0 && (
         <>
-          <SectionTitle>Local customs</SectionTitle>
+          <SectionTitle>{t('ui.localCustoms')}</SectionTitle>
           <div className="space-y-2.5">
             {culturalTips.map((tip, i) => (
               <Card key={i}>
@@ -93,7 +95,7 @@ export function TipsTab({ itinerary }: TipsTabProps) {
 
       {customsRestrictions.length > 0 && (
         <>
-          <SectionTitle>Before you pack: restricted items</SectionTitle>
+          <SectionTitle>{t('ui.restrictedItems')}</SectionTitle>
           <div className="space-y-2.5">
             {customsRestrictions.map((item, i) => (
               <Card key={i} tint="bg-jz-goldTint" className="border-none">
@@ -106,7 +108,7 @@ export function TipsTab({ itinerary }: TipsTabProps) {
 
       {commonScams.length > 0 && (
         <>
-          <SectionTitle>A friend's heads-up</SectionTitle>
+          <SectionTitle>{t('ui.friendHeadsUp')}</SectionTitle>
           <div className="space-y-2.5">
             {commonScams.map((scam, i) => (
               <Card key={i} tint="bg-jz-mist" className="border-none">

@@ -151,12 +151,17 @@ export default function Itinerary() {
           >
             <ArrowLeft className="w-5 h-5" /> {t("nav.home")}
           </button>
-          <button
-            onClick={startNewTrip}
-            className="flex items-center gap-1.5 text-jz-teal font-extrabold text-jz-body-big"
-          >
-            <MessageCircle className="w-5 h-5" /> {t("nav.newTrip")}
-          </button>
+          {/* Only past trips need an explicit "start something new" CTA here —
+              for an upcoming trip this is redundant, since Home's Chat tab
+              already covers it (going Home -> Chat -> plan). */}
+          {isPastTrip && (
+            <button
+              onClick={startNewTrip}
+              className="flex items-center gap-1.5 text-jz-teal font-extrabold text-jz-body-big"
+            >
+              <MessageCircle className="w-5 h-5" /> {t("nav.newTrip")}
+            </button>
+          )}
           <span className="ml-auto text-xs font-extrabold text-jz-soft uppercase tracking-wide">
             {isPastTrip ? t("nav.pastTrip") : t("nav.upcomingTrip")}
           </span>
@@ -190,7 +195,6 @@ export default function Itinerary() {
                 region={itinerary.plan.region}
                 weatherWeek={itinerary.insights?.weatherWeek}
                 weatherOverview={itinerary.insights?.weatherOverview}
-                onOpenChat={() => openChat(`What medicines should I check for ${itinerary.plan.region}?`)}
               />
             )}
             {tab === 'tips' && <TipsTab itinerary={itinerary} />}

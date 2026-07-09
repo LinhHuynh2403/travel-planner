@@ -1,12 +1,15 @@
 import { ReactNode } from 'react';
 import { LucideIcon } from 'lucide-react';
 
+import { useTranslation } from '../utils/translations';
+
 /** "Because · ..." reasoning line — the core trust-building pattern from the
  * prototype: every recommendation gets a plain-English reason attached. */
 export function Why({ children }: { children: ReactNode }) {
+  const { t } = useTranslation();
   return (
     <p className="mt-1.5 text-[16px] leading-snug font-semibold text-jz-teal">
-      <span className="font-extrabold">Because · </span>{children}
+      <span className="font-extrabold">{t('ui.reason')} · </span>{children}
     </p>
   );
 }

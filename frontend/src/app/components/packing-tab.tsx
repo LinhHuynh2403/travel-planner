@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { PackingItem, PackingEntry, WeatherDay } from '../types/travel';
 import { useLiveWeatherWeek } from '../utils/live-weather';
+import { useTranslation } from '../utils/translations';
 
 interface PackingTabProps {
   packingList?: PackingItem[];
   region: string;
   weatherWeek?: WeatherDay[];
   weatherOverview?: string;
-  onOpenChat: () => void;
 }
 
 /* Backend may send items as plain strings (older trips) or as
@@ -20,7 +20,8 @@ const WEATHER_EMOJI: Record<string, string> = {
   sunny: '☀️', partly: '⛅', cloudy: '☁️', rainy: '🌧️', snowy: '❄️', stormy: '⛈️',
 };
 
-export function PackingTab({ packingList, region, weatherWeek, weatherOverview, onOpenChat }: PackingTabProps) {
+export function PackingTab({ packingList, region, weatherWeek, weatherOverview }: PackingTabProps) {
+  const { t } = useTranslation();
   const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set());
   const liveWeatherWeek = useLiveWeatherWeek(region);
   const displayWeatherWeek = liveWeatherWeek || weatherWeek;
@@ -44,33 +45,16 @@ export function PackingTab({ packingList, region, weatherWeek, weatherOverview, 
     <div className="space-y-1">
       {/* Header */}
       <h1 className="text-jz-screen font-black text-jz-ink leading-tight">
-        Pack for {cityName}
+        {t('ui.packFor')} {cityName}
       </h1>
       <p className="text-jz-body text-jz-soft font-bold">
-        Every item has a reason — no mystery checklists.
+        {t('ui.packSubtitle')}
       </p>
-
-      {/* A caring heads-up about medicine (50+ traveler care) */}
-      <div className="bg-jz-goldTint rounded-jz-card p-[18px] !mt-4">
-        <p className="text-jz-body-big font-black text-jz-goldInk">
-          💊 A caring heads-up about medicine
-        </p>
-        <p className="text-jz-label font-bold text-jz-goldSoft leading-relaxed mt-1.5 mb-3">
-          {cityName} doesn't allow some common medicines in without notice. Tell
-          me what you take and I'll check each one against local rules.
-        </p>
-        <button
-          onClick={onOpenChat}
-          className="w-full min-h-jz-touch rounded-jz-btn bg-jz-card border-2 border-jz-gold text-jz-goldInk font-extrabold text-[17.5px]"
-        >
-          Check my medicines with JourZy
-        </button>
-      </div>
 
       {/* The week's weather */}
       {(displayWeatherWeek && displayWeatherWeek.length > 0) ? (
         <>
-          <h2 className="text-jz-title font-black text-jz-ink !mt-6 mb-3">The week's weather</h2>
+          <h2 className="text-jz-title font-black text-jz-ink !mt-6 mb-3">{t('ui.weekWeather')}</h2>
           <div className="flex gap-2 overflow-x-auto pb-1.5 -mx-1 px-1 [scrollbar-width:none]">
             {displayWeatherWeek.map(w => (
               <div key={w.d} className="shrink-0 w-24 bg-jz-card border-[1.5px] border-jz-line rounded-jz-card px-1.5 py-3 text-center">
@@ -120,7 +104,7 @@ export function PackingTab({ packingList, region, weatherWeek, weatherOverview, 
                     </span>
                     {item.why && (
                       <span className="block text-[16px] leading-snug font-semibold text-jz-teal mt-1">
-                        <span className="font-extrabold">Because · </span>{item.why}
+                        <span className="font-extrabold">{t('ui.reason')} · </span>{item.why}
                       </span>
                     )}
                   </span>
@@ -134,7 +118,7 @@ export function PackingTab({ packingList, region, weatherWeek, weatherOverview, 
       {/* Leave these at home */}
       {leaveGroups.length > 0 && (
         <div>
-          <h2 className="text-jz-title font-black text-jz-ink !mt-6 mb-3">Leave these at home</h2>
+          <h2 className="text-jz-title font-black text-jz-ink !mt-6 mb-3">{t('ui.leaveAtHome')}</h2>
           <div className="space-y-2.5">
             {leaveGroups.flatMap(g => g.items).map((raw, i) => {
               const item = normalize(raw);
@@ -153,7 +137,7 @@ export function PackingTab({ packingList, region, weatherWeek, weatherOverview, 
 
       {list.length === 0 && (
         <p className="text-jz-body text-jz-soft font-bold !mt-6">
-          Your packing list will appear here once JourZy builds your trip. ✨
+          {t('ui.emptyPacking')}
         </p>
       )}
     </div>

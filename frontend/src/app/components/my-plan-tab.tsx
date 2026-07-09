@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { ChevronRight, Wallet, MapPin, Star, Train, Bus, Footprints, Car, Umbrella, MessageCircle } from 'lucide-react';
 import { DayItinerary, GeneratedItinerary, ItineraryActivity } from '../types/travel';
 import { Card, Why } from './jourzy-ui';
+import { useTranslation } from '../utils/translations';
 
 function getTravelIcon(text: string) {
   const t = (text || '').toLowerCase();
@@ -18,37 +19,37 @@ interface MyPlanTabProps {
   onOpenChat: () => void;
 }
 
-function getPeriodLabel(timeStr: string): string {
+function getPeriodLabel(timeStr: string, t: (k: string) => string): string {
   const match = (timeStr || '').match(/(\d+):(\d+)\s*(AM|PM)/i);
   if (!match) return '';
   let hours = parseInt(match[1]);
   const period = match[3].toUpperCase();
   if (period === 'PM' && hours !== 12) hours += 12;
   if (period === 'AM' && hours === 12) hours = 0;
-  if (hours < 11) return 'Morning';
-  if (hours < 12) return 'Late Morning';
-  if (hours < 17) return 'Afternoon';
-  if (hours < 21) return 'Evening';
-  return 'Night';
+  if (hours < 11) return t('ui.morning') || 'Morning';
+  if (hours < 12) return t('ui.lateMorning') || 'Late Morning';
+  if (hours < 17) return t('ui.afternoon') || 'Afternoon';
+  if (hours < 21) return t('ui.evening') || 'Evening';
+  return t('ui.night') || 'Night';
 }
 
-const CATEGORY_DAY_TITLES: Record<string, string> = {
-  food: 'Food & flavors',
-  museum: 'Museums at your pace',
-  exhibition: 'Exhibitions & culture',
-  nature: 'Nature & fresh air',
-  activity: 'Sights at your pace',
-  rest: 'A slower day',
-};
-
-function getDayTitle(day: DayItinerary, region: string): string {
+function getDayTitle(day: DayItinerary, region: string, t: (k: string) => string): string {
   const counts: Record<string, number> = {};
   for (const act of day.activities) {
     counts[act.category] = (counts[act.category] || 0) + 1;
   }
   const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
-  if (!top) return `Your day in ${region.split(',')[0]}`;
-  return CATEGORY_DAY_TITLES[top[0]] || `Your day in ${region.split(',')[0]}`;
+  if (!top) return `${t('ui.yourDayIn')} ${region.split(',')[0]}`;
+  
+  const categoryMap: Record<string, string> = {
+    food: t('ui.catFood') || 'Food & flavors',
+    museum: t('ui.catMuseum') || 'Museums at your pace',
+    exhibition: t('ui.catExhibition') || 'Exhibitions & culture',
+    nature: t('ui.catNature') || 'Nature & fresh air',
+    activity: t('ui.catActivity') || 'Sights at your pace',
+    rest: t('ui.catRest') || 'A slower day',
+  };
+  return categoryMap[top[0]] || `${t('ui.yourDayIn')} ${region.split(',')[0]}`;
 }
 
 function mapsSearchUrl(title: string, location: string) {
@@ -70,15 +71,17 @@ function parseLegacyBreakdown(text: string): { category: string; amount: number 
   return rows;
 }
 
-function paceDescription(itinerary: GeneratedItinerary): string {
+function paceDescription(itinerary: GeneratedItinerary, t: (k: string) => string): string {
   const days = itinerary.days || [];
   if (days.length === 0) return '';
   const avg = days.reduce((s, d) => s + d.activities.length, 0) / days.length;
-  const pace = avg <= 3 ? 'relaxed pace: 2–3 stops a day' : avg <= 5 ? 'balanced pace: 3–5 stops a day' : 'active pace: 5+ stops a day';
-  return `your ${pace}, picked from top-rated places on Google Maps`;
+  const pace = avg <= 3 ? t('ui.paceRelaxed') || 'relaxed pace: 2–3 stops a day' : avg <= 5 ? t('ui.paceBalanced') || 'balanced pace: 3–5 stops a day' : t('ui.paceActive') || 'active pace: 5+ stops a day';
+  const pacePicked = t('ui.pacePicked') || 'your {{pace}}, picked from top-rated places on Google Maps';
+  return pacePicked.replace('{{pace}}', pace);
 }
 
 export function MyPlanTab({ itinerary, initialDayNumber, onOpenChat }: MyPlanTabProps) {
+  const { t } = useTranslation();
   const days = itinerary.days || [];
   const [dayNumber, setDayNumber] = useState<number>(initialDayNumber || days[0]?.dayNumber || 1);
   const [showBudget, setShowBudget] = useState(false);
@@ -95,7 +98,7 @@ export function MyPlanTab({ itinerary, initialDayNumber, onOpenChat }: MyPlanTab
   const isRainyDay = dayWeather && (dayWeather.icon === 'rainy' || dayWeather.icon === 'stormy');
   // Legacy trips (generated before backupTip existed) fall back to a generic
   // weather-based nudge; new trips always get a real, activity-specific tip.
-  const backupMessage = day?.backupTip || (isRainyDay ? 'Rain is in the forecast today — ask JourZy for an indoor alternative.' : null);
+  const backupMessage = day?.backupTip || (isRainyDay ? t('ui.rainForecast') || 'Rain is in the forecast today — ask JourZy for an indoor alternative.' : null);
 
   const arrival = new Date(itinerary.plan.arrivalDate);
   const leave = new Date(itinerary.plan.leaveDate);
@@ -117,13 +120,13 @@ export function MyPlanTab({ itinerary, initialDayNumber, onOpenChat }: MyPlanTab
   return (
     <div>
       <h1 className="text-jz-screen font-black text-jz-ink leading-tight">{region}</h1>
-      <p className="mt-0.5 text-[17px] font-bold text-jz-soft">{dateRange} · {paceDescription(itinerary)}</p>
+      <p className="mt-0.5 text-[17px] font-bold text-jz-soft">{dateRange} · {paceDescription(itinerary, t)}</p>
 
       {budgetSummary ? (
         <Card tint="bg-jz-tealTint" className="mt-3.5 border-none">
           <button onClick={() => setShowBudget(v => !v)} className="w-full flex items-center justify-between text-left">
             <span className="flex items-center gap-2.5 text-[19px] font-black text-jz-tealDark">
-              <Wallet className="w-[22px] h-[22px]" /> Whole trip: about ${budgetSummary.totalEstimatedCost.toLocaleString()}
+              <Wallet className="w-[22px] h-[22px]" /> {t('ui.wholeTrip')}{budgetSummary.totalEstimatedCost.toLocaleString()}
             </span>
             <ChevronRight className={`w-6 h-6 text-jz-tealDark transition-transform ${showBudget ? 'rotate-90' : ''}`} />
           </button>
@@ -141,14 +144,14 @@ export function MyPlanTab({ itinerary, initialDayNumber, onOpenChat }: MyPlanTab
               <p className="mt-2 text-[15.5px] font-bold text-jz-tealDark">{budgetSummary.fitsStatedBudget}</p>
             </div>
           ) : (
-            <p className="mt-1.5 text-[15.5px] font-bold text-jz-tealDark">Tap to see where every dollar goes.</p>
+            <p className="mt-1.5 text-[15.5px] font-bold text-jz-tealDark">{t('ui.tapToSee')}</p>
           )}
         </Card>
       ) : (
         <Card tint="bg-jz-tealTint" className="mt-3.5 border-none">
           <button onClick={onOpenChat} className="w-full flex items-center justify-between text-left">
             <span className="flex items-center gap-2.5 text-[17px] font-black text-jz-tealDark">
-              <Wallet className="w-5 h-5" /> Ask JourZy for a cost estimate
+              <Wallet className="w-5 h-5" /> {t('ui.askCost')}
             </span>
             <ChevronRight className="w-5 h-5 text-jz-tealDark" />
           </button>
@@ -165,7 +168,7 @@ export function MyPlanTab({ itinerary, initialDayNumber, onOpenChat }: MyPlanTab
               className={`shrink-0 min-w-[74px] min-h-[58px] rounded-2xl font-extrabold text-[16px] border-[1.5px] ${active ? 'bg-jz-teal text-white border-jz-teal' : 'bg-jz-card text-jz-ink border-jz-line'
                 }`}
             >
-              Day {d.dayNumber}<br />
+              {t('ui.day')} {d.dayNumber}<br />
               <span className="text-[13.5px] font-bold opacity-85">
                 {new Date(d.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
               </span>
@@ -176,7 +179,7 @@ export function MyPlanTab({ itinerary, initialDayNumber, onOpenChat }: MyPlanTab
 
       {day && (
         <>
-          <h2 className="mt-2.5 text-jz-title font-black text-jz-ink">{getDayTitle(day, region)}</h2>
+          <h2 className="mt-2.5 text-jz-title font-black text-jz-ink">{getDayTitle(day, region, t)}</h2>
           <p className="mb-3 text-[16.5px] font-bold text-jz-soft">
             {new Date(day.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
           </p>
@@ -187,14 +190,14 @@ export function MyPlanTab({ itinerary, initialDayNumber, onOpenChat }: MyPlanTab
               return (
                 <div key={i}>
                   <Card className="space-y-0">
-                    <p className="text-[15px] font-extrabold text-jz-gold uppercase tracking-wide">{getPeriodLabel(act.time)}</p>
+                    <p className="text-[15px] font-extrabold text-jz-gold uppercase tracking-wide">{getPeriodLabel(act.time, t)}</p>
                     <p className="mt-1 text-jz-title font-black text-jz-ink">{act.title}</p>
                     <Why>{act.description}</Why>
                     <div className="flex justify-between items-center mt-3 gap-2.5">
                       {act.place?.rating ? (
                         <span className="flex items-center gap-1.5 text-[16px] font-extrabold text-jz-ink">
                           <Star className="w-[18px] h-[18px]" fill="#F0A742" stroke="#F0A742" /> {act.place.rating.toFixed(1)}{' '}
-                          <span className="text-jz-soft font-bold">on Google</span>
+                          <span className="text-jz-soft font-bold">{t('ui.onGoogle')}</span>
                         </span>
                       ) : <span />}
                       <a
@@ -203,7 +206,7 @@ export function MyPlanTab({ itinerary, initialDayNumber, onOpenChat }: MyPlanTab
                         rel="noreferrer"
                         className="flex items-center gap-1.5 no-underline bg-jz-tealTint text-jz-tealDark font-extrabold text-[16px] px-4 py-2.5 rounded-jz-btn min-h-[44px]"
                       >
-                        <MapPin className="w-[18px] h-[18px]" /> Directions
+                        <MapPin className="w-[18px] h-[18px]" /> {t('ui.directions')}
                       </a>
                     </div>
                   </Card>
@@ -224,9 +227,9 @@ export function MyPlanTab({ itinerary, initialDayNumber, onOpenChat }: MyPlanTab
             <Card tint="bg-jz-mist" className="mt-3.5 border-none">
               <p className="text-[16.5px] leading-relaxed font-bold text-jz-ink">
                 <Umbrella className="w-[18px] h-[18px] text-jz-teal inline -mt-0.5 mr-1" />{' '}
-                <b>If plans change:</b> {backupMessage}{' '}
+                <b>{t('ui.ifPlansChange')}</b> {backupMessage}{' '}
                 <button onClick={onOpenChat} className="inline-flex items-center gap-1 text-jz-teal underline font-extrabold">
-                  <MessageCircle className="w-4 h-4" /> Talk to JourZy
+                  <MessageCircle className="w-4 h-4" /> {t('ui.talkToJourzy')}
                 </button>
               </p>
             </Card>

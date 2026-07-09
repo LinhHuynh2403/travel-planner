@@ -331,12 +331,12 @@ export default function Home() {
             <Sparkles className="w-5 h-5 text-white animate-pulse" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="font-black text-jz-title tracking-tight leading-tight text-jz-ink">With JourZy</p>
-            <p className="text-jz-teal text-xs font-black tracking-wide uppercase">Your travel companion</p>
+            <p className="font-black text-jz-title tracking-tight leading-tight text-jz-ink">{t('brand.withJourZy')}</p>
+            <p className="text-jz-teal text-xs font-black tracking-wide uppercase">{t('brand.companion')}</p>
           </div>
           <button
             onClick={() => navigate('/settings')}
-            aria-label="Settings"
+            aria-label={t('settings.title')}
             className="w-10 h-10 rounded-xl flex items-center justify-center text-jz-soft hover:bg-jz-mist hover:text-jz-ink transition-all shrink-0"
           >
             <SettingsIcon className="w-5 h-5" />
@@ -346,7 +346,7 @@ export default function Home() {
         {/* Dynamic Parameter Memory Chips */}
         {activeView === 'chat' && (travelPersonaArchetype.length + vibeSettings.length + foodPreferences.length) > 0 && (
           <div className="flex gap-2 items-center overflow-x-auto px-4 py-2.5 bg-jz-card border-b-[1.5px] border-jz-line shrink-0 no-scrollbar">
-            <span className="text-xs font-extrabold text-jz-soft whitespace-nowrap">💛 JourZy remembers:</span>
+            <span className="text-xs font-extrabold text-jz-soft whitespace-nowrap">{t('brand.remembers')}</span>
             {[...travelPersonaArchetype, ...vibeSettings, ...foodPreferences].map(memory => (
               <span key={memory} className="jz-chip whitespace-nowrap">{memory}</span>
             ))}
@@ -384,7 +384,7 @@ export default function Home() {
                       <Sparkles className="w-4 h-4 animate-pulse" />
                     </div>
                     <div className="bg-jz-card border-[1.5px] border-jz-line rounded-[22px] rounded-tl-[6px] p-4 flex items-center gap-1">
-                      <span className="text-jz-label font-bold text-jz-soft">typing</span>
+                      <span className="text-jz-label font-bold text-jz-soft">{t('brand.typing')}</span>
                       <div className="flex gap-1 items-center pt-1.5">
                         <span className="h-1.5 w-1.5 rounded-full bg-jz-teal animate-bounce" style={{ animationDelay: '0ms' }} />
                         <span className="h-1.5 w-1.5 rounded-full bg-jz-teal animate-bounce" style={{ animationDelay: '150ms' }} />
@@ -484,7 +484,7 @@ export default function Home() {
                         >
                           <p className="font-black text-jz-title text-jz-ink capitalize">{trip.region}</p>
                           <p className="text-jz-label font-extrabold text-jz-soft mt-1">
-                            {loadingTripId === trip.id ? t("nav.loading") : `${new Date(trip.arrival_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} – ${new Date(trip.leave_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} — trip ended`}
+                            {loadingTripId === trip.id ? t("nav.loading") : `${new Date(trip.arrival_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} – ${new Date(trip.leave_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} — ${t("nav.tripEnded")}`}
                           </p>
                         </button>
                       ))}
@@ -499,21 +499,21 @@ export default function Home() {
         {/* Global Bottom Navigation Shell Targets */}
         <nav className="flex border-t-[1.5px] border-jz-line bg-jz-card px-1 pt-1.5 pb-3 shrink-0 z-10">
           {[
-            { id: 'chat', label: 'Chat', icon: MessageCircle },
-            { id: 'trips', label: 'My Plan', icon: Map },
-          ].map(t => {
-            const active = activeView === t.id;
-            const Icon = t.icon;
+            { id: 'chat', label: t('nav.chat'), icon: MessageCircle },
+            { id: 'trips', label: t('nav.myPlan'), icon: Map },
+          ].map(navItem => {
+            const active = activeView === navItem.id;
+            const Icon = navItem.icon;
             return (
               <button
-                key={t.id}
-                onClick={() => setSearchParams({ view: t.id })}
+                key={navItem.id}
+                onClick={() => setSearchParams({ view: navItem.id })}
                 className="flex-1 min-h-[58px] flex flex-col items-center justify-center gap-0.5"
               >
                 <span className={`w-12 h-8 rounded-xl flex items-center justify-center transition-all ${active ? 'bg-jz-tealTint' : ''}`}>
                   <Icon className="w-[26px] h-[26px]" color={active ? '#0F6E64' : '#5C6B74'} strokeWidth={active ? 2.6 : 2} />
                 </span>
-                <span className={`text-xs font-black tracking-tight ${active ? 'text-jz-teal' : 'text-jz-soft'}`}>{t.label}</span>
+                <span className={`text-xs font-black tracking-tight ${active ? 'text-jz-teal' : 'text-jz-soft'}`}>{navItem.label}</span>
               </button>
             );
           })}

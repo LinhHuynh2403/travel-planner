@@ -6,6 +6,7 @@ import { autoResizeTextarea } from '../utils/autoresize';
 import { generateItinerary } from '../utils/generate-itinerary';
 import { GeneratedItinerary, TravelPlan } from '../types/travel';
 import { ChatText } from './chat-text';
+import { useTranslation } from '../utils/translations';
 
 type ChatMessage = { id: string; role: 'ai' | 'user'; text: string };
 
@@ -29,6 +30,7 @@ const STORAGE_KEY = 'rescheduleChatMessages';
 const STORAGE_TRIP_KEY = 'rescheduleChatTripId';
 
 export function RescheduleTab({ itinerary, onRescheduled }: RescheduleTabProps) {
+  const { t } = useTranslation();
   const tripKey = itinerary.tripId || itinerary.plan.region;
 
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
@@ -75,10 +77,10 @@ export function RescheduleTab({ itinerary, onRescheduled }: RescheduleTabProps) 
           const data = await resp.json();
           setMessages([{ id: '1', role: 'ai', text: data.text }]);
         } else {
-          setMessages([{ id: '1', role: 'ai', text: "Want to change something about this trip? Tell me what's different this time — new dates, a different pace, anything." }]);
+          setMessages([{ id: '1', role: 'ai', text: t('chat.rescheduleFallbackGreeting') }]);
         }
       } catch (e) {
-        setMessages([{ id: '1', role: 'ai', text: "Want to change something about this trip? Tell me what's different this time — new dates, a different pace, anything." }]);
+        setMessages([{ id: '1', role: 'ai', text: t('chat.rescheduleFallbackGreeting') }]);
       } finally {
         setIsThinking(false);
       }
@@ -88,7 +90,7 @@ export function RescheduleTab({ itinerary, onRescheduled }: RescheduleTabProps) 
 
   const runReschedule = async (chatHistory: ChatMessage[]) => {
     setIsRescheduling(true);
-    setMessages(prev => [...prev, { id: Date.now().toString(), role: 'ai', text: "On it! Rebuilding your itinerary with everything we just talked about... 🪄" }]);
+    setMessages(prev => [...prev, { id: Date.now().toString(), role: 'ai', text: t('chat.reschedulingInProgress') }]);
     try {
       // Give the extraction step the ORIGINAL trip as a fallback baseline —
       // anything the traveler didn't explicitly change in this conversation
@@ -128,7 +130,7 @@ export function RescheduleTab({ itinerary, onRescheduled }: RescheduleTabProps) 
       localStorage.removeItem('itineraryChatTripId');
       onRescheduled(finalItinerary);
     } catch (e) {
-      setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'ai', text: e instanceof Error && e.message ? e.message : "Sorry, I ran into a problem rebuilding your itinerary. Try typing \"ready\" again." }]);
+      setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'ai', text: e instanceof Error && e.message ? e.message : t('chat.rescheduleError') }]);
     } finally {
       setIsRescheduling(false);
     }
@@ -142,7 +144,11 @@ export function RescheduleTab({ itinerary, onRescheduled }: RescheduleTabProps) 
     const updated = [...messages, { id: Date.now().toString(), role: 'user' as const, text }];
     setMessages(updated);
 
-    if (/ready|done|generate|good to go/i.test(text)) {
+    // The confirmation prompt shown to the traveler is translated per
+    // language (see chat.rescheduleBanner), so the trigger word it tells
+    // them to type must be recognized in every one of those languages too —
+    // not just the English "ready".
+    if (/ready|done|generate|good to go|sẵn sàng|xong|준비|완료|準備|完了|准备|好了|完成|listo|hecho|prêt|terminé/i.test(text)) {
       await runReschedule(updated);
       return;
     }
@@ -168,7 +174,7 @@ export function RescheduleTab({ itinerary, onRescheduled }: RescheduleTabProps) 
         setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'ai', text: errorText }]);
       }
     } catch (e) {
-      setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'ai', text: "Sorry, I couldn't connect just now — try again in a moment." }]);
+      setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'ai', text: t('chat.errorConnect') }]);
     } finally {
       setIsThinking(false);
     }
@@ -180,7 +186,7 @@ export function RescheduleTab({ itinerary, onRescheduled }: RescheduleTabProps) 
         <div className="bg-jz-tealTint border-[1.5px] border-jz-teal/30 rounded-jz-card p-4 flex items-start gap-2.5">
           <RefreshCw className="w-5 h-5 text-jz-teal shrink-0 mt-0.5" />
           <p className="text-jz-label text-jz-tealDark font-bold leading-relaxed">
-            Not happy with this plan? Tell JourZy what to change, then type "ready" to rebuild the whole itinerary — this replaces your current plan for this trip.
+            {t('chat.rescheduleBanner')}
           </p>
         </div>
 
@@ -228,7 +234,7 @@ export function RescheduleTab({ itinerary, onRescheduled }: RescheduleTabProps) 
               }
             }}
             disabled={isRescheduling}
-            placeholder={isRescheduling ? "Rebuilding your itinerary..." : "What would you like to change?"}
+            placeholder={isRescheduling ? t('chat.reschedulingPlaceholder') : t('chat.rescheduleChangePlaceholder')}
             className="w-full bg-transparent py-4 pl-5 pr-20 text-jz-body-big text-jz-ink placeholder-jz-soft/60 focus:outline-none min-h-jz-touch max-h-[120px] resize-none overflow-y-auto font-semibold disabled:opacity-60"
           />
           <button

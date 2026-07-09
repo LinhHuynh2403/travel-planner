@@ -5,6 +5,7 @@ import { getPreferredLanguage } from '../utils/language';
 import { autoResizeTextarea } from '../utils/autoresize';
 import { GeneratedItinerary } from '../types/travel';
 import { ChatText } from './chat-text';
+import { useTranslation } from '../utils/translations';
 
 interface PlaceSuggestion {
   placeId?: string;
@@ -38,13 +39,15 @@ function buildItineraryContext(itinerary: GeneratedItinerary): string {
 }
 
 export function ChatOverlay({ itinerary, prefill, isPastTrip, onClose, onReplaceActivity }: ChatOverlayProps) {
+  const { t } = useTranslation();
   const region = itinerary.plan.region;
+  const cityName = region.split(',')[0];
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
     const saved = localStorage.getItem('itineraryChatMessages');
     return saved ? JSON.parse(saved) : [
       isPastTrip
-        ? { id: '1', role: 'ai', text: `Good to see you! Want to relive some highlights from your ${region.split(',')[0]} trip? Ask me anything about how it went! ✨` }
-        : { id: '1', role: 'ai', text: `Good to see you! Want to tweak something in your ${region.split(',')[0]} plan, or just have a question?` },
+        ? { id: '1', role: 'ai', text: t('chat.pastTripGreeting').replace('{{city}}', cityName) }
+        : { id: '1', role: 'ai', text: t('chat.itineraryGreeting').replace('{{city}}', cityName) },
     ];
   });
   const [inputValue, setInputValue] = useState(prefill || '');
@@ -91,7 +94,7 @@ export function ChatOverlay({ itinerary, prefill, isPastTrip, onClose, onReplace
         setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'ai', text: errorText }]);
       }
     } catch (e) {
-      setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'ai', text: "Sorry, I couldn't connect just now — try again in a moment." }]);
+      setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'ai', text: t('chat.errorConnect') }]);
     } finally {
       setIsThinking(false);
     }
@@ -103,11 +106,11 @@ export function ChatOverlay({ itinerary, prefill, isPastTrip, onClose, onReplace
     onReplaceActivity(dayNumber, activityIdx, {
       title: s.title,
       location: s.address,
-      description: `Swapped in via chat: ${s.title} — ${s.address}.`,
+      description: t('chat.swappedDescription').replace('{{title}}', s.title).replace('{{address}}', s.address),
       place: s,
     });
     setPickerFor(null);
-    setMessages(prev => [...prev, { id: Date.now().toString(), role: 'ai', text: `Done! Swapped that into your schedule. ✨` }]);
+    setMessages(prev => [...prev, { id: Date.now().toString(), role: 'ai', text: t('chat.swappedIn') }]);
   };
 
   return (
@@ -118,9 +121,9 @@ export function ChatOverlay({ itinerary, prefill, isPastTrip, onClose, onReplace
         </div>
         <div className="flex-1 min-w-0">
           <p className="font-black text-jz-title text-jz-ink m-0">JourZy</p>
-          <p className="text-jz-teal text-xs font-black uppercase tracking-wide m-0">Your travel companion</p>
+          <p className="text-jz-teal text-xs font-black uppercase tracking-wide m-0">{t('brand.companion')}</p>
         </div>
-        <button onClick={onClose} aria-label="Close chat" className="p-2.5 text-jz-ink">
+        <button onClick={onClose} aria-label={t('chat.close')} className="p-2.5 text-jz-ink">
           <X className="w-6 h-6" />
         </button>
       </div>
@@ -148,7 +151,7 @@ export function ChatOverlay({ itinerary, prefill, isPastTrip, onClose, onReplace
                     {m.suggestion.rating ? (
                       <span className="flex items-center gap-1.5 text-[15px] font-extrabold text-jz-ink">
                         <Star className="w-4 h-4" fill="#F0A742" stroke="#F0A742" /> {m.suggestion.rating.toFixed(1)}{' '}
-                        <span className="text-jz-soft font-bold">on Google</span>
+                        <span className="text-jz-soft font-bold">{t('ui.onGoogle')}</span>
                       </span>
                     ) : <span />}
                     <a
@@ -157,14 +160,14 @@ export function ChatOverlay({ itinerary, prefill, isPastTrip, onClose, onReplace
                       rel="noreferrer"
                       className="flex items-center gap-1.5 no-underline bg-jz-tealTint text-jz-tealDark font-extrabold text-[14px] px-3 py-2 rounded-jz-btn"
                     >
-                      <MapPin className="w-4 h-4" /> Directions
+                      <MapPin className="w-4 h-4" /> {t('ui.directions')}
                     </a>
                   </div>
                   <button
                     onClick={() => setPickerFor({ suggestion: m.suggestion! })}
                     className="w-full mt-2.5 min-h-[44px] rounded-jz-btn bg-jz-teal text-white font-extrabold text-[15px] flex items-center justify-center gap-2"
                   >
-                    <RefreshCw className="w-4 h-4" /> Replace in schedule
+                    <RefreshCw className="w-4 h-4" /> {t('chat.replaceInSchedule')}
                   </button>
                 </div>
               )}
@@ -193,10 +196,10 @@ export function ChatOverlay({ itinerary, prefill, isPastTrip, onClose, onReplace
             className="w-full bg-jz-card rounded-t-[28px] p-4 max-h-[70%] overflow-y-auto no-scrollbar"
             onClick={e => e.stopPropagation()}
           >
-            <p className="text-jz-title font-black text-jz-ink mb-3">Which stop should this replace?</p>
+            <p className="text-jz-title font-black text-jz-ink mb-3">{t('chat.whichStopReplace')}</p>
             {(itinerary.days || []).map(day => (
               <div key={day.dayNumber} className="mb-3">
-                <p className="text-[13px] font-extrabold text-jz-soft uppercase tracking-wide mb-1.5">Day {day.dayNumber}</p>
+                <p className="text-[13px] font-extrabold text-jz-soft uppercase tracking-wide mb-1.5">{t('ui.day')} {day.dayNumber}</p>
                 <div className="space-y-2">
                   {day.activities.map((act, idx) => (
                     <button
@@ -232,7 +235,7 @@ export function ChatOverlay({ itinerary, prefill, isPastTrip, onClose, onReplace
                 if (inputRef.current) inputRef.current.style.height = 'auto';
               }
             }}
-            placeholder="Ask anything about your trip..."
+            placeholder={t('chat.placeholder')}
             className="w-full bg-transparent py-4 pl-5 pr-20 text-jz-body-big text-jz-ink placeholder-jz-soft/60 focus:outline-none min-h-jz-touch max-h-[120px] resize-none overflow-y-auto font-semibold"
           />
           <button
