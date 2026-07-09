@@ -5,6 +5,20 @@
       <meta charset="UTF-8" />
       <meta name="viewport" content="width=device-width, initial-scale=1.0" />
       <title>JourZy - Your Trip Planner</title>
+      <script>
+        // Applied before first paint so switching pages/reloading never flashes
+        // the wrong theme. Defaults to system preference until the traveler
+        // makes an explicit choice in Settings (see app/utils/theme.ts).
+        (function () {
+          try {
+            var saved = localStorage.getItem('jzTheme');
+            var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            if (saved === 'dark' || (saved !== 'light' && prefersDark)) {
+              document.documentElement.classList.add('dark');
+            }
+          } catch (e) {}
+        })();
+      </script>
     </head>
 
     <body>
