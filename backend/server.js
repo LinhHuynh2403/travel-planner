@@ -974,6 +974,56 @@ Model reply:`;
       }
     }
 
+    // 1.6 Try Gemini again on gemini-3.1-flash-lite if 3.5-flash failed —
+    // 3.5-flash's free tier caps out at just 20 requests PER DAY (confirmed
+    // via a live RESOURCE_EXHAUSTED/GenerateRequestsPerDayPerProjectPerModel
+    // error), which real chat traffic exhausts almost immediately, after
+    // which every message would otherwise fall straight to the generic
+    // canned response below. flash-lite has much higher headroom (it's
+    // already handling all itinerary generation without issue), so try it
+    // as a still-real-AI middle fallback before giving up on Gemini entirely.
+    if (!success && process.env.GEMINI_API_KEY) {
+      try {
+        console.log("Sending chat prompt to Gemini API (gemini-3.1-flash-lite fallback)...");
+        const geminiKey = process.env.GEMINI_API_KEY;
+        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${geminiKey}`;
+
+        const contents = chatHistory.filter(m => m).map(m => ({
+          role: (m.role || 'user') === 'ai' ? 'model' : 'user',
+          parts: [{ text: m.text || '' }]
+        }));
+
+        const geminiRes = await fetch(geminiUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: contents,
+            systemInstruction: {
+              parts: [{ text: `${systemInstruction}\nCurrent Date: ${currentDateTime}` }]
+            },
+            generationConfig: {
+              temperature: 0.7,
+              maxOutputTokens: 600,
+              thinkingConfig: { thinkingBudget: 0 }
+            }
+          })
+        });
+
+        if (geminiRes.ok) {
+          const geminiData = await geminiRes.json();
+          if (geminiData.candidates && geminiData.candidates[0].content?.parts?.[0]?.text) {
+            replyText = geminiData.candidates[0].content.parts[0].text.trim();
+            success = true;
+            console.log("Successfully generated chat response via Gemini API (flash-lite fallback)!");
+          }
+        } else {
+          console.warn(`Gemini API (flash-lite fallback) responded with status ${geminiRes.status}.`);
+        }
+      } catch (geminiError) {
+        console.warn("Gemini API (flash-lite fallback) chat failed.", geminiError.message);
+      }
+    }
+
     // 1.7 Try OpenRouter API if Ollama and Gemini fail
     if (!success && process.env.OPENROUTER_API_KEY) {
       try {
