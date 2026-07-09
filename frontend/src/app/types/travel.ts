@@ -97,6 +97,7 @@ export interface HotelRecommendation {
   name: string;
   neighborhood: string;
   reasoning: string;
+  checkInNote?: string;
   alternatives?: HotelAlternative[];
   pricePerNight?: number;
   place?: {
@@ -113,11 +114,14 @@ export interface ExpandedLogisticsGuide {
   connectivity: string;
   transitCards: string;
   bookingTips?: string;
+  airportName?: string;
   airportToStay?: string;
   gettingAround?: string;
   luggageStorage?: string;
   mobilityNotes?: string;
   airlinePoints?: string;
+  breakfastNote?: string;
+  healthAccess?: string;
 }
 
 export interface GeneratedItinerary {
@@ -149,7 +153,7 @@ export interface GeneratedItinerary {
     timezoneNote?: string;
     budgetSummary?: {
       totalEstimatedCost: number;
-      breakdown: { category: string; amount: number }[];
+      breakdown: { category: string; amount: number; savingTip?: string }[];
       fitsStatedBudget: string;
     };
   };

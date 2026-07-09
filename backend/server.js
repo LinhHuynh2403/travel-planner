@@ -4,7 +4,7 @@ import "dotenv/config";
 import rateLimit from "express-rate-limit";
 import { supabase } from "./db.js";
 import fetch from "node-fetch";
-import { SYSTEM_CHAT_INSTRUCTION, getDeterministicGeneratorPrompt, getItineraryChatInstruction, getPastTripChatInstruction, getRescheduleChatInstruction, getLanguageInstruction, BOOKING_GUIDANCE } from "./prompts.js";
+import { SYSTEM_CHAT_INSTRUCTION, getDeterministicGeneratorPrompt, getItineraryChatInstruction, getPastTripChatInstruction, getRescheduleChatInstruction, getLanguageInstruction, BOOKING_GUIDANCE, FLIGHT_GUIDANCE, getActivitySuggestionPrompt, getFlightSuggestionPrompt } from "./prompts.js";
 
 const app = express();
 
@@ -231,9 +231,173 @@ async function searchPlaces(query, city) {
   try {
     const resp = await fetch(searchUrl);
     const data = await resp.json();
-    return data.results ? data.results.slice(0, 3) : data;
+    // Slightly more than the "top pick" ever needs — the itinerary chat's
+    // <<SUGGEST>> resolution reasons over a few real candidates (spatial fit,
+    // budget) rather than blindly trusting whichever result Google ranked
+    // first; see getActivitySuggestionPrompt in prompts.js.
+    return data.results ? data.results.slice(0, 6) : data;
   } catch (e) {
     return { error: String(e) };
+  }
+}
+
+// Pure enrichment on top of the <<SUGGEST>> flow: given several REAL,
+// verified Places candidates, asks the model to pick the single best one
+// with genuine spatial/budget/mood reasoning instead of just trusting
+// whichever result Google ranked first. Never a hard dependency — any
+// failure here (missing key, bad JSON, no matching placeId) returns null
+// and the caller falls back to the original top-ranked result.
+async function synthesizeBestSuggestion(traveler, request, candidates, currentDayPlan) {
+  const geminiKey = process.env.GEMINI_API_KEY;
+  if (!geminiKey || !Array.isArray(candidates) || candidates.length < 2) return null;
+  try {
+    const verifiedPlacesJson = JSON.stringify(candidates.map(c => ({
+      placeId: c.place_id, name: c.name, address: c.formatted_address || "", rating: c.rating,
+      lat: c.geometry?.location?.lat, lng: c.geometry?.location?.lng,
+    })));
+    const prompt = getActivitySuggestionPrompt(traveler, request, verifiedPlacesJson, currentDayPlan || "(not specified)");
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${geminiKey}`;
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.4, maxOutputTokens: 300, thinkingConfig: { thinkingBudget: 0 } },
+      }),
+    });
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    const match = raw.match(/<<SUGGEST>>([\s\S]*?)<<END>>/);
+    if (!match) return null;
+    const parsed = JSON.parse(match[1]);
+    const picked = candidates.find(c => c.place_id === parsed.placeId);
+    if (!picked) return null;
+    return { picked, why: parsed.why, cost: parsed.cost, travelTimeFromPlan: parsed.travelTimeFromPlan, swapsOut: parsed.swapsOut };
+  } catch (e) {
+    console.warn("Activity suggestion synthesis failed, falling back to top result:", e.message);
+    return null;
+  }
+}
+
+// A few country names the model is likely to abbreviate that don't
+// substring-match Travelpayouts' full country_name (e.g. "USA" vs "United
+// States") — expand the common ones so the country filter below still hits.
+const COUNTRY_ALIASES = { usa: "united states", us: "united states", uk: "united kingdom", uae: "united arab emirates" };
+
+// Resolves a free-text "City" or "City, Country" string (per FLIGHT_SEARCH_HANDOFF
+// in prompts.js) to the IATA city/airport code Travelpayouts' fare endpoints
+// require. No token needed for this specific autocomplete API.
+//
+// IMPORTANT: query the autocomplete API with the city name ALONE — querying
+// with "City, Country" together (e.g. "Tokyo, Japan") empirically returns
+// EMPTY results for most real cities (Paris/France, London/United Kingdom,
+// New York/USA, Hanoi/Vietnam all failed in testing), even though the
+// country suffix is exactly what the API's own response calls it. Instead,
+// query the city alone (which reliably returns several same-named-city
+// candidates worldwide — e.g. "San Jose" returns both San Jose, USA and San
+// Jose, Costa Rica) and use the country to pick the right one from that list.
+async function resolveIataCode(cityName) {
+  try {
+    const [cityPart, countryPartRaw] = cityName.split(",").map(s => s?.trim());
+    const url = `https://autocomplete.travelpayouts.com/places2?term=${encodeURIComponent(cityPart)}&locale=en&types[]=city&types[]=airport`;
+    const resp = await fetch(url);
+    if (!resp.ok) return null;
+    const results = await resp.json();
+    if (!Array.isArray(results) || results.length === 0) return null;
+
+    if (countryPartRaw) {
+      const countryPart = (COUNTRY_ALIASES[countryPartRaw.toLowerCase()] || countryPartRaw).toLowerCase();
+      const match = results.find(r =>
+        (r.country_name || "").toLowerCase().includes(countryPart) ||
+        countryPart.includes((r.country_name || "").toLowerCase())
+      );
+      if (match) return match.code;
+    }
+    // No country given, or none of the candidates matched it — fall back to
+    // the API's own top-ranked (highest-weight) result.
+    return results[0].code;
+  } catch (e) {
+    console.warn("IATA code lookup failed:", e.message);
+    return null;
+  }
+}
+
+// Cached lowest-fare data (NOT a live bookable quote — see the NOTE above
+// getFlightSuggestionPrompt in prompts.js for exactly what fields this feed
+// does/doesn't have) from Travelpayouts' free v1/prices/cheap endpoint.
+// Returns the raw { "<transfers>": {price, airline, flight_number,
+// departure_at, return_at, expires_at, duration_to, duration_back} } map for
+// the given route, or {}.
+async function fetchCheapFlights(originIata, destIata, departDate, returnDate, token) {
+  const params = new URLSearchParams({
+    origin: originIata, destination: destIata, depart_date: departDate,
+    currency: "usd", token,
+  });
+  if (returnDate) params.set("return_date", returnDate);
+  const resp = await fetch(`https://api.travelpayouts.com/v1/prices/cheap?${params.toString()}`);
+  if (!resp.ok) return {};
+  const data = await resp.json();
+  return data?.data?.[destIata] || {};
+}
+
+async function searchCheapFlights(originIata, destIata, departDate, returnDate) {
+  const token = process.env.TRAVELPAYOUTS_API_TOKEN;
+  if (!token) return {};
+  try {
+    // Exact-day queries against this cached-fare feed are frequently empty
+    // for anything but the busiest routes (confirmed empirically — a
+    // specific 2026-10-12 date returned {} while the same route at
+    // month-level granularity returned real cached fares). Try the exact
+    // date first since it's the most relevant if present, then fall back to
+    // the traveler's departure month so a real answer beats none.
+    const exact = await fetchCheapFlights(originIata, destIata, departDate, returnDate, token);
+    if (Object.keys(exact).length > 0) return exact;
+
+    const departMonth = departDate.slice(0, 7);
+    const returnMonth = returnDate ? returnDate.slice(0, 7) : null;
+    return await fetchCheapFlights(originIata, destIata, departMonth, returnMonth, token);
+  } catch (e) {
+    console.warn("Flight price search failed:", e.message);
+    return {};
+  }
+}
+
+// Ranks/explains the real cached fares above via getFlightSuggestionPrompt —
+// never invents a flight; only selects and reasons over what the API
+// actually returned. Any failure here (missing key, bad JSON) returns null
+// and the caller simply skips attaching a flight suggestion to the reply.
+async function synthesizeFlightPicks(traveler, flightResultsJson) {
+  const geminiKey = process.env.GEMINI_API_KEY;
+  if (!geminiKey) return null;
+  try {
+    const prompt = getFlightSuggestionPrompt(traveler, flightResultsJson);
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${geminiKey}`;
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.4, maxOutputTokens: 700, thinkingConfig: { thinkingBudget: 0 } },
+      }),
+    });
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    const parsed = JSON.parse(extractJson(raw));
+
+    // Validate every pick's price/airline/flightNumber exists verbatim in
+    // the real API results before trusting it — drop any pick that doesn't
+    // match rather than render a model-drifted number.
+    const realEntries = Object.values(JSON.parse(flightResultsJson));
+    const picks = (parsed.picks || []).filter(p => realEntries.some(r =>
+      r.price === p.price && r.airline === p.airline && String(r.flight_number) === String(p.flightNumber)
+    ));
+    if (picks.length === 0) return null;
+    return { picks, honestNote: parsed.honestNote, bookVia: parsed.bookVia };
+  } catch (e) {
+    console.warn("Flight suggestion synthesis failed:", e.message);
+    return null;
   }
 }
 
@@ -414,7 +578,7 @@ async function fetchRealPlaces(plan) {
       const resp = await fetch(url);
       const data = await resp.json();
       if (!data.results) return [];
-      return data.results.slice(0, 8).map(p => ({
+      return data.results.slice(0, 12).map(p => ({
         placeId: p.place_id,
         name: p.name,
         address: p.formatted_address || "",
@@ -441,7 +605,7 @@ async function fetchRealPlaces(plan) {
       if (seenRestIds.has(r.placeId)) return false;
       seenRestIds.add(r.placeId);
       return true;
-    }).slice(0, 15);
+    }).slice(0, 25);
 
     const attractionLists = await Promise.all(uniqueQueries.attractions.map(q => fetchAndFormat(q)));
     const rawAttractions = attractionLists.flat();
@@ -450,7 +614,7 @@ async function fetchRealPlaces(plan) {
       if (seenAttrIds.has(a.placeId)) return false;
       seenAttrIds.add(a.placeId);
       return true;
-    }).slice(0, 15);
+    }).slice(0, 25);
   } catch (err) {
     console.error("Failed to pre-fetch places details:", err);
   }
@@ -842,12 +1006,14 @@ app.post("/api/chat", expensiveLimiter, optionalAuth, async (req, res) => {
   // the model a synthetic, never-displayed kickoff turn to react to instead
   // of an empty conversation (Gemini/OpenRouter both require at least one
   // turn). This is never shown to the traveler or stored as their message.
-  if (chatHistory.length === 0 && mode !== "itinerary" && mode !== "pastTrip") {
-    chatHistory = [{
-      role: "user", text: mode === "reschedule"
-        ? "(The traveler just opened the Reschedule tab for this trip. Greet them warmly as JourZy and ask what they'd like to change, per your instructions.)"
-        : "(The traveler just opened the app for the first time. Greet them warmly as JourZy and start the conversation, per your instructions.)"
-    }];
+  if (chatHistory.length === 0) {
+    let kickoffText = "";
+    if (mode === "reschedule") kickoffText = "(The traveler just opened the Reschedule tab for this trip. Greet them warmly as JourZy and ask what they'd like to change, per your instructions.)";
+    else if (mode === "pastTrip") kickoffText = "(The traveler just opened the chat for this past trip. Greet them warmly as JourZy, bring up a specific highlight or memory from the trip, and ask how they liked it, per your instructions.)";
+    else if (mode === "itinerary") kickoffText = "(The traveler just opened the chat for this active/upcoming trip. Greet them warmly as JourZy and ask if they have any questions or need to swap anything in the itinerary.)";
+    else kickoffText = "(The traveler just opened the app for the first time. Greet them warmly as JourZy and start the conversation, per your instructions.)";
+
+    chatHistory = [{ role: "user", text: kickoffText }];
   }
 
   // Cap history so a hostile payload can't inflate the LLM prompt
@@ -868,12 +1034,13 @@ app.post("/api/chat", expensiveLimiter, optionalAuth, async (req, res) => {
     const baseInstruction = mode === "itinerary"
       ? getItineraryChatInstruction(itineraryContext || "(no trip details provided)")
       : mode === "pastTrip"
-      ? getPastTripChatInstruction(itineraryContext || "(no trip details provided)")
-      : mode === "reschedule"
-      ? getRescheduleChatInstruction(itineraryContext || "(no trip details provided)")
-      : SYSTEM_CHAT_INSTRUCTION;
+        ? getPastTripChatInstruction(itineraryContext || "(no trip details provided)")
+        : mode === "reschedule"
+          ? getRescheduleChatInstruction(itineraryContext || "(no trip details provided)")
+          : SYSTEM_CHAT_INSTRUCTION;
     const languageInstruction = getLanguageInstruction(language);
-    const systemInstruction = [baseInstruction, BOOKING_GUIDANCE, languageInstruction].filter(Boolean).join("\n\n");
+    const flightSearchEnabled = !!process.env.TRAVELPAYOUTS_API_TOKEN;
+    const systemInstruction = [baseInstruction, flightSearchEnabled ? FLIGHT_GUIDANCE : BOOKING_GUIDANCE, languageInstruction].filter(Boolean).join("\n\n");
 
     let replyText = "";
     let success = false;
@@ -1129,7 +1296,26 @@ Model reply:`;
           // with no country, which Google's text search can resolve to a
           // same-named place in the wrong country entirely.
           const results = await searchPlaces(suggestMatch[1].trim(), (region || suggestMatch[2]).trim());
-          const top = Array.isArray(results) ? results[0] : null;
+          const candidates = Array.isArray(results) ? results : [];
+          let top = candidates[0] || null;
+
+          // Enrichment: with 2+ real candidates, let the model reason over
+          // them (spatial fit to today's plan, budget, mood) instead of
+          // always trusting Google's #1 ranked result. Traveler fields we
+          // don't have in this route are marked "not specified" rather than
+          // guessed — the prompt is told never to invent them.
+          const enrichment = await synthesizeBestSuggestion(
+            {
+              destination: region || suggestMatch[2].trim(),
+              loves: "not specified", dislikes: "not specified",
+              transport: "not specified", remainingBudget: "not specified", party: "not specified",
+            },
+            text || suggestMatch[1].trim(),
+            candidates,
+            itineraryContext || "(not specified)"
+          );
+          if (enrichment?.picked) top = enrichment.picked;
+
           if (top) {
             suggestion = {
               placeId: top.place_id,
@@ -1139,10 +1325,69 @@ Model reply:`;
               lat: top.geometry?.location?.lat,
               lng: top.geometry?.location?.lng,
               mapsUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((top.name || "") + " " + (top.formatted_address || ""))}&query_place_id=${top.place_id}`,
+              why: enrichment?.why || undefined,
+              travelTimeFromPlan: enrichment?.travelTimeFromPlan || undefined,
             };
           }
         } catch (e) {
           console.warn("Failed to resolve suggested place:", e.message);
+        }
+      }
+    }
+
+    // When flight search is enabled (see FLIGHT_GUIDANCE / FLIGHT_SEARCH_HANDOFF
+    // above), the model may end its reply with a hidden
+    // <<FLIGHTS: origin | destination | departDate | returnDate>> tag instead
+    // of stating any flight details itself. Strip it and resolve it to REAL
+    // cached fare data via Travelpayouts, then let synthesizeFlightPicks rank
+    // and explain the actual options — the model never invents a price.
+    let flightSuggestion = null;
+    if (flightSearchEnabled) {
+      const flightsMatch = replyText.match(/<<FLIGHTS:\s*(.+?)\s*\|\s*(.+?)\s*\|\s*(.+?)\s*\|\s*(.+?)\s*>>/i);
+      if (flightsMatch) {
+        replyText = replyText.replace(flightsMatch[0], "").trim();
+        try {
+          const [, originCity, destCity, departDate, returnDateRaw] = flightsMatch;
+          const returnDate = /^oneway$/i.test(returnDateRaw.trim()) ? null : returnDateRaw.trim();
+
+          const [originIata, destIata] = await Promise.all([
+            resolveIataCode(originCity.trim()),
+            resolveIataCode(destCity.trim()),
+          ]);
+
+          if (originIata && destIata) {
+            const fareMap = await searchCheapFlights(originIata, destIata, departDate.trim(), returnDate);
+            const entries = Object.entries(fareMap).map(([transfers, fare]) => ({
+              transfers: Number(transfers),
+              price: fare.price,
+              airline: fare.airline,
+              flight_number: fare.flight_number,
+              departure_at: fare.departure_at,
+              return_at: fare.return_at,
+              expires_at: fare.expires_at,
+              // Total minutes in the air + connections each way, when the
+              // feed includes it (usually present at month-level queries,
+              // sometimes absent) — the only duration signal this endpoint
+              // has; no per-layover breakdown exists.
+              duration_to_minutes: fare.duration_to ?? undefined,
+              duration_back_minutes: fare.duration_back ?? undefined,
+            }));
+
+            if (entries.length > 0) {
+              const picksResult = await synthesizeFlightPicks(
+                {
+                  origin: originCity.trim(), destination: destCity.trim(),
+                  departDate: departDate.trim(), returnDate: returnDate || "one-way",
+                  budget: "not specified", party: "not specified",
+                  pointsPrograms: "none mentioned",
+                },
+                JSON.stringify(entries)
+              );
+              if (picksResult) flightSuggestion = picksResult;
+            }
+          }
+        } catch (e) {
+          console.warn("Failed to resolve flight search:", e.message);
         }
       }
     }
@@ -1195,7 +1440,7 @@ Model reply:`;
       }
     }
 
-    return res.json({ text: replyText, suggestion, isReady });
+    return res.json({ text: replyText, suggestion, flightSuggestion, isReady });
   } catch (e) {
     console.error("Chat route critical failure:", e);
     return res.status(500).json({ error: "Chat failed. Please try again." });
@@ -1351,7 +1596,8 @@ app.post("/api/trips", requireAuth, async (req, res) => {
           hotel_recommendation: itinerary.hotelRecommendation || itinerary.hotel_recommendation || null,
           days: itinerary.days || [],
           packing_list: itinerary.packingList || itinerary.packing_list || null,
-          insights: itinerary.insights || null
+          insights: itinerary.insights || null,
+          logistics_guide: itinerary.logisticsGuide || itinerary.logistics_guide || null
         }
       ]);
 

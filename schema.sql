@@ -24,8 +24,14 @@ CREATE TABLE IF NOT EXISTS public.itineraries (
     days JSONB NOT NULL,
     packing_list JSONB,
     insights JSONB,
+    logistics_guide JSONB,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+
+-- For an EXISTING database that already had the itineraries table before
+-- logistics_guide existed, CREATE TABLE IF NOT EXISTS above is a no-op and
+-- won't add the new column — run this once against your existing database:
+-- ALTER TABLE public.itineraries ADD COLUMN IF NOT EXISTS logistics_guide JSONB;
 
 -- 3. User Memory Table (Milestone 7)
 CREATE TABLE IF NOT EXISTS public.user_memory (
