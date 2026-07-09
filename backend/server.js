@@ -1072,6 +1072,37 @@ Model reply:`;
       }
     }
 
+    // In onboarding chat, JourZy may emit a hidden <<NAME: Their Name>> tag
+    // the moment the traveler tells it their name (see SYSTEM_CHAT_INSTRUCTION
+    // rule 1.5) — strip it from the visible reply and persist it to their
+    // memory profile (same table/shape as POST /api/memory) so future visits
+    // can greet them by name, same as the old scripted name-capture step did.
+    if (mode !== "itinerary" && mode !== "pastTrip") {
+      const nameMatch = replyText.match(/<<NAME:\s*(.+?)\s*>>/i);
+      if (nameMatch) {
+        replyText = replyText.replace(nameMatch[0], "").trim();
+        const capturedName = nameMatch[1].trim().slice(0, 40);
+        if (capturedName && userId) {
+          try {
+            const { data: existing } = await supabase
+              .from("user_memory")
+              .select("preferences")
+              .eq("user_id", userId)
+              .single();
+            const existingPrefs = existing?.preferences || {};
+            await supabase
+              .from("user_memory")
+              .upsert(
+                { user_id: userId, preferences: { ...existingPrefs, userName: capturedName }, updated_at: new Date().toISOString() },
+                { onConflict: "user_id" }
+              );
+          } catch (e) {
+            console.warn("Failed to save captured name to memory:", e.message);
+          }
+        }
+      }
+    }
+
     if (success && sessionId && userId && replyText && dbAvailable) {
       try {
         await supabase.from('chat_histories').insert([
