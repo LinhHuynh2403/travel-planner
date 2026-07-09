@@ -13,20 +13,9 @@ export const SUPPORTED_LANGUAGES: { code: string; label: string }[] = [
   { code: 'vi', label: 'Tiếng Việt' },
   { code: 'es', label: 'Español' },
   { code: 'fr', label: 'Français' },
-  { code: 'de', label: 'Deutsch' },
   { code: 'ja', label: '日本語' },
   { code: 'ko', label: '한국어' },
   { code: 'zh', label: '中文' },
-  { code: 'th', label: 'ไทย' },
-  { code: 'id', label: 'Bahasa Indonesia' },
-  { code: 'pt', label: 'Português' },
-  { code: 'ru', label: 'Русский' },
-  { code: 'hi', label: 'हिन्दी' },
-  { code: 'ar', label: 'العربية' },
-  { code: 'it', label: 'Italiano' },
-  { code: 'nl', label: 'Nederlands' },
-  { code: 'tl', label: 'Filipino' },
-  { code: 'ms', label: 'Bahasa Melayu' },
 ];
 
 // What's actually sent to the backend with every chat/itinerary request.
@@ -45,4 +34,5 @@ export function getLanguageChoice(): string {
 
 export function setLanguageChoice(code: string) {
   localStorage.setItem(STORAGE_KEY, code);
+  window.dispatchEvent(new Event('languageChanged'));
 }

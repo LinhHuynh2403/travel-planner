@@ -8,6 +8,7 @@ import { apiFetch, friendlyErrorMessage } from '../utils/api';
 import { getPreferredLanguage } from '../utils/language';
 import { autoResizeTextarea } from '../utils/autoresize';
 import { ChatText } from '../components/chat-text';
+import { useTranslation } from '../utils/translations';
 type Message = {
   id: string;
   role: 'ai' | 'user';
@@ -37,6 +38,7 @@ function clearStaleTripSession() {
 }
 
 export default function Home() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   clearStaleTripSession();
   const [user, setUser] = useState<User | null>(null);
@@ -223,10 +225,10 @@ export default function Home() {
           const data = await response.json();
           setMessages([{ id: '1', role: 'ai', text: data.text }]);
         } else {
-          setMessages([{ id: '1', role: 'ai', text: "Hey, I'm JourZy! ✈️ Where are you dreaming of going?" }]);
+          setMessages([{ id: '1', role: 'ai', text: t("chat.greeting") }]);
         }
       } catch (e) {
-        setMessages([{ id: '1', role: 'ai', text: "Hey, I'm JourZy! ✈️ Where are you dreaming of going?" }]);
+        setMessages([{ id: '1', role: 'ai', text: t("chat.greeting") }]);
       } finally {
         setIsThinking(false);
       }
@@ -279,7 +281,7 @@ export default function Home() {
       // generateItinerary() already throws with the backend's actual error
       // text (e.g. a rate-limit message) when available — show that instead
       // of a generic "make sure the backend is running" guess.
-      const errorText = e instanceof Error && e.message ? e.message : "Sorry, I ran into a problem building your itinerary. Try confirming you are ready again.";
+      const errorText = e instanceof Error && e.message ? e.message : t("chat.errorBuild");
       setMessages(prev => [
         ...prev,
         { id: Date.now().toString(), role: 'ai', text: errorText, step: 'chatting' }
@@ -311,7 +313,7 @@ export default function Home() {
       }
     } catch (e) {
       console.error(e);
-      setMessages(prev => [...prev, { id: Date.now().toString(), role: 'ai', text: "Sorry, I couldn't connect just now — try again in a moment.", step: 'chatting' }]);
+      setMessages(prev => [...prev, { id: Date.now().toString(), role: 'ai', text: t("chat.errorConnect"), step: 'chatting' }]);
     } finally { setIsThinking(false); }
   };
 
@@ -322,7 +324,7 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-jz-outerBg text-jz-ink flex items-center justify-center sm:p-4 selection:bg-jz-tealTint">
       <div className="relative w-full max-w-[430px] h-[100dvh] sm:h-[min(920px,94vh)] bg-jz-bg sm:rounded-[36px] overflow-hidden sm:border-[10px] sm:border-jz-ink sm:shadow-2xl flex flex-col">
-        
+
         {/* Onboarding Identity Bar */}
         <header className="flex items-center gap-3 px-4 py-3.5 bg-jz-card border-b-[1.5px] border-jz-line shrink-0">
           <div className="w-11 h-11 rounded-2xl bg-jz-teal flex items-center justify-center shrink-0 shadow-inner">
@@ -362,17 +364,15 @@ export default function Home() {
               >
                 {messages.map((msg) => (
                   <div key={msg.id} className={`flex gap-3 items-start ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
-                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border ${
-                      msg.role === 'ai' ? 'bg-jz-tealTint text-jz-teal border-jz-teal/20' : 'bg-jz-mist text-jz-ink border-jz-line'
-                    }`}>
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border ${msg.role === 'ai' ? 'bg-jz-tealTint text-jz-teal border-jz-teal/20' : 'bg-jz-mist text-jz-ink border-jz-line'
+                      }`}>
                       {msg.role === 'ai' ? <Sparkles className="w-4 h-4" /> : <UserIcon className="w-4 h-4" />}
                     </div>
 
-                    <div className={`relative max-w-[85%] border-[1.5px] p-[16px] text-jz-body-big shadow-sm transition-all ${
-                      msg.role === 'ai'
-                        ? 'bg-jz-card border-jz-line rounded-[22px] rounded-bl-[6px] text-jz-ink'
-                        : 'bg-jz-card border-jz-teal text-jz-teal rounded-[22px] rounded-tr-[6px] font-bold'
-                    }`}>
+                    <div className={`relative max-w-[85%] border-[1.5px] p-[16px] text-jz-body-big shadow-sm transition-all ${msg.role === 'ai'
+                      ? 'bg-jz-card border-jz-line rounded-[22px] rounded-bl-[6px] text-jz-ink'
+                      : 'bg-jz-card border-jz-teal text-jz-teal rounded-[22px] rounded-tr-[6px] font-bold'
+                      }`}>
                       <div className="leading-relaxed"><ChatText text={msg.text} /></div>
                     </div>
                   </div>
@@ -419,7 +419,7 @@ export default function Home() {
                       }
                     }}
                     disabled={currentStep === 'generating'}
-                    placeholder={currentStep === 'generating' ? "JourZy is building your itinerary..." : "Ask anything about your trip..."}
+                    placeholder={currentStep === 'generating' ? t("chat.building") : t("chat.placeholder")}
                     className="w-full bg-transparent py-4 pl-5 pr-20 text-jz-body-big text-jz-ink placeholder-jz-soft/60 focus:outline-none min-h-jz-touch max-h-[120px] resize-none overflow-y-auto font-semibold disabled:opacity-60"
                   />
                   <button
@@ -448,14 +448,14 @@ export default function Home() {
               onScroll={(e) => { scrollPositions.current.trips = e.currentTarget.scrollTop; }}
               className="flex-1 overflow-y-auto p-5 space-y-4 no-scrollbar"
             >
-              <h2 className="text-jz-screen font-black text-jz-ink tracking-tight">My Plan</h2>
+              <h2 className="text-jz-screen font-black text-jz-ink tracking-tight">{t("nav.myPlan")}</h2>
               {savedTrips.length === 0 ? (
-                <p className="text-jz-soft font-bold text-jz-body bg-jz-card p-5 rounded-jz-card border border-jz-line text-center">No saved trips yet — plan one in Chat! ✈️</p>
+                <p className="text-jz-soft font-bold text-jz-body bg-jz-card p-5 rounded-jz-card border border-jz-line text-center">{t("nav.noTrips")}</p>
               ) : (
                 <>
                   {upcomingTrips.length > 0 && (
                     <div className="space-y-3">
-                      <p className="text-xs font-extrabold text-jz-soft uppercase tracking-wide">Upcoming</p>
+                      <p className="text-xs font-extrabold text-jz-soft uppercase tracking-wide">{t("nav.upcoming")}</p>
                       {upcomingTrips.map((trip: any) => (
                         <button
                           key={trip.id}
@@ -465,7 +465,7 @@ export default function Home() {
                         >
                           <p className="font-black text-jz-title text-jz-ink capitalize">{trip.region}</p>
                           <p className="text-jz-label font-extrabold text-jz-soft mt-1">
-                            {loadingTripId === trip.id ? 'Loading…' : `${new Date(trip.arrival_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} – ${new Date(trip.leave_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} — click to launch`}
+                            {loadingTripId === trip.id ? t("nav.loading") : `${new Date(trip.arrival_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} – ${new Date(trip.leave_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} — ${t("nav.clickToLaunch")}`}
                           </p>
                         </button>
                       ))}
@@ -474,7 +474,7 @@ export default function Home() {
 
                   {historyTrips.length > 0 && (
                     <div className="space-y-3 !mt-6">
-                      <p className="text-xs font-extrabold text-jz-soft uppercase tracking-wide">History</p>
+                      <p className="text-xs font-extrabold text-jz-soft uppercase tracking-wide">{t("nav.history")}</p>
                       {historyTrips.map((trip: any) => (
                         <button
                           key={trip.id}
@@ -484,7 +484,7 @@ export default function Home() {
                         >
                           <p className="font-black text-jz-title text-jz-ink capitalize">{trip.region}</p>
                           <p className="text-jz-label font-extrabold text-jz-soft mt-1">
-                            {loadingTripId === trip.id ? 'Loading…' : `${new Date(trip.arrival_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} – ${new Date(trip.leave_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} — trip ended`}
+                            {loadingTripId === trip.id ? t("nav.loading") : `${new Date(trip.arrival_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} – ${new Date(trip.leave_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} — trip ended`}
                           </p>
                         </button>
                       ))}

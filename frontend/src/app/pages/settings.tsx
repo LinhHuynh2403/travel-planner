@@ -5,8 +5,10 @@ import { apiFetch } from '../utils/api';
 import { supabase } from '../utils/supabaseClient';
 import { SUPPORTED_LANGUAGES, getLanguageChoice, setLanguageChoice } from '../utils/language';
 import { getEffectiveTheme, setTheme, previewTheme, type ThemeChoice } from '../utils/theme';
+import { useTranslation } from '../utils/translations';
 
 export default function Settings() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [userId, setUserId] = useState<string | null>(null);
 
@@ -101,7 +103,7 @@ export default function Settings() {
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
-          <p className="font-black text-jz-title tracking-tight text-jz-ink">Settings</p>
+          <p className="font-black text-jz-title tracking-tight text-jz-ink">{t("settings.title")}</p>
         </header>
 
         <main className="flex-1 overflow-y-auto p-4 space-y-6 pb-28 no-scrollbar">
@@ -110,21 +112,21 @@ export default function Settings() {
           <section className="bg-jz-card border-[1.5px] border-jz-line rounded-jz-card p-5">
             <div className="flex items-center gap-2 mb-4">
               <UserIcon className="w-5 h-5 text-jz-teal" />
-              <h2 className="font-black text-jz-body-big text-jz-ink">Profile</h2>
+              <h2 className="font-black text-jz-body-big text-jz-ink">{t("settings.profile")}</h2>
             </div>
             <label className="block text-jz-label font-extrabold text-jz-soft uppercase tracking-wide mb-2">
-              Your name
+              {t("settings.yourName")}
             </label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="What should JourZy call you?"
+              placeholder={t("settings.placeholderName")}
               disabled={!userId}
               className="w-full bg-jz-bg border-2 border-jz-line rounded-jz-btn px-4 py-3 text-jz-body-big text-jz-ink placeholder-jz-soft/60 focus:outline-none focus:border-jz-teal transition-all disabled:opacity-60"
             />
             {!userId && (
-              <p className="text-jz-label text-jz-soft font-semibold mt-2">Sign in to save your name across visits.</p>
+              <p className="text-jz-label text-jz-soft font-semibold mt-2">{t("settings.signInPrompt")}</p>
             )}
           </section>
 
@@ -132,10 +134,10 @@ export default function Settings() {
           <section className="bg-jz-card border-[1.5px] border-jz-line rounded-jz-card p-5">
             <div className="flex items-center gap-2 mb-4">
               <Globe className="w-5 h-5 text-jz-teal" />
-              <h2 className="font-black text-jz-body-big text-jz-ink">Language</h2>
+              <h2 className="font-black text-jz-body-big text-jz-ink">{t("settings.language")}</h2>
             </div>
             <p className="text-jz-label text-jz-soft font-semibold mb-3">
-              JourZy's replies and generated trip plans will use this language.
+              {t("settings.langDesc")}
             </p>
             <select
               value={language}
@@ -152,7 +154,7 @@ export default function Settings() {
           <section className="bg-jz-card border-[1.5px] border-jz-line rounded-jz-card p-5">
             <div className="flex items-center gap-2 mb-4">
               {theme === 'dark' ? <Moon className="w-5 h-5 text-jz-teal" /> : <Sun className="w-5 h-5 text-jz-teal" />}
-              <h2 className="font-black text-jz-body-big text-jz-ink">Appearance</h2>
+              <h2 className="font-black text-jz-body-big text-jz-ink">{t("settings.appearance")}</h2>
             </div>
             <div className="flex gap-2.5">
               <button
@@ -160,14 +162,14 @@ export default function Settings() {
                 className={`flex-1 flex items-center justify-center gap-2 min-h-jz-touch rounded-jz-btn border-2 font-extrabold text-jz-body-big transition-all ${theme === 'light' ? 'border-jz-teal bg-jz-tealTint text-jz-teal' : 'border-jz-line text-jz-ink'
                   }`}
               >
-                <Sun className="w-4.5 h-4.5" /> Light
+                <Sun className="w-4.5 h-4.5" /> {t("settings.light")}
               </button>
               <button
                 onClick={() => handleThemeChange('dark')}
                 className={`flex-1 flex items-center justify-center gap-2 min-h-jz-touch rounded-jz-btn border-2 font-extrabold text-jz-body-big transition-all ${theme === 'dark' ? 'border-jz-teal bg-jz-tealTint text-jz-teal' : 'border-jz-line text-jz-ink'
                   }`}
               >
-                <Moon className="w-4.5 h-4.5" /> Dark
+                <Moon className="w-4.5 h-4.5" /> {t("settings.dark")}
               </button>
             </div>
           </section>
@@ -184,9 +186,9 @@ export default function Settings() {
             {saveStatus === 'saving' ? (
               <span className="w-4.5 h-4.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
             ) : saveStatus === 'saved' ? (
-              <><Check className="w-5 h-5" /> Saved</>
+              <><Check className="w-5 h-5" /> {t("settings.saved")}</>
             ) : (
-              'Save'
+              t("settings.save")
             )}
           </button>
         </div>

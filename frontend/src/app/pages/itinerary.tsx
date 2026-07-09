@@ -9,18 +9,20 @@ import { PackingTab } from '../components/packing-tab';
 import { TipsTab } from '../components/tips-tab';
 import { ChatOverlay } from '../components/chat-overlay';
 import { RescheduleTab } from '../components/reschedule-tab';
+import { useTranslation } from '../utils/translations';
 
 type TabId = 'today' | 'plan' | 'packing' | 'tips' | 'reschedule';
 
 const TABS: { id: TabId; label: string; icon: typeof Home }[] = [
-  { id: 'today', label: 'Today', icon: Home },
-  { id: 'plan', label: 'My Plan', icon: Map },
-  { id: 'packing', label: 'Packing', icon: Backpack },
-  { id: 'tips', label: 'Tips', icon: Lightbulb },
-  { id: 'reschedule', label: 'Reschedule', icon: RefreshCw },
+  { id: 'today', label: 'nav.today', icon: Home },
+  { id: 'plan', label: 'nav.myPlan', icon: Map },
+  { id: 'packing', label: 'nav.packing', icon: Backpack },
+  { id: 'tips', label: 'nav.tips', icon: Lightbulb },
+  { id: 'reschedule', label: 'nav.reschedule', icon: RefreshCw },
 ];
 
 export default function Itinerary() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [itinerary, setItinerary] = useState<GeneratedItinerary | null>(null);
   const [isPastTrip, setIsPastTrip] = useState(false);
@@ -147,16 +149,16 @@ export default function Itinerary() {
             onClick={() => navigate('/?view=trips')}
             className="flex items-center gap-1.5 text-jz-teal font-extrabold text-jz-body-big"
           >
-            <ArrowLeft className="w-5 h-5" /> Home
+            <ArrowLeft className="w-5 h-5" /> {t("nav.home")}
           </button>
           <button
             onClick={startNewTrip}
             className="flex items-center gap-1.5 text-jz-teal font-extrabold text-jz-body-big"
           >
-            <MessageCircle className="w-5 h-5" /> New Trip
+            <MessageCircle className="w-5 h-5" /> {t("nav.newTrip")}
           </button>
           <span className="ml-auto text-xs font-extrabold text-jz-soft uppercase tracking-wide">
-            {isPastTrip ? 'Past trip' : 'Upcoming trip'}
+            {isPastTrip ? t("nav.pastTrip") : t("nav.upcomingTrip")}
           </span>
         </div>
 
@@ -206,19 +208,19 @@ export default function Itinerary() {
         )}
 
         <nav className="flex border-t-[1.5px] border-jz-line bg-jz-card px-1 pt-1.5 pb-3 shrink-0 z-10">
-          {TABS.map(t => {
-            const active = tab === t.id;
-            const Icon = t.icon;
+          {TABS.map(tabDef => {
+            const active = tab === tabDef.id;
+            const Icon = tabDef.icon;
             return (
               <button
-                key={t.id}
-                onClick={() => { changeTab(t.id); setChatOpen(false); }}
+                key={tabDef.id}
+                onClick={() => { changeTab(tabDef.id); setChatOpen(false); }}
                 className="flex-1 min-h-[62px] flex flex-col items-center justify-center gap-1"
               >
                 <span className={`w-[52px] h-[34px] rounded-xl flex items-center justify-center ${active ? 'bg-jz-tealTint' : ''}`}>
                   <Icon className="w-[26px] h-[26px]" color={active ? '#0F6E64' : '#5C6B74'} strokeWidth={active ? 2.6 : 2} />
                 </span>
-                <span className={`text-[14.5px] font-black ${active ? 'text-jz-teal' : 'text-jz-soft'}`}>{t.label}</span>
+                <span className={`text-[14.5px] font-black ${active ? 'text-jz-teal' : 'text-jz-soft'}`}>{t(tabDef.label)}</span>
               </button>
             );
           })}
