@@ -67,6 +67,7 @@ export default function NewTripChat({ goTrips }: { goTrips: () => void }) {
       const plan = JSON.parse(localStorage.getItem('chatPlan') || '{}');
       const generated = await generateItinerary(plan, customMessages);
 
+      let tripSaveFailed = false;
       try {
         const saveResp = await apiFetch('/api/trips', {
           method: 'POST',
@@ -82,8 +83,20 @@ export default function NewTripChat({ goTrips }: { goTrips: () => void }) {
         if (saveResp.ok) {
           const { tripId } = await saveResp.json();
           generated.tripId = tripId;
+        } else if (saveResp.status !== 401) {
+          // 401 just means a guest/logged-out session — saving to My Trips
+          // was never going to happen, that's expected, not a bug. Any other
+          // failure (validation, a 500) means the save genuinely broke, and
+          // silently swallowing it (as this used to do) is exactly what
+          // produced a real "ghost" trip stuck showing "No itinerary data"
+          // with no way for the traveler to know why — surface it instead.
+          console.error('Trip save failed:', await saveResp.json().catch(() => ({})));
+          tripSaveFailed = true;
         }
-      } catch (e) { }
+      } catch (e) {
+        console.error('Trip save request failed:', e);
+        tripSaveFailed = true;
+      }
 
       localStorage.setItem('generatedItinerary', JSON.stringify(generated));
       localStorage.setItem('travelPlan', JSON.stringify(generated.plan));
@@ -92,6 +105,9 @@ export default function NewTripChat({ goTrips }: { goTrips: () => void }) {
 
       setCurrentStep('chatting');
       setBuilt(true);
+      if (tripSaveFailed) {
+        setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'ai', text: t("chat.tripSaveFailed") }]);
+      }
       // Wait a moment then go to trips or let the user click it? The prototype has a button.
     } catch (e) {
       setCurrentStep('chatting');

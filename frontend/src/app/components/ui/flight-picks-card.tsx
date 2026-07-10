@@ -1,5 +1,6 @@
 import { Plane } from "lucide-react";
 import { C } from "./jourzy-theme";
+import { useTranslation } from "../../utils/translations";
 
 export type FlightPick = {
   label: string; airline: string; flightNumber: string; price: number;
@@ -22,12 +23,12 @@ function formatDate(iso: string) {
   }
 }
 
-function stopsLabel(transfers: number) {
-  return transfers === 0 ? "Nonstop" : `${transfers} stop${transfers > 1 ? "s" : ""}`;
-}
-
 export function FlightPicksCard({ suggestion }: { suggestion: FlightSuggestion }) {
+  const { t } = useTranslation();
   if (!suggestion.picks?.length) return null;
+
+  const stopsLabel = (transfers: number) =>
+    transfers === 0 ? t("chat.flightNonstop") : t("chat.flightStops").replace("{{n}}", String(transfers));
 
   return (
     <div className="mt-2.5 rounded-2xl p-3.5" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
@@ -49,13 +50,13 @@ export function FlightPicksCard({ suggestion }: { suggestion: FlightSuggestion }
                 {p.airline} {p.flightNumber}
               </div>
               <div className="text-xs mt-0.5" style={{ color: C.sub }}>
-                {stopsLabel(p.transfers)}{duration ? ` · ${duration}` : ""} · departs {formatDate(p.departureAt)}
-                {p.returnAt ? ` · returns ${formatDate(p.returnAt)}` : ""}
+                {stopsLabel(p.transfers)}{duration ? ` · ${duration}` : ""} · {t("chat.flightDeparts").replace("{{date}}", formatDate(p.departureAt))}
+                {p.returnAt ? ` · ${t("chat.flightReturns").replace("{{date}}", formatDate(p.returnAt))}` : ""}
               </div>
 
               {p.why && <div className="text-xs mt-1.5 leading-relaxed" style={{ color: C.ink }}>{p.why}</div>}
               {typeof p.budgetLeftAfter === "number" && (
-                <div className="text-xs mt-1" style={{ color: C.green }}>${p.budgetLeftAfter} left of your budget after this</div>
+                <div className="text-xs mt-1" style={{ color: C.green }}>{t("chat.flightBudgetLeft").replace("{{amount}}", `$${p.budgetLeftAfter}`)}</div>
               )}
               {p.pointsNote && <div className="text-xs mt-1 italic" style={{ color: C.sub }}>{p.pointsNote}</div>}
             </div>
@@ -67,7 +68,7 @@ export function FlightPicksCard({ suggestion }: { suggestion: FlightSuggestion }
         <div className="text-xs mt-2.5 leading-relaxed" style={{ color: C.sub }}>{suggestion.honestNote}</div>
       )}
       {suggestion.bookVia && (
-        <div className="text-xs mt-1.5 font-bold" style={{ color: C.ink }}>Book via: {suggestion.bookVia}</div>
+        <div className="text-xs mt-1.5 font-bold" style={{ color: C.ink }}>{t("chat.flightBookVia").replace("{{platforms}}", suggestion.bookVia)}</div>
       )}
     </div>
   );
