@@ -256,7 +256,11 @@ async function synthesizeBestSuggestion(traveler, request, candidates, currentDa
       lat: c.geometry?.location?.lat, lng: c.geometry?.location?.lng,
     })));
     const prompt = getActivitySuggestionPrompt(traveler, request, verifiedPlacesJson, currentDayPlan || "(not specified)");
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${geminiKey}`;
+    // gemini-3-flash-preview — Pro-level reasoning at Flash latency/cost, the
+    // current default for production JSON-extraction workloads in the 3.x
+    // lineup; this task needs genuine spatial/budget reasoning over several
+    // candidates, not just fast pattern-matching.
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${geminiKey}`;
     const resp = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -372,7 +376,10 @@ async function synthesizeFlightPicks(traveler, flightResultsJson, languageInstru
   if (!geminiKey) return null;
   try {
     const prompt = getFlightSuggestionPrompt(traveler, flightResultsJson, languageInstruction);
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${geminiKey}`;
+    // gemini-3-flash-preview — see synthesizeBestSuggestion above for why this
+    // moved off flash-lite: ranking/explaining real fare tradeoffs benefits
+    // from the stronger reasoning, at the same Flash-tier latency/cost.
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${geminiKey}`;
     const resp = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -657,11 +664,13 @@ Conversation:
 ${chatHistory.filter(m => m).map(m => `${(m.role || 'user').toUpperCase()}: ${m.text || ''}`).join('\n')}`;
 
   try {
-    // 1. Try Gemini
+    // 1. Try Gemini — gemini-3-flash-preview, same as the deterministic generator
+    // this feeds into (a one-shot structured JSON extraction, not a live
+    // chat turn).
     const geminiKey = process.env.GEMINI_API_KEY;
     if (geminiKey) {
       const resp = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${geminiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${geminiKey}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -808,12 +817,18 @@ app.post("/api/itinerary", expensiveLimiter, optionalAuth, async (req, res) => {
       // 2. Try Gemini API for Itinerary generation
       if (!success && process.env.GEMINI_API_KEY) {
         try {
-          console.log(`Sending itinerary generation prompt to Gemini API... (attempt ${attempt}/${MAX_GENERATION_ATTEMPTS})`);
+          // gemini-3-flash-preview is the default for this — Pro-level reasoning at
+          // Flash latency/cost, and tested to handle this structured JSON
+          // task cleanly. Escalate to gemini-3.1-pro-preview ONLY on the
+          // final retry AND only when prior attempts failed specifically on
+          // JSON parsing (lastParseError set) — i.e. Flash is producing
+          // output but failing the JSON eval — not for plain API errors,
+          // which OpenRouter below already covers within the same attempt.
+          const escalateToPro = attempt === MAX_GENERATION_ATTEMPTS && !!lastParseError;
+          const geminiModel = escalateToPro ? "gemini-3.1-pro-preview" : "gemini-3-flash-preview";
+          console.log(`Sending itinerary generation prompt to Gemini API (${geminiModel})... (attempt ${attempt}/${MAX_GENERATION_ATTEMPTS})`);
           const geminiKey = process.env.GEMINI_API_KEY;
-          // gemini-3.1-flash-lite — higher daily request quota than
-          // 2.5-flash-lite, and tested to handle this structured JSON task
-          // cleanly (no implicit thinking-token consumption observed).
-          const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${geminiKey}`;
+          const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${geminiKey}`;
 
           const geminiRes = await fetch(geminiUrl, {
             method: "POST",
@@ -823,11 +838,11 @@ app.post("/api/itinerary", expensiveLimiter, optionalAuth, async (req, res) => {
               generationConfig: {
                 temperature: 0.4,
                 responseMimeType: "application/json",
-                // Gemini 2.5 Flash supports up to 65536 output tokens — use the
-                // full budget since multi-week trips (days x activities x 3
-                // alternatives each, all with full place metadata) can run long.
+                // 65536 output tokens — use the full budget since multi-week
+                // trips (days x activities x 3 alternatives each, all with
+                // full place metadata) can run long.
                 maxOutputTokens: 65536,
-                // 2.5 Flash "thinks" before answering by default, and those
+                // Flash "thinks" before answering by default, and those
                 // thinking tokens are drawn from the SAME maxOutputTokens
                 // budget as the final answer. On a long, complex itinerary
                 // prompt this was silently consuming enough of the budget that
@@ -1046,9 +1061,9 @@ app.post("/api/chat", expensiveLimiter, optionalAuth, async (req, res) => {
     // actually in the conversation caused the model to snap back to the
     // device language mid-conversation (observed live: an English
     // conversation flipped to Vietnamese right at the final <<READY>>
-    // confirmation once the free-tier fallback model — gemini-3.1-flash-lite,
-    // used after gemini-3.5-flash hit its daily quota — was handling the
-    // reply). Once the traveler has actually written something real, trust
+    // confirmation once a weaker fallback model ended up handling the
+    // reply, under a since-simplified chat model setup). Once the traveler
+    // has actually written something real, trust
     // the conversation's own established language via chat history/context
     // instead of re-asserting a possibly-wrong locale guess every turn.
     const hasRealUserMessage = chatHistory.some(m => (m.role || "user") !== "ai" && (m.text || "").trim() && !/^\(/.test((m.text || "").trim()));
@@ -1106,11 +1121,11 @@ Model reply:`;
       try {
         console.log("Sending chat prompt to Gemini API...");
         const geminiKey = process.env.GEMINI_API_KEY;
-        // gemini-3.5-flash specifically for chat (not itinerary generation) —
-        // tested to give noticeably more fluent, natural non-English replies
-        // (Vietnamese especially) than 2.5-flash-lite, which matters most
-        // right where the traveler is actually reading prose.
-        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${geminiKey}`;
+        // gemini-3.1-flash-lite for all chat turns (onboarding, in-trip
+        // companion, reschedule, past-trip) — fast/cheap conversational
+        // replies, reserving gemini-3-flash-preview's heavier reasoning for the
+        // deterministic generator and suggestion-synthesis tasks instead.
+        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${geminiKey}`;
 
         const contents = chatHistory.filter(m => m).map(m => ({
           role: (m.role || 'user') === 'ai' ? 'model' : 'user',
@@ -1132,13 +1147,13 @@ Model reply:`;
               // whenever the model ran long. The prompt now hard-bans
               // multi-day dumps, so this only needs to cover a normal reply.
               maxOutputTokens: 600,
-              // gemini-3.5-flash "thinks" before answering by default, same
-              // as 2.5 did, and those tokens draw from this SAME budget —
-              // tested empirically and it consumed 572/600 tokens on
-              // thinking alone, cutting the actual reply off mid-sentence
-              // (finishReason MAX_TOKENS after only 24 usable tokens). This
-              // is a short conversational reply, not a task that benefits
-              // from visible reasoning, so disable thinking entirely.
+              // Flash "thinks" before answering by default, and those tokens
+              // draw from this SAME budget — tested empirically and it
+              // consumed 572/600 tokens on thinking alone, cutting the
+              // actual reply off mid-sentence (finishReason MAX_TOKENS after
+              // only 24 usable tokens). This is a short conversational
+              // reply, not a task that benefits from visible reasoning, so
+              // disable thinking entirely.
               thinkingConfig: { thinkingBudget: 0 }
             }
           })
@@ -1161,57 +1176,7 @@ Model reply:`;
       }
     }
 
-    // 1.6 Try Gemini again on gemini-3.1-flash-lite if 3.5-flash failed —
-    // 3.5-flash's free tier caps out at just 20 requests PER DAY (confirmed
-    // via a live RESOURCE_EXHAUSTED/GenerateRequestsPerDayPerProjectPerModel
-    // error), which real chat traffic exhausts almost immediately, after
-    // which every message would otherwise fall straight to the generic
-    // canned response below. flash-lite has much higher headroom (it's
-    // already handling all itinerary generation without issue), so try it
-    // as a still-real-AI middle fallback before giving up on Gemini entirely.
-    if (!success && process.env.GEMINI_API_KEY) {
-      try {
-        console.log("Sending chat prompt to Gemini API (gemini-3.1-flash-lite fallback)...");
-        const geminiKey = process.env.GEMINI_API_KEY;
-        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${geminiKey}`;
-
-        const contents = chatHistory.filter(m => m).map(m => ({
-          role: (m.role || 'user') === 'ai' ? 'model' : 'user',
-          parts: [{ text: m.text || '' }]
-        }));
-
-        const geminiRes = await fetch(geminiUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: contents,
-            systemInstruction: {
-              parts: [{ text: `${systemInstruction}\nCurrent Date: ${currentDateTime}` }]
-            },
-            generationConfig: {
-              temperature: 0.7,
-              maxOutputTokens: 600,
-              thinkingConfig: { thinkingBudget: 0 }
-            }
-          })
-        });
-
-        if (geminiRes.ok) {
-          const geminiData = await geminiRes.json();
-          if (geminiData.candidates && geminiData.candidates[0].content?.parts?.[0]?.text) {
-            replyText = geminiData.candidates[0].content.parts[0].text.trim();
-            success = true;
-            console.log("Successfully generated chat response via Gemini API (flash-lite fallback)!");
-          }
-        } else {
-          console.warn(`Gemini API (flash-lite fallback) responded with status ${geminiRes.status}.`);
-        }
-      } catch (geminiError) {
-        console.warn("Gemini API (flash-lite fallback) chat failed.", geminiError.message);
-      }
-    }
-
-    // 1.7 Try OpenRouter API if Ollama and Gemini fail
+    // 1.6 Try OpenRouter API if Ollama and Gemini fail
     if (!success && process.env.OPENROUTER_API_KEY) {
       try {
         console.log("Sending chat prompt to OpenRouter API (Qwen)...");
@@ -1447,8 +1412,26 @@ Model reply:`;
     let isReady = false;
     const readyMatch = replyText.match(/<<READY>>/i);
     if (readyMatch) {
-      isReady = true;
       replyText = replyText.replace(readyMatch[0], "").trim();
+      // SAFETY NET (defense in depth beyond the prompt's "TWO-TURN RULE, NO
+      // EXCEPTIONS" wording in READY_PROTOCOL): <<READY>> must only ever be
+      // honored on a turn AFTER the traveler has already seen the recap +
+      // "are you ready?" question on a PRIOR turn and separately replied to
+      // confirm it — never on the very same turn that first presents that
+      // recap, even when the traveler dumped every category into one
+      // message with nothing left to ask (they still haven't said yes to
+      // anything yet). Model compliance with the prompt wording alone has
+      // proven unreliable here — observed live: the recap/question and
+      // <<READY>> arriving in the same reply, silently building and
+      // attempting to save a trip the traveler never confirmed. Detect it
+      // deterministically via whether a prior AI turn already showed the
+      // recap's "- **" bullet format; only then trust the tag.
+      const recapAlreadyShownBefore = chatHistory.some(m => (m.role || "user") === "ai" && /^-\s*\*\*/m.test(m.text || ""));
+      if (recapAlreadyShownBefore) {
+        isReady = true;
+      } else {
+        console.warn("Blocked premature <<READY>> — recap/question was shown for the first time in this same reply.");
+      }
     }
 
     if (success && sessionId && userId && replyText && dbAvailable) {
