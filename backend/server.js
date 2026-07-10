@@ -890,14 +890,16 @@ app.post("/api/itinerary", expensiveLimiter, optionalAuth, async (req, res) => {
               messages: [{ role: "user", content: prompt }],
               temperature: 0.4,
               // Full itinerary JSON (days, activities, alternatives x3 each,
-              // packing list, insights) regularly runs past 4000 tokens — that
-              // cap was silently truncating the JSON mid-document and causing
-              // "Failed to parse itinerary" 500s on this fallback path. NOTE:
-              // the configured OpenRouter account currently has very little
-              // balance (observed 402 "requires more credits" around ~8-10k
-              // tokens) — top up at openrouter.ai/settings/credits, since this
-              // whole fallback silently can't run at all on an empty balance.
-              max_tokens: 6000,
+              // packing list, insights) regularly runs past 6000 tokens too —
+              // confirmed live (2026-07-09): 3/3 real generation attempts cut
+              // off mid-sentence at the very edge of a 6000-token budget,
+              // producing invalid JSON every time on this fallback path.
+              // Raised to 12000 for headroom. NOTE: this account has
+              // previously shown very little balance (402 "requires more
+              // credits" around ~8-10k tokens) — if 12000 starts producing
+              // 402s instead of truncation, that's a billing issue, not a
+              // code bug — top up at openrouter.ai/settings/credits.
+              max_tokens: 12000,
               response_format: { type: "json_object" }
             })
           });
