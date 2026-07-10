@@ -730,6 +730,22 @@ app.post("/api/itinerary", expensiveLimiter, optionalAuth, async (req, res) => {
   let chatHistory = payload.chatHistory || [];
   const language = payload.language;
 
+  // The frontend's "stop generating" button aborts its OWN fetch, but that
+  // alone doesn't stop US from burning more LLM API calls/time on a request
+  // nobody is waiting on anymore. Tie an AbortController to the client
+  // connection actually closing so every upstream fetch below gets
+  // cancelled too, and so we never try to write a response to a socket
+  // that's already gone. IMPORTANT: this must be res.on("close"), not
+  // req.on("close") — tested live and confirmed req's close event does NOT
+  // reliably fire on client disconnect/reload (a full generation completed
+  // uninterrupted after reloading mid-request); res.on("close") is the
+  // event Node actually fires when the underlying connection drops before
+  // the response finishes.
+  const abortController = new AbortController();
+  res.on("close", () => {
+    if (!res.writableEnded) abortController.abort();
+  });
+
   // Cap chat history size so a hostile payload can't inflate the LLM prompt (token cost)
   if (Array.isArray(chatHistory) && chatHistory.length > MAX_CHAT_MESSAGES) {
     chatHistory = chatHistory.slice(-MAX_CHAT_MESSAGES);
@@ -792,6 +808,10 @@ app.post("/api/itinerary", expensiveLimiter, optionalAuth, async (req, res) => {
     let lastParseError = null;
 
     for (let attempt = 1; attempt <= MAX_GENERATION_ATTEMPTS && !itinerary; attempt++) {
+      if (abortController.signal.aborted) {
+        console.log("Itinerary generation aborted by client disconnect — stopping retries.");
+        break;
+      }
       let raw = "";
       let success = false;
 
@@ -804,6 +824,7 @@ app.post("/api/itinerary", expensiveLimiter, optionalAuth, async (req, res) => {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ model: bestModel, prompt, stream: false, options: { temperature: 0.4 } }),
+          signal: abortController.signal,
         });
         if (ollamaRes.ok) {
           const data = await ollamaRes.json();
@@ -854,7 +875,8 @@ app.post("/api/itinerary", expensiveLimiter, optionalAuth, async (req, res) => {
                 // entirely and spend the whole budget on the real output.
                 thinkingConfig: { thinkingBudget: 0 }
               }
-            })
+            }),
+            signal: abortController.signal,
           });
 
           if (geminiRes.ok) {
@@ -901,7 +923,8 @@ app.post("/api/itinerary", expensiveLimiter, optionalAuth, async (req, res) => {
               // code bug — top up at openrouter.ai/settings/credits.
               max_tokens: 12000,
               response_format: { type: "json_object" }
-            })
+            }),
+            signal: abortController.signal,
           });
 
           if (orRes.ok) {
@@ -943,6 +966,15 @@ app.post("/api/itinerary", expensiveLimiter, optionalAuth, async (req, res) => {
       }
     }
 
+    // Client disconnected (traveler hit "stop generating," closed the tab,
+    // reloaded, etc.) — nothing left to do. Writing to res here would throw
+    // ("write after end") since the connection is already gone, and there's
+    // no one left to receive the answer anyway.
+    if (abortController.signal.aborted) {
+      console.log("Itinerary generation aborted by client disconnect — discarding result, not responding.");
+      return;
+    }
+
     if (!itinerary) {
       if (lastParseError) {
         console.error(`Model JSON parse failed on all ${MAX_GENERATION_ATTEMPTS} attempts:`, lastParseError.message);
@@ -968,8 +1000,21 @@ app.post("/api/itinerary", expensiveLimiter, optionalAuth, async (req, res) => {
       itinerary.insights = { weatherOverview: "", culturalTips: [], safetyTips: [], customsRestrictions: [] };
     }
 
+    if (abortController.signal.aborted) {
+      console.log("Itinerary finished generating but client had already disconnected — discarding result.");
+      return;
+    }
+
     return res.json(itinerary);
   } catch (e) {
+    // A genuinely aborted fetch (e.g. fetchRealPlaces or enrichItineraryPlaces
+    // mid-flight when the client disconnects) throws an AbortError that isn't
+    // caught by the per-provider try/catches above — never try to write to a
+    // socket that's already gone.
+    if (abortController.signal.aborted) {
+      console.log("Itinerary generation aborted by client disconnect — discarding result, not responding.");
+      return;
+    }
     console.error("Critical failure in itinerary route:", e);
     return res.status(500).json({ error: "Failed to generate itinerary. Please try again." });
   }
