@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Send, RefreshCw, Bookmark, Sparkles } from "lucide-react";
+import { Send, RefreshCw, Bookmark, Sparkles, Square } from "lucide-react";
 import { C, display } from "./jourzy-theme";
 import { apiFetch, friendlyErrorMessage } from "../../utils/api";
 import { getPreferredLanguage } from "../../utils/language";
@@ -30,6 +30,7 @@ export default function NewTripChat({ goTrips }: { goTrips: () => void }) {
   const [built, setBuilt] = useState(false);
   const hasBootstrapped = useRef(false);
   const endRef = useRef<HTMLDivElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     localStorage.setItem('chatMessages', JSON.stringify(messages));
@@ -63,9 +64,11 @@ export default function NewTripChat({ goTrips }: { goTrips: () => void }) {
 
   const handleGenerate = async (customMessages: Message[]) => {
     setCurrentStep('generating');
+    const controller = new AbortController();
+    abortRef.current = controller;
     try {
       const plan = JSON.parse(localStorage.getItem('chatPlan') || '{}');
-      const generated = await generateItinerary(plan, customMessages);
+      const generated = await generateItinerary(plan, customMessages, controller.signal);
 
       let tripSaveFailed = false;
       try {
@@ -111,9 +114,19 @@ export default function NewTripChat({ goTrips }: { goTrips: () => void }) {
       // Wait a moment then go to trips or let the user click it? The prototype has a button.
     } catch (e) {
       setCurrentStep('chatting');
+      // The traveler hit "stop" themselves (e.g. to add more detail before
+      // generating) — that's an intentional cancel, not a failure, so don't
+      // show an error message for it.
+      if (e instanceof DOMException && e.name === 'AbortError') return;
       const errorText = e instanceof Error && e.message ? e.message : t("chat.errorBuild");
       setMessages(prev => [...prev, { id: Date.now().toString(), role: 'ai', text: errorText }]);
+    } finally {
+      abortRef.current = null;
     }
+  };
+
+  const stopGenerating = () => {
+    abortRef.current?.abort();
   };
 
   const send = async (text: string) => {
@@ -229,21 +242,26 @@ export default function NewTripChat({ goTrips }: { goTrips: () => void }) {
                   e.currentTarget.style.height = 'auto';
                 }
               }}
-              disabled={currentStep === 'generating' || isThinking}
-              placeholder={currentStep === 'generating' ? t("chat.building") : t("chat.placeholder")}
+              disabled={isThinking}
+              placeholder={currentStep === 'generating' ? t("chat.addMoreWhileBuilding") : t("chat.placeholder")}
               className="w-full bg-transparent py-3 pl-4 pr-12 focus:outline-none min-h-[44px] max-h-[100px] resize-none overflow-y-auto disabled:opacity-60 placeholder:opacity-60"
               style={{ color: C.green }}
             />
             <button
               onClick={() => {
+                if (currentStep === 'generating') {
+                  stopGenerating();
+                  return;
+                }
                 send(inputValue);
                 if (document.querySelector('textarea')) (document.querySelector('textarea') as any).style.height = 'auto';
               }}
-              disabled={currentStep === 'generating' || isThinking || !inputValue.trim()}
+              disabled={currentStep !== 'generating' && (isThinking || !inputValue.trim())}
               className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center justify-center transition-all disabled:opacity-50"
-              style={{ color: C.green }}
+              style={{ color: currentStep === 'generating' ? C.hanko : C.green }}
+              title={currentStep === 'generating' ? t("chat.stopGenerating") : undefined}
             >
-              <Send size={18} strokeWidth={2} />
+              {currentStep === 'generating' ? <Square size={16} fill={C.hanko} /> : <Send size={18} strokeWidth={2} />}
             </button>
           </div>
         </div>

@@ -39,7 +39,8 @@ function toDateOnly(d?: Date | string): string | undefined {
 
 export async function generateItinerary(
   plan: TravelPlan,
-  chatHistory?: any[]
+  chatHistory?: any[],
+  signal?: AbortSignal
 ): Promise<JourZyItineraryResponse> {
   const API_BASE = import.meta.env.VITE_API_URL || "";
 
@@ -53,6 +54,7 @@ export async function generateItinerary(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ plan: normalizedPlan, chatHistory, language: getPreferredLanguage() }),
+    signal,
   });
 
   if (!resp.ok) {
