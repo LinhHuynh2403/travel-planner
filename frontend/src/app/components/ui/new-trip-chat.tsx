@@ -34,12 +34,22 @@ export default function NewTripChat({ goTrips }: { goTrips: () => void }) {
   const hasBootstrapped = useRef(false);
   const endRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     localStorage.setItem('chatMessages', JSON.stringify(messages));
     localStorage.setItem('chatStep', JSON.stringify(currentStep));
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, currentStep]);
+
+  // The textarea is disabled while a reply is in flight (see disabled=
+  // {isThinking} below), and disabling a focused element makes the browser
+  // drop focus entirely — re-enabling it afterward does NOT restore focus on
+  // its own, which is why the traveler had to click back into the box for
+  // every single message. Refocus it the moment thinking finishes.
+  useEffect(() => {
+    if (!isThinking) textareaRef.current?.focus();
+  }, [isThinking]);
 
   useEffect(() => {
     if (messages.length > 0 || hasBootstrapped.current) return;
@@ -215,11 +225,11 @@ export default function NewTripChat({ goTrips }: { goTrips: () => void }) {
         {built && (
           <div className="space-y-2 pt-4">
             <button onClick={goTrips} className="w-full px-4 py-2.5 rounded-2xl text-sm font-medium text-white flex items-center justify-center gap-2" style={{ background: C.green }}>
-              <Bookmark size={14} /> Trip saved — open it in My trips
+              <Bookmark size={14} /> {t("chat.tripSavedOpen")}
             </button>
             <button onClick={startNewPlan} className="w-full px-4 py-2.5 rounded-2xl text-sm font-medium flex items-center justify-center gap-2"
               style={{ background: C.card, border: `1.5px solid ${C.green}`, color: C.green }}>
-              <Sparkles size={14} /> Plan another trip
+              <Sparkles size={14} /> {t("chat.planAnotherTrip")}
             </button>
           </div>
         )}
@@ -231,6 +241,7 @@ export default function NewTripChat({ goTrips }: { goTrips: () => void }) {
           <div className="relative flex items-center w-full text-left rounded-2xl text-sm font-medium transition-colors"
             style={{ background: "#FFFFFF", border: `1.5px solid ${C.green}`, color: C.green }}>
             <textarea
+              ref={textareaRef}
               rows={1}
               value={inputValue}
               onChange={(e) => {

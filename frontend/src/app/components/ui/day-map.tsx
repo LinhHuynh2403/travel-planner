@@ -1,16 +1,26 @@
 import { Map } from "lucide-react";
 import { C } from "./jourzy-theme";
+import { useTranslation } from "../../utils/translations";
 
 const enc = encodeURIComponent;
 
+// Kept in sync with plan-view.tsx's addressOf — a bare neighborhood/district
+// string alone (e.g. "Jongno District, Seoul, South Korea") is too vague a
+// point for Google Maps' walking directions to resolve and can trigger a
+// false "outside our coverage area" error, so pair it with the venue
+// name/title when there's no verified address.
 function addressOf(entity: any, fallback?: string): string {
-  return entity?.place?.address || entity?.address || entity?.location || entity?.title || fallback || "";
+  if (entity?.place?.address) return entity.place.address;
+  if (entity?.address) return entity.address;
+  if (entity?.location && entity?.title && entity.location !== entity.title) return `${entity.title}, ${entity.location}`;
+  return entity?.location || entity?.title || fallback || "";
 }
 
 export default function DayMap({ stops, hotelName, hotelAddr }: { stops: any[]; hotelName: string; hotelAddr: string }) {
+  const { t } = useTranslation();
   if (!stops.length) return (
     <div className="rounded-2xl p-6 text-center text-xs mb-3" style={{ background: C.card, border: `1px solid ${C.line}`, color: C.sub }}>
-      Nothing picked for this day yet — check some stops in List view.
+      {t("plan.nothingPicked")}
     </div>
   );
 
@@ -29,7 +39,7 @@ export default function DayMap({ stops, hotelName, hotelAddr }: { stops: any[]; 
 
   return (
     <div className="rounded-2xl p-3 mb-3" style={{ background: C.card, border: `1px solid ${C.line}` }}>
-      <div className="text-xs font-bold mb-1 px-1" style={{ color: C.ink }}>Today's route — in walking order</div>
+      <div className="text-xs font-bold mb-1 px-1" style={{ color: C.ink }}>{t("plan.routeTitle")}</div>
       <svg viewBox={`0 0 330 ${H}`} width="100%" style={{ display: "block" }}>
         <path d={path} fill="none" stroke={C.green} strokeWidth="2.5" strokeDasharray="1 7" strokeLinecap="round" />
         {pts.map((p, i) => (
@@ -52,10 +62,10 @@ export default function DayMap({ stops, hotelName, hotelAddr }: { stops: any[]; 
       <a href={routeUrl} target="_blank" rel="noreferrer"
         className="mt-2 w-full py-2.5 rounded-xl text-xs font-bold text-white flex items-center justify-center gap-1.5"
         style={{ background: C.green }}>
-        <Map size={13} /> Open full route in Google Maps
+        <Map size={13} /> {t("plan.openFullRoute")}
       </a>
       <div className="text-center text-xs mt-1.5" style={{ color: C.sub }}>
-        Opens real turn-by-turn navigation
+        {t("plan.opensNavigation")}
       </div>
     </div>
   );

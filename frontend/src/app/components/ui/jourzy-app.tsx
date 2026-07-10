@@ -5,8 +5,10 @@ import NewTripChat from "./new-trip-chat";
 import TripsList from "./trips-list";
 import PlanViewWrapper from "./plan-view-wrapper";
 import SettingsPage from "../../pages/settings-new"; // We will rename or recreate the settings page
+import { useTranslation } from "../../utils/translations";
 
 export default function JourZyApp() {
+  const { t } = useTranslation();
   // Global state for bottom nav and current open trip
   const [tab, setTab] = useState<"chat" | "trips" | "settings">("chat");
   const [openTripId, setOpenTripId] = useState<string | null>(null);
@@ -40,9 +42,9 @@ export default function JourZyApp() {
         {/* tab bar */}
         <div className="flex justify-around items-center py-2 px-2" style={{ background: C.card, borderTop: `1px solid ${C.line}` }}>
           {[
-            ["chat", MessageCircle, "New trip"],
-            ["trips", Bookmark, "My trips"],
-            ["settings", Settings, "Settings"]
+            ["chat", MessageCircle, t("nav.newTrip")],
+            ["trips", Bookmark, t("nav.myTrips")],
+            ["settings", Settings, t("settings.title")]
           ].map(([k, Icon, lbl]) => {
             const active = tab === k;
             const IconComp = Icon as any;

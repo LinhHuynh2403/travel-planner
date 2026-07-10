@@ -47,7 +47,7 @@ export default function PlanViewWrapper({ tripId, goBack }: { tripId: string, go
       {/* trip header */}
       <div className="flex items-center gap-2 px-4 py-2 sticky top-0 bg-[#F5F6F2] z-10">
         <button onClick={goBack} className="flex items-center text-xs font-bold" style={{ color: C.green }}>
-          <ChevronLeft size={16} /> Trips
+          <ChevronLeft size={16} /> {t("nav.backToTrips")}
         </button>
         <div className="flex-1 text-center text-sm font-bold capitalize" style={{ color: C.ink }}>
           {tripData.plan?.region}
@@ -80,7 +80,7 @@ export default function PlanViewWrapper({ tripId, goBack }: { tripId: string, go
           <div className="pt-4">
             <div className="mx-4 mb-6 p-5 rounded-2xl" style={{ background: "#22283A", color: "#FFFFFF" }}>
               <div className="text-[10px] font-bold tracking-wider mb-1" style={{ color: "#8E99B0", textTransform: "uppercase" }}>
-                Completed Trip
+                {t("nav.completedTrip")}
               </div>
               <div className="text-3xl font-bold mb-2" style={{ fontFamily: "Fraunces, serif" }}>
                 {tripData.plan?.region || "Seoul"}
@@ -91,7 +91,7 @@ export default function PlanViewWrapper({ tripId, goBack }: { tripId: string, go
             </div>
 
             <div className="mx-4 bg-white rounded-2xl p-5 shadow-sm border border-[#E4E6E0]">
-              <h3 className="font-bold text-[#1B2333] mb-4 text-base">Your highlights</h3>
+              <h3 className="font-bold text-[#1B2333] mb-4 text-base">{t("nav.yourHighlights")}</h3>
               <div className="space-y-3">
                 {(tripData.plan?.days?.[0]?.activities?.slice(0, 3).map((a: any) => a.title) || [
                   "Bukchon Hanok stay",
@@ -107,7 +107,7 @@ export default function PlanViewWrapper({ tripId, goBack }: { tripId: string, go
             </div>
 
             <div className="mx-10 mt-10 text-center text-sm leading-relaxed" style={{ color: C.sub }}>
-              This trip is read-only now. Tap the chat bubble to reminisce — JourZy remembers what you loved for next time.
+              {t("nav.readOnlyPastTrip")}
             </div>
           </div>
         ) : (

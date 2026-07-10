@@ -1,12 +1,14 @@
 import { C } from "./jourzy-theme";
 import { Cloud, CloudRain, CloudSun, Sun, CloudSnow, CloudLightning, Check, AlertCircle, ShieldAlert, HeartPulse, Wallet, Wifi, Clock } from "lucide-react";
+import { useTranslation } from "../../utils/translations";
 
 const WEATHER_ICON: Record<string, any> = {
   sunny: Sun, partly: CloudSun, cloudy: Cloud, rainy: CloudRain, snowy: CloudSnow, stormy: CloudLightning,
 };
 
 export default function PrepView({ tripData }: { tripData: any }) {
-  if (!tripData) return <div className="p-4 text-center text-sm text-[#6B7280]">Prep data not available.</div>;
+  const { t } = useTranslation();
+  if (!tripData) return <div className="p-4 text-center text-sm text-[#6B7280]">{t("prep.notAvailable")}</div>;
 
   const insights = tripData.insights || {};
   const keyPhrases = insights.keyPhrases || [];
@@ -69,14 +71,18 @@ export default function PrepView({ tripData }: { tripData: any }) {
       {packingList.length > 0 && (
         <div className="rounded-2xl p-5" style={{ background: C.card, border: `1px solid ${C.line}` }}>
           <div className="font-bold text-sm mb-4" style={{ color: C.ink }}>
-            <span role="img" aria-label="pack" className="mr-2">🎒</span> Pack for this trip
+            <span role="img" aria-label="pack" className="mr-2">🎒</span> {t("prep.packForTrip")}
           </div>
           <div className="space-y-4">
             {packingList.map((cat: any, i: number) => {
-              const isLeave = cat.category?.toLowerCase().includes("leave");
+              // The generator always makes this category last (see prompts.js)
+              // and the category NAME itself is translated per-language, so
+              // matching on the English word "leave" broke this styling for
+              // every non-English trip — go by position instead.
+              const isLeave = i === packingList.length - 1;
               return (
                 <div key={i}>
-                  {isLeave && <div className="text-xs font-bold uppercase mb-2 mt-4" style={{ color: "#EF4444" }}>Leave these at home</div>}
+                  {isLeave && <div className="text-xs font-bold uppercase mb-2 mt-4" style={{ color: "#EF4444" }}>{t("ui.leaveAtHome")}</div>}
                   <div className="space-y-3">
                     {cat.items?.map((item: any, j: number) => {
                       const name = typeof item === "string" ? item : item.name;
@@ -102,14 +108,14 @@ export default function PrepView({ tripData }: { tripData: any }) {
       {(emergency || logistics.healthAccess) && (
         <div className="rounded-2xl p-5" style={{ background: C.card, border: `1px solid ${C.line}` }}>
           <div className="font-bold text-sm mb-3 flex items-center gap-2" style={{ color: C.ink }}>
-            <HeartPulse size={16} style={{ color: C.green }} /> If something goes wrong
+            <HeartPulse size={16} style={{ color: C.green }} /> {t("prep.ifSomethingGoesWrong")}
           </div>
           <div className="text-xs leading-relaxed space-y-2" style={{ color: C.sub }}>
             {emergency && (
               <p>
-                <span className="font-bold" style={{ color: C.ink }}>Emergency:</span>{' '}
-                <span className="font-bold" style={{ color: C.ink }}>{emergency.ambulance}</span> (ambulance) · <span className="font-bold" style={{ color: C.ink }}>{emergency.police}</span> (police)
-                {emergency.touristPolice && emergency.touristPolice !== "none" && <> · <span className="font-bold" style={{ color: C.ink }}>{emergency.touristPolice}</span> (tourist police)</>}
+                <span className="font-bold" style={{ color: C.ink }}>{t("prep.emergencyLabel")}</span>{' '}
+                <span className="font-bold" style={{ color: C.ink }}>{emergency.ambulance}</span> ({t("prep.ambulanceLabel")}) · <span className="font-bold" style={{ color: C.ink }}>{emergency.police}</span> ({t("prep.policeLabel")})
+                {emergency.touristPolice && emergency.touristPolice !== "none" && <> · <span className="font-bold" style={{ color: C.ink }}>{emergency.touristPolice}</span> ({t("prep.touristPoliceLabel")})</>}
               </p>
             )}
             {logistics.healthAccess && <p>{logistics.healthAccess}</p>}
@@ -120,16 +126,20 @@ export default function PrepView({ tripData }: { tripData: any }) {
       {/* Logistics Cheat Sheet */}
       <div className="rounded-2xl p-5" style={{ background: C.card, border: `1px solid ${C.line}` }}>
         <div className="font-bold text-sm mb-3 flex items-center gap-2" style={{ color: C.ink }}>
-          <AlertCircle size={16} /> Logistics cheat-sheet
+          <AlertCircle size={16} /> {t("prep.logisticsCheatSheet")}
         </div>
         <div className="text-xs leading-relaxed space-y-2" style={{ color: C.sub }}>
-          {logistics.airportToStay && <p><span className="font-bold" style={{ color: C.ink }}>{logistics.airportName ? `${logistics.airportName} → hotel:` : "Airport → hotel:"}</span> {logistics.airportToStay}</p>}
-          {logistics.gettingAround && <p><span className="font-bold" style={{ color: C.ink }}>Getting around:</span> {logistics.gettingAround}</p>}
-          {logistics.luggageStorage && <p><span className="font-bold" style={{ color: C.ink }}>Luggage:</span> {logistics.luggageStorage}</p>}
-          {logistics.mobilityNotes && <p><span className="font-bold" style={{ color: C.ink }}>Getting around safely:</span> {logistics.mobilityNotes}</p>}
-          {logistics.breakfastNote && <p><span className="font-bold" style={{ color: C.ink }}>Breakfast:</span> {logistics.breakfastNote}</p>}
-          {logistics.airlinePoints && <p><span className="font-bold" style={{ color: C.ink }}>Airline points:</span> {logistics.airlinePoints}</p>}
-          {logistics.bookingTips && <p><span className="font-bold" style={{ color: C.ink }}>Booking:</span> {logistics.bookingTips}</p>}
+          {/* airportToHotelLabel is "Airport → hotel:" in each language, always
+              leading with a single translated word — swap in the real airport
+              name (a proper noun, never translated) while keeping the rest of
+              the phrase in the traveler's language. */}
+          {logistics.airportToStay && <p><span className="font-bold" style={{ color: C.ink }}>{t("prep.airportToHotelLabel").replace(/^\S+/, logistics.airportName || t("plan.airportFallback"))}</span> {logistics.airportToStay}</p>}
+          {logistics.gettingAround && <p><span className="font-bold" style={{ color: C.ink }}>{t("prep.gettingAroundLabel")}</span> {logistics.gettingAround}</p>}
+          {logistics.luggageStorage && <p><span className="font-bold" style={{ color: C.ink }}>{t("prep.luggageLabel")}</span> {logistics.luggageStorage}</p>}
+          {logistics.mobilityNotes && <p><span className="font-bold" style={{ color: C.ink }}>{t("prep.gettingAroundSafelyLabel")}</span> {logistics.mobilityNotes}</p>}
+          {logistics.breakfastNote && <p><span className="font-bold" style={{ color: C.ink }}>{t("prep.breakfastLabel")}</span> {logistics.breakfastNote}</p>}
+          {logistics.airlinePoints && <p><span className="font-bold" style={{ color: C.ink }}>{t("prep.airlinePointsLabel")}</span> {logistics.airlinePoints}</p>}
+          {logistics.bookingTips && <p><span className="font-bold" style={{ color: C.ink }}>{t("prep.bookingLabel")}</span> {logistics.bookingTips}</p>}
         </div>
       </div>
 
@@ -137,7 +147,7 @@ export default function PrepView({ tripData }: { tripData: any }) {
       {(customs.length > 0 || safety.length > 0 || cultural.length > 0) && (
         <div className="rounded-2xl p-5" style={{ background: "#E8F5E9", border: "1px solid #A5D6A7" }}>
           <div className="font-bold text-sm mb-3 flex items-center gap-2" style={{ color: C.green }}>
-            <ShieldAlert size={16} /> Customs & rules — real ones
+            <ShieldAlert size={16} /> {t("prep.customsRulesTitle")}
           </div>
           <div className="text-xs leading-relaxed space-y-2" style={{ color: "#374151" }}>
             {customs.map((c: string, i: number) => <p key={`c-${i}`}>• {c}</p>)}
@@ -150,7 +160,7 @@ export default function PrepView({ tripData }: { tripData: any }) {
       {/* Key Phrases */}
       {keyPhrases.length > 0 && (
         <div className="rounded-2xl p-4" style={{ background: C.card, border: `1px solid ${C.line}` }}>
-          <div className="font-bold text-sm mb-3" style={{ color: C.ink }}>Say it like a local</div>
+          <div className="font-bold text-sm mb-3" style={{ color: C.ink }}>{t("prep.sayItLikeLocal")}</div>
           <div className="space-y-3">
             {keyPhrases.map((kp: any, idx: number) => (
               <div key={idx} className="flex justify-between items-center text-sm" style={{ borderBottom: idx < keyPhrases.length - 1 ? `1px solid ${C.line}` : 'none', paddingBottom: idx < keyPhrases.length - 1 ? '12px' : 0 }}>
@@ -165,11 +175,19 @@ export default function PrepView({ tripData }: { tripData: any }) {
               </div>
             ))}
           </div>
-          {smileIdx >= 0 && (
-            <div className="text-xs mt-3 p-2.5 rounded-xl leading-relaxed" style={{ background: C.greenSoft, color: C.ink }}>
-              😊 <b>Guaranteed smile:</b> say "<b>{keyPhrases[smileIdx].local}</b>" ({keyPhrases[smileIdx].say}) — locals light up when visitors know it.
-            </div>
-          )}
+          {smileIdx >= 0 && (() => {
+            // Each locale's quoting style around {{phrase}} differs (straight
+            // quotes vs 「」), so split the translated template around the
+            // placeholder instead of hardcoding quote characters in JSX.
+            const [before, after] = t("prep.guaranteedSmileText")
+              .replace("{{pronunciation}}", keyPhrases[smileIdx].say)
+              .split("{{phrase}}");
+            return (
+              <div className="text-xs mt-3 p-2.5 rounded-xl leading-relaxed" style={{ background: C.greenSoft, color: C.ink }}>
+                😊 <b>{t("prep.guaranteedSmileLabel")}</b> {before}<b>{keyPhrases[smileIdx].local}</b>{after}
+              </div>
+            );
+          })()}
         </div>
       )}
     </div>

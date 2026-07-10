@@ -2,29 +2,36 @@ import { useState } from "react";
 import { ChevronRight, X, Star, Clock, Plane, Train, Utensils, Landmark } from "lucide-react";
 import { C, display } from "./jourzy-theme";
 import { Seal } from "./jourzy-seal";
+import { useTranslation } from "../../utils/translations";
 
 type BreakdownItem = { category: string; amount: number; savingTip?: string };
 type CategoryKind = "flight" | "hotel" | "meals" | "transport" | "activities" | "other";
 
+// The generator writes budgetSummary.breakdown categories in the traveler's
+// selected language (see prompts.js's "IMPORTANT FOR TRANSLATION" rule), so
+// an English-only keyword match here would silently classify every category
+// as "other" for any non-English trip — losing icons and the tap-to-expand
+// detail sheet. Match across all 7 supported UI languages instead.
 function categoryKind(category: string): CategoryKind {
   const c = (category || "").toLowerCase();
-  if (/flight|airfare/.test(c)) return "flight";
-  if (/hotel|lodging|accommodation|stay/.test(c)) return "hotel";
-  if (/meal|food|dining|restaurant/.test(c)) return "meals";
-  if (/train|bus|transit|transport|metro|subway|suica|tram/.test(c)) return "transport";
-  if (/museum|activit|sight|shop|tour|attraction|exhibition/.test(c)) return "activities";
+  if (/flight|airfare|chuyến bay|vé máy bay|máy bay|항공|비행기|フライト|航空|机票|航班|vuelo|vol\b/.test(c)) return "flight";
+  if (/hotel|lodging|accommodation|stay|khách sạn|lưu trú|chỗ ở|호텔|숙박|ホテル|宿泊|酒店|住宿|alojamiento|hébergement/.test(c)) return "hotel";
+  if (/meal|food|dining|restaurant|bữa ăn|ăn uống|ẩm thực|식사|음식|食事|食費|餐|饮食|美食|comida|repas/.test(c)) return "meals";
+  if (/train|bus|transit|transport|metro|subway|suica|tram|di chuyển|giao thông|tàu xe|교통|대중교통|交通|transporte/.test(c)) return "transport";
+  if (/museum|activit|sight|shop|tour|attraction|exhibition|hoạt động|tham quan|vui chơi|활동|관광|アクティビティ|観光|活动|游览|观光|actividades/.test(c)) return "activities";
   return "other";
 }
 
 const KIND_ICON: Record<CategoryKind, any> = { flight: Plane, hotel: Landmark, meals: Utensils, transport: Train, activities: Landmark, other: null };
 
 export default function BudgetView({ tripData }: { tripData: any }) {
+  const { t } = useTranslation();
   const [openItem, setOpenItem] = useState<BreakdownItem | null>(null);
   const b = tripData?.insights?.budgetSummary;
-  const userBudgetStr = tripData?.plan?.budget || "No budget set";
+  const userBudgetStr = tripData?.plan?.budget || t("nav.budgetNotSet");
   const userBudgetNum = parseFloat(String(userBudgetStr).replace(/[^0-9.]/g, '')) || 0;
 
-  if (!b) return <div className="p-4 text-center text-sm text-[#6B7280]">Budget data not available.</div>;
+  if (!b) return <div className="p-4 text-center text-sm text-[#6B7280]">{t("budget.notAvailable")}</div>;
 
   const total = b.totalEstimatedCost || 0;
   const currency = "$";
@@ -36,11 +43,11 @@ export default function BudgetView({ tripData }: { tripData: any }) {
       {/* Top Card */}
       <div className="rounded-2xl p-5 mb-4 text-white" style={{ background: C.ink }}>
         <div className="text-xs opacity-70 uppercase tracking-widest font-bold mb-1">
-          LIVE TRIP TOTAL — updates with every swap
+          {t("budget.liveTripTotal")}
         </div>
         <div className="flex items-baseline gap-2 mb-4">
           <div className="text-4xl font-bold font-serif leading-none">{currency}{total}</div>
-          <div className="text-sm opacity-70">of {userBudgetStr}</div>
+          <div className="text-sm opacity-70">{t("ui.of")} {userBudgetStr}</div>
         </div>
 
         {pctUsed !== null && (
@@ -51,9 +58,9 @@ export default function BudgetView({ tripData }: { tripData: any }) {
 
         {headroom !== null && (
           headroom >= 0 ? (
-            <div className="text-sm font-medium" style={{ color: C.green }}>{currency}{headroom} of headroom — nice work!</div>
+            <div className="text-sm font-medium" style={{ color: C.green }}>{t("budget.headroomNice").replace("{{amount}}", `${currency}${headroom}`)}</div>
           ) : (
-            <div className="text-sm font-medium text-[#EF4444]">{currency}{Math.abs(headroom)} over budget — time to swap?</div>
+            <div className="text-sm font-medium text-[#EF4444]">{t("budget.overBudget").replace("{{amount}}", `${currency}${Math.abs(headroom)}`)}</div>
           )
         )}
       </div>
@@ -83,7 +90,7 @@ export default function BudgetView({ tripData }: { tripData: any }) {
               {item.savingTip && (
                 <div className="text-xs leading-relaxed flex items-start gap-1.5" style={{ color: C.sub }}>
                   <span style={{ color: C.green, marginTop: 1 }}>✨</span>
-                  <span><span className="font-bold">Save:</span> {item.savingTip}</span>
+                  <span><span className="font-bold">{t("budget.saveLabel")}</span> {item.savingTip}</span>
                 </div>
               )}
             </Wrapper>
@@ -99,13 +106,14 @@ export default function BudgetView({ tripData }: { tripData: any }) {
 }
 
 function BudgetCategorySheet({ item, kind, tripData, close }: { item: BreakdownItem; kind: CategoryKind; tripData: any; close: () => void }) {
+  const { t } = useTranslation();
   const currency = "$";
   const logistics = tripData?.logisticsGuide || {};
   const hotel = tripData?.hotelRecommendation;
-  const region = tripData?.plan?.region || "your destination";
+  const region = tripData?.plan?.region || t("budget.destination");
 
   const allActivities = (tripData?.days || []).flatMap((d: any) =>
-    (d.activities || []).map((a: any, idx: number) => ({ ...a, dayNumber: d.dayNumber, prevTitle: idx > 0 ? d.activities[idx - 1]?.title : "Hotel" }))
+    (d.activities || []).map((a: any, idx: number) => ({ ...a, dayNumber: d.dayNumber, prevTitle: idx > 0 ? d.activities[idx - 1]?.title : t("plan.hotelFallback") }))
   );
   const foodActivities = allActivities.filter((a: any) => a.category === "food");
   const sightActivities = allActivities.filter((a: any) => a.category !== "food" && a.category !== "rest");
@@ -117,7 +125,7 @@ function BudgetCategorySheet({ item, kind, tripData, close }: { item: BreakdownI
         <div className="flex justify-between items-start mb-3">
           <div>
             <div style={{ ...display, fontSize: 20, color: C.ink }}>{item.category}</div>
-            <div className="text-xs mt-0.5" style={{ color: C.sub }}>Estimated {currency}{item.amount} for this trip</div>
+            <div className="text-xs mt-0.5" style={{ color: C.sub }}>{t("budget.estimatedForTrip").replace("{{amount}}", `${currency}${item.amount}`)}</div>
           </div>
           <button onClick={close}><X size={18} style={{ color: C.sub }} /></button>
         </div>
@@ -125,21 +133,21 @@ function BudgetCategorySheet({ item, kind, tripData, close }: { item: BreakdownI
         {item.savingTip && (
           <div className="rounded-2xl p-3 mb-4 flex items-start gap-1.5 text-xs leading-relaxed" style={{ background: C.greenSoft, color: C.green }}>
             <span className="mt-0.5">✨</span>
-            <span><span className="font-bold">Save:</span> {item.savingTip}</span>
+            <span><span className="font-bold">{t("budget.saveLabel")}</span> {item.savingTip}</span>
           </div>
         )}
 
         {kind === "flight" && (
           <div className="space-y-3">
             {logistics.airportName && (
-              <DetailRow label="Arrival airport" value={logistics.airportName} />
+              <DetailRow label={t("budget.arrivalAirport")} value={logistics.airportName} />
             )}
-            <DetailRow label="Destination" value={region} />
-            {logistics.airportToStay && <DetailBlock label="Getting to your hotel" text={logistics.airportToStay} />}
-            {logistics.bookingTips && <DetailBlock label="Where to book" text={logistics.bookingTips} />}
-            {logistics.airlinePoints && <DetailBlock label="Points & miles" text={logistics.airlinePoints} />}
+            <DetailRow label={t("budget.destination")} value={region} />
+            {logistics.airportToStay && <DetailBlock label={t("budget.gettingToHotel")} text={logistics.airportToStay} />}
+            {logistics.bookingTips && <DetailBlock label={t("budget.whereToBook")} text={logistics.bookingTips} />}
+            {logistics.airlinePoints && <DetailBlock label={t("budget.pointsAndMiles")} text={logistics.airlinePoints} />}
             {!logistics.airportToStay && !logistics.bookingTips && (
-              <p className="text-xs" style={{ color: C.sub }}>No further flight details saved for this trip yet — ask JourZy in chat about specific flight options.</p>
+              <p className="text-xs" style={{ color: C.sub }}>{t("budget.noFlightDetails")}</p>
             )}
           </div>
         )}
@@ -155,24 +163,24 @@ function BudgetCategorySheet({ item, kind, tripData, close }: { item: BreakdownI
             </div>
             <div className="flex items-center gap-2 text-xs mb-3" style={{ color: C.sub }}>
               {hotel.place?.rating && <span className="flex items-center gap-0.5"><Star size={11} fill="#FFC94D" color="#FFC94D" />{hotel.place.rating.toFixed(1)}</span>}
-              {hotel.pricePerNight && <span>{currency}{hotel.pricePerNight}/night</span>}
+              {hotel.pricePerNight && <span>{currency}{hotel.pricePerNight}{t("ui.perNight")}</span>}
             </div>
-            {hotel.reasoning && <DetailBlock label="Why this hotel" text={hotel.reasoning} />}
-            {hotel.checkInNote && <DetailBlock label="Check-in & check-out" text={hotel.checkInNote} />}
-            {hotel.place?.address && <DetailRow label="Address" value={hotel.place.address} />}
+            {hotel.reasoning && <DetailBlock label={t("budget.whyThisHotel")} text={hotel.reasoning} />}
+            {hotel.checkInNote && <DetailBlock label={t("budget.checkInCheckOut")} text={hotel.checkInNote} />}
+            {hotel.place?.address && <DetailRow label={t("budget.address")} value={hotel.place.address} />}
           </div>
         )}
 
         {kind === "meals" && (
           <div className="space-y-2.5">
-            {foodActivities.length === 0 && <p className="text-xs" style={{ color: C.sub }}>No specific meals saved in the plan yet.</p>}
+            {foodActivities.length === 0 && <p className="text-xs" style={{ color: C.sub }}>{t("budget.noMealsSaved")}</p>}
             {foodActivities.map((a: any, i: number) => (
               <div key={i} className="rounded-xl p-3" style={{ background: C.card, border: `1px solid ${C.line}` }}>
                 <div className="flex justify-between items-start gap-2">
                   <div className="font-bold text-sm" style={{ color: C.ink }}>🍜 {a.title}</div>
                   {typeof a.cost === "number" && <div className="text-xs font-bold shrink-0" style={{ color: C.ink }}>{currency}{a.cost}</div>}
                 </div>
-                <div className="text-xs mt-0.5" style={{ color: C.sub }}>Day {a.dayNumber}</div>
+                <div className="text-xs mt-0.5" style={{ color: C.sub }}>{t("ui.day")} {a.dayNumber}</div>
                 {a.description && <p className="text-xs mt-1 leading-relaxed" style={{ color: C.sub }}>{a.description}</p>}
               </div>
             ))}
@@ -181,14 +189,14 @@ function BudgetCategorySheet({ item, kind, tripData, close }: { item: BreakdownI
 
         {kind === "activities" && (
           <div className="space-y-2.5">
-            {sightActivities.length === 0 && <p className="text-xs" style={{ color: C.sub }}>No specific stops saved in the plan yet.</p>}
+            {sightActivities.length === 0 && <p className="text-xs" style={{ color: C.sub }}>{t("budget.noStopsSaved")}</p>}
             {sightActivities.map((a: any, i: number) => (
               <div key={i} className="rounded-xl p-3" style={{ background: C.card, border: `1px solid ${C.line}` }}>
                 <div className="flex justify-between items-start gap-2">
                   <div className="font-bold text-sm" style={{ color: C.ink }}>{a.title}</div>
                   {typeof a.cost === "number" && <div className="text-xs font-bold shrink-0" style={{ color: C.ink }}>{currency}{a.cost}</div>}
                 </div>
-                <div className="text-xs mt-0.5" style={{ color: C.sub }}>Day {a.dayNumber}</div>
+                <div className="text-xs mt-0.5" style={{ color: C.sub }}>{t("ui.day")} {a.dayNumber}</div>
                 {a.description && <p className="text-xs mt-1 leading-relaxed" style={{ color: C.sub }}>{a.description}</p>}
               </div>
             ))}
@@ -197,17 +205,17 @@ function BudgetCategorySheet({ item, kind, tripData, close }: { item: BreakdownI
 
         {kind === "transport" && (
           <div>
-            {logistics.transitCards && <DetailBlock label="Fare card" text={logistics.transitCards} />}
-            {logistics.gettingAround && <DetailBlock label="Getting around" text={logistics.gettingAround} />}
+            {logistics.transitCards && <DetailBlock label={t("budget.fareCard")} text={logistics.transitCards} />}
+            {logistics.gettingAround && <DetailBlock label={t("budget.gettingAround")} text={logistics.gettingAround} />}
             {transportLegs.length > 0 && (
               <div className="mt-3">
-                <div className="text-xs font-bold uppercase tracking-wide mb-2" style={{ color: C.sub }}>If you follow the plan</div>
+                <div className="text-xs font-bold uppercase tracking-wide mb-2" style={{ color: C.sub }}>{t("budget.ifYouFollowPlan")}</div>
                 <div className="space-y-2">
                   {transportLegs.map((leg: any, i: number) => (
                     <div key={i} className="flex items-center gap-2 text-xs rounded-xl p-2.5" style={{ background: C.card, border: `1px solid ${C.line}` }}>
                       <Clock size={12} style={{ color: C.green }} className="shrink-0" />
                       <span style={{ color: C.ink }}>
-                        Day {leg.dayNumber}: <span className="font-bold">{leg.prevTitle}</span> → <span className="font-bold">{leg.title}</span>
+                        {t("ui.day")} {leg.dayNumber}: <span className="font-bold">{leg.prevTitle}</span> → <span className="font-bold">{leg.title}</span>
                       </span>
                       <span className="ml-auto shrink-0" style={{ color: C.green }}>{leg.travelTimeFromPrevious}</span>
                     </div>

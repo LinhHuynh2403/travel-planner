@@ -24,11 +24,20 @@ export default function CompanionSheet({ tripId, isPast, tripData, close, onRepl
   const [inputValue, setInputValue] = useState("");
   const [isThinking, setIsThinking] = useState(false);
   const [picker, setPicker] = useState<{ suggestion: PlaceSuggestion; msgIdx: number } | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     localStorage.setItem(`itineraryChat_${tripId}`, JSON.stringify(messages));
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, tripId]);
+
+  // Disabling the textarea while a reply is in flight (disabled={isThinking}
+  // below) drops browser focus, and re-enabling it afterward doesn't restore
+  // focus on its own — refocus it once thinking finishes so the traveler can
+  // keep typing without clicking back in.
+  useEffect(() => {
+    if (!isThinking) textareaRef.current?.focus();
+  }, [isThinking]);
 
   useEffect(() => {
     if (messages.length > 0 || hasBootstrapped.current) return;
@@ -119,9 +128,9 @@ export default function CompanionSheet({ tripId, isPast, tripData, close, onRepl
       <div className="rounded-t-3xl flex flex-col" style={{ background: C.paper, height: "72%" }} onClick={e => e.stopPropagation()}>
         <div className="flex justify-between items-center px-5 pt-4 pb-2">
           <div>
-            <div className="font-bold text-sm" style={{ color: C.ink }}>{isPast ? "Looking back" : "Trip companion"}</div>
+            <div className="font-bold text-sm" style={{ color: C.ink }}>{isPast ? t("chat.lookingBackTitle") : t("chat.tripCompanionTitle")}</div>
             <div className="text-xs" style={{ color: C.sub }}>
-              {isPast ? "Past-trip chat is for memories" : "This chat lives with your trip"}
+              {isPast ? t("chat.pastTripSubtitle") : t("chat.tripCompanionSubtitle")}
             </div>
           </div>
           <button onClick={close}><X size={18} style={{ color: C.sub }} /></button>
@@ -151,12 +160,12 @@ export default function CompanionSheet({ tripId, isPast, tripData, close, onRepl
                       <div className="text-xs mt-1.5 leading-relaxed" style={{ color: C.ink }}>{m.suggestion.why}</div>
                     )}
                     {m.suggestion.travelTimeFromPlan && (
-                      <div className="text-xs mt-1" style={{ color: C.green }}>{m.suggestion.travelTimeFromPlan} from your plan</div>
+                      <div className="text-xs mt-1" style={{ color: C.green }}>{m.suggestion.travelTimeFromPlan} {t("chat.fromYourPlan")}</div>
                     )}
                     <button onClick={() => setPicker({ suggestion: m.suggestion!, msgIdx: i })}
                       className="mt-2 w-full py-2 rounded-lg text-xs font-bold text-white flex items-center justify-center gap-1"
                       style={{ background: tone }}>
-                      <RefreshCw size={11} /> Swap it into your plan
+                      <RefreshCw size={11} /> {t("chat.swapIntoPlan")}
                     </button>
                   </div>
                 )}
@@ -176,17 +185,18 @@ export default function CompanionSheet({ tripId, isPast, tripData, close, onRepl
 
         {isPast && messages.length === 1 && !isThinking ? (
           <div className="p-4 space-y-2 pb-6" style={{ background: "#FFFFFF", borderTop: `1px solid ${C.line}` }}>
-            <button onClick={() => send("Amazing — I miss them already")} className="w-full text-left px-4 py-3 rounded-2xl text-sm font-medium flex justify-between items-center transition-colors" style={{ border: `1.5px solid ${C.ink}`, color: C.ink }}>
-              Amazing — I miss them already <Send size={16} />
+            <button onClick={() => send(t("chat.missThemAlready"))} className="w-full text-left px-4 py-3 rounded-2xl text-sm font-medium flex justify-between items-center transition-colors" style={{ border: `1.5px solid ${C.ink}`, color: C.ink }}>
+              {t("chat.missThemAlready")} <Send size={16} />
             </button>
-            <button onClick={() => send("Plan me something similar!")} className="w-full text-left px-4 py-3 rounded-2xl text-sm font-medium flex justify-between items-center transition-colors" style={{ border: `1.5px solid ${C.ink}`, color: C.ink }}>
-              Plan me something similar! <Send size={16} />
+            <button onClick={() => send(t("chat.planSimilar"))} className="w-full text-left px-4 py-3 rounded-2xl text-sm font-medium flex justify-between items-center transition-colors" style={{ border: `1.5px solid ${C.ink}`, color: C.ink }}>
+              {t("chat.planSimilar")} <Send size={16} />
             </button>
           </div>
         ) : (
           <div className="p-3 pb-6" style={{ background: "#FFFFFF", borderTop: `1px solid ${C.line}` }}>
             <div className="relative flex items-end shadow-sm rounded-2xl border border-[#E4E6E0] bg-white focus-within:border-[#0E7A5F] transition-colors">
               <textarea
+                ref={textareaRef}
                 rows={1}
                 value={inputValue}
                 onChange={(e) => {
@@ -226,12 +236,12 @@ export default function CompanionSheet({ tripId, isPast, tripData, close, onRepl
         <div className="fixed inset-0 z-[60] flex items-end" style={{ background: "rgba(20,25,40,0.5)" }} onClick={() => setPicker(null)}>
           <div className="w-full bg-white rounded-t-3xl p-4 max-h-[70%] overflow-y-auto jz-scroll" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-3">
-              <p className="text-sm font-bold" style={{ color: C.ink }}>Which stop should this replace?</p>
+              <p className="text-sm font-bold" style={{ color: C.ink }}>{t("chat.whichStopReplace")}</p>
               <button onClick={() => setPicker(null)}><X size={18} style={{ color: C.sub }} /></button>
             </div>
             {(tripData?.days || []).map((day: any) => (
               <div key={day.dayNumber} className="mb-3">
-                <p className="text-xs font-extrabold uppercase tracking-wide mb-1.5" style={{ color: C.sub }}>Day {day.dayNumber}</p>
+                <p className="text-xs font-extrabold uppercase tracking-wide mb-1.5" style={{ color: C.sub }}>{t("ui.day")} {day.dayNumber}</p>
                 <div className="space-y-2">
                   {day.activities.map((act: any, idx: number) => (
                     <button key={idx} onClick={() => confirmSwap(day.dayNumber, idx)}

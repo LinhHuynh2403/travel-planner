@@ -105,7 +105,7 @@ export default function TripsList({ open, goChat }: { open: (id: string) => void
                   <div style={{ ...display, fontSize: 20 }} className="capitalize">{trip.region}</div>
                   <div className="text-xs opacity-75 mt-0.5">
                     {new Date(trip.arrival_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} – {new Date(trip.leave_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                    {' · '}{Math.floor((new Date(trip.leave_date).getTime() - new Date(trip.arrival_date).getTime()) / (1000 * 60 * 60 * 24)) + 1} days
+                    {' · '}{t("nav.daysCount").replace("{{n}}", String(Math.floor((new Date(trip.leave_date).getTime() - new Date(trip.arrival_date).getTime()) / (1000 * 60 * 60 * 24)) + 1))}
                     {' · '}{trip.who_traveling}
                   </div>
                 </div>
@@ -120,15 +120,15 @@ export default function TripsList({ open, goChat }: { open: (id: string) => void
                   ) : (
                     <>
                       <span className="px-2 py-0.5 rounded whitespace-nowrap shrink-0" style={{ background: "rgba(255,255,255,0.1)" }}>
-                        {trip.itineraries?.[0]?.days?.reduce((acc: number, d: any) => acc + d.activities.length, 0) || 0} places
+                        {t("nav.places").replace("{{n}}", String(trip.itineraries?.[0]?.days?.reduce((acc: number, d: any) => acc + d.activities.length, 0) || 0))}
                       </span>
                       {trip.itineraries?.[0]?.insights?.budgetSummary?.totalEstimatedCost ? (
                         <span className="px-2 py-0.5 rounded whitespace-nowrap truncate" style={{ background: "rgba(255,255,255,0.1)" }}>
-                          ${trip.itineraries[0].insights.budgetSummary.totalEstimatedCost} of {trip.budget || "budget"}
+                          ${trip.itineraries[0].insights.budgetSummary.totalEstimatedCost} {t("ui.of")} {trip.budget || t("nav.budgetFallback")}
                         </span>
                       ) : (
                         <span className="px-2 py-0.5 rounded whitespace-nowrap truncate" style={{ background: "rgba(255,255,255,0.1)" }}>
-                          {trip.budget || "Budget not set"}
+                          {trip.budget || t("nav.budgetNotSet")}
                         </span>
                       )}
                     </>
@@ -140,7 +140,7 @@ export default function TripsList({ open, goChat }: { open: (id: string) => void
                   </span>
                   {!isBroken(trip) && (
                     <span className="px-3 py-1 rounded-full font-bold whitespace-nowrap" style={{ background: C.green, color: "#fff" }}>
-                      {loadingTripId === trip.id ? t("nav.loading") : "Open →"}
+                      {loadingTripId === trip.id ? t("nav.loading") : t("nav.openArrow")}
                     </span>
                   )}
                 </div>
@@ -150,9 +150,9 @@ export default function TripsList({ open, goChat }: { open: (id: string) => void
         </div>
       ) : (
         <div className="rounded-2xl p-5 text-center" style={{ background: C.card, border: `1px dashed ${C.line}` }}>
-          <div className="text-sm font-bold mb-1" style={{ color: C.ink }}>No upcoming trips yet</div>
-          <p className="text-xs mb-3" style={{ color: C.sub }}>Plan one in the Chat tab — it saves here automatically, so you can keep it and plan more.</p>
-          <button onClick={goChat} className="px-5 py-2 rounded-full text-xs font-bold text-white" style={{ background: C.green }}>Start planning</button>
+          <div className="text-sm font-bold mb-1" style={{ color: C.ink }}>{t("nav.noUpcomingTrips")}</div>
+          <p className="text-xs mb-3" style={{ color: C.sub }}>{t("nav.planInChatTab")}</p>
+          <button onClick={goChat} className="px-5 py-2 rounded-full text-xs font-bold text-white" style={{ background: C.green }}>{t("nav.startPlanning")}</button>
         </div>
       )}
 
@@ -169,7 +169,7 @@ export default function TripsList({ open, goChat }: { open: (id: string) => void
                     <div style={{ ...display, fontSize: 18, color: C.ink }} className="capitalize truncate">{trip.region}</div>
                     <div className="text-xs mt-0.5 truncate" style={{ color: C.sub }}>
                       {new Date(trip.arrival_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })} – {new Date(trip.leave_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-                      {' · '}{isBroken(trip) ? t("nav.tripBroken") : `${trip.itineraries?.[0]?.days?.reduce((acc: number, d: any) => acc + d.activities.length, 0) || 0} places visited`}
+                      {' · '}{isBroken(trip) ? t("nav.tripBroken") : t("nav.placesVisited").replace("{{n}}", String(trip.itineraries?.[0]?.days?.reduce((acc: number, d: any) => acc + d.activities.length, 0) || 0))}
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
@@ -178,7 +178,7 @@ export default function TripsList({ open, goChat }: { open: (id: string) => void
                     </span>
                     {!isBroken(trip) && (
                       <span className="text-xs font-bold whitespace-nowrap" style={{ color: C.green }}>
-                        {loadingTripId === trip.id ? t("nav.loading") : "Relive →"}
+                        {loadingTripId === trip.id ? t("nav.loading") : t("nav.reliveArrow")}
                       </span>
                     )}
                   </div>
