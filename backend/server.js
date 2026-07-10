@@ -1468,12 +1468,27 @@ Model reply:`;
               // locale, which would otherwise risk the same language-flip
               // bug the main chat had (see getLanguageMatchInstruction).
               const flightLanguageInstruction = getLanguageMatchInstruction(text) || getLanguageInstruction(language);
+              // The traveler may have already stated a total trip budget
+              // earlier in this same conversation (onboarding recaps it
+              // explicitly, e.g. "- Budget: $1,000 USD"). Ground the flight
+              // advisor in that real transcript instead of a hardcoded
+              // "not specified" — otherwise it has no way to honor the
+              // "never fabricate budgetLeftAfter" rule correctly, since it
+              // would never see a real number to work from even when one
+              // was genuinely given. Capped to the most recent portion so a
+              // long conversation can't blow up prompt size.
+              const conversationContext = chatHistory
+                .filter(m => m && (m.text || "").trim())
+                .map(m => `${(m.role || "user") === "ai" ? "JourZy" : "Traveler"}: ${m.text}`)
+                .join("\n")
+                .slice(-3000);
               const picksResult = await synthesizeFlightPicks(
                 {
                   origin: originCity.trim(), destination: destCity.trim(),
                   departDate: departDate.trim(), returnDate: returnDate || "one-way",
                   budget: "not specified", party: "not specified",
                   pointsPrograms: "none mentioned",
+                  conversationContext,
                 },
                 JSON.stringify(entries),
                 flightLanguageInstruction
