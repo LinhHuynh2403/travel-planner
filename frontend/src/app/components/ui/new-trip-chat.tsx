@@ -260,7 +260,7 @@ export default function NewTripChat({ goTrips }: { goTrips: () => void }) {
                 if (document.querySelector('textarea')) (document.querySelector('textarea') as any).style.height = 'auto';
               }}
               disabled={currentStep !== 'generating' && (isThinking || !inputValue.trim())}
-              className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center justify-center transition-all disabled:opacity-50"
+              className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center justify-center rounded-full p-2 transition-all hover:bg-black/5 active:scale-90 disabled:opacity-50 disabled:hover:bg-transparent disabled:active:scale-100"
               style={{ color: currentStep === 'generating' ? C.hanko : C.green }}
               title={currentStep === 'generating' ? t("chat.stopGenerating") : undefined}
             >
