@@ -4,7 +4,7 @@ import "dotenv/config";
 import rateLimit from "express-rate-limit";
 import { supabase } from "./db.js";
 import fetch from "node-fetch";
-import { SYSTEM_CHAT_INSTRUCTION, getDeterministicGeneratorPrompt, getItineraryChatInstruction, getPastTripChatInstruction, getRescheduleChatInstruction, getLanguageInstruction, getLanguageMatchInstruction, BOOKING_GUIDANCE, FLIGHT_GUIDANCE, getActivitySuggestionPrompt, getFlightSuggestionPrompt } from "./prompts.js";
+import { getSystemChatInstruction, getDeterministicGeneratorPrompt, getItineraryChatInstruction, getPastTripChatInstruction, getRescheduleChatInstruction, getLanguageInstruction, getLanguageMatchInstruction, BOOKING_GUIDANCE, FLIGHT_GUIDANCE, getActivitySuggestionPrompt, getFlightSuggestionPrompt } from "./prompts.js";
 
 const app = express();
 
@@ -1035,6 +1035,18 @@ app.post("/api/chat", expensiveLimiter, optionalAuth, async (req, res) => {
   // SECURITY: user id comes ONLY from the verified JWT. Previously the client
   // sent userId in the body, letting anyone write chat rows into any account.
   const userId = req.user?.id || null;
+  let memoryProfile = null;
+
+  if (userId) {
+    try {
+      const { data: memData } = await supabase
+        .from("user_memory")
+        .select("preferences")
+        .eq("user_id", userId)
+        .single();
+      if (memData?.preferences) memoryProfile = memData.preferences;
+    } catch (_) { }
+  }
 
   // Persist to DB only for authenticated users with a session id
   if (text && sessionId && userId) {
@@ -1106,7 +1118,7 @@ app.post("/api/chat", expensiveLimiter, optionalAuth, async (req, res) => {
         ? getPastTripChatInstruction(itineraryContext || "(no trip details provided)")
         : mode === "reschedule"
           ? getRescheduleChatInstruction(itineraryContext || "(no trip details provided)")
-          : SYSTEM_CHAT_INSTRUCTION;
+          : getSystemChatInstruction(memoryProfile);
     // The device/browser locale (navigator.language) is only a real signal
     // before the traveler has typed anything — plenty of people (this app's
     // own Vietnamese-locale users typing in English, for instance) chat in a
