@@ -26,6 +26,10 @@ app.use(cors({
   origin(origin, callback) {
     // Allow non-browser tools / same-origin requests with no Origin header, and all localhost origins
     if (!origin || allowedOrigins.includes(origin) || origin.startsWith("http://localhost:")) return callback(null, true);
+    // The bare "Not allowed by CORS" error gives no way to tell a typo in
+    // ALLOWED_ORIGINS apart from a genuinely different origin — log exactly
+    // what was rejected against exactly what's currently allowed.
+    console.warn(`CORS rejected origin "${origin}". Currently allowed: ${allowedOrigins.join(", ")}`);
     return callback(new Error("Not allowed by CORS"));
   },
   credentials: true,
