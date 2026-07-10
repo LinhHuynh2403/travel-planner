@@ -4,7 +4,7 @@ import "dotenv/config";
 import rateLimit from "express-rate-limit";
 import { supabase } from "./db.js";
 import fetch from "node-fetch";
-import { SYSTEM_CHAT_INSTRUCTION, getDeterministicGeneratorPrompt, getItineraryChatInstruction, getPastTripChatInstruction, getRescheduleChatInstruction, getLanguageInstruction, BOOKING_GUIDANCE, FLIGHT_GUIDANCE, getActivitySuggestionPrompt, getFlightSuggestionPrompt } from "./prompts.js";
+import { SYSTEM_CHAT_INSTRUCTION, getDeterministicGeneratorPrompt, getItineraryChatInstruction, getPastTripChatInstruction, getRescheduleChatInstruction, getLanguageInstruction, getLanguageMatchInstruction, BOOKING_GUIDANCE, FLIGHT_GUIDANCE, getActivitySuggestionPrompt, getFlightSuggestionPrompt } from "./prompts.js";
 
 const app = express();
 
@@ -367,11 +367,11 @@ async function searchCheapFlights(originIata, destIata, departDate, returnDate) 
 // never invents a flight; only selects and reasons over what the API
 // actually returned. Any failure here (missing key, bad JSON) returns null
 // and the caller simply skips attaching a flight suggestion to the reply.
-async function synthesizeFlightPicks(traveler, flightResultsJson) {
+async function synthesizeFlightPicks(traveler, flightResultsJson, languageInstruction) {
   const geminiKey = process.env.GEMINI_API_KEY;
   if (!geminiKey) return null;
   try {
-    const prompt = getFlightSuggestionPrompt(traveler, flightResultsJson);
+    const prompt = getFlightSuggestionPrompt(traveler, flightResultsJson, languageInstruction);
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${geminiKey}`;
     const resp = await fetch(url, {
       method: "POST",
@@ -1388,6 +1388,12 @@ Model reply:`;
             }));
 
             if (entries.length > 0) {
+              // This synthesis prompt has no chat transcript of its own to
+              // infer language from, unlike the main chat model — ground it
+              // in the traveler's actual last message instead of the device
+              // locale, which would otherwise risk the same language-flip
+              // bug the main chat had (see getLanguageMatchInstruction).
+              const flightLanguageInstruction = getLanguageMatchInstruction(text) || getLanguageInstruction(language);
               const picksResult = await synthesizeFlightPicks(
                 {
                   origin: originCity.trim(), destination: destCity.trim(),
@@ -1395,7 +1401,8 @@ Model reply:`;
                   budget: "not specified", party: "not specified",
                   pointsPrograms: "none mentioned",
                 },
-                JSON.stringify(entries)
+                JSON.stringify(entries),
+                flightLanguageInstruction
               );
               if (picksResult) flightSuggestion = picksResult;
             }
@@ -1584,6 +1591,16 @@ app.post("/api/trips", requireAuth, async (req, res) => {
     return res.status(400).json({ error: "Missing required fields for saving trip" });
   }
 
+  // A trip with zero days is useless and almost certainly means generation
+  // upstream produced a malformed itinerary — reject it here rather than
+  // saving a "ghost" trip that will show "No itinerary data" forever with no
+  // way for the traveler to know why.
+  const days = itinerary.days || [];
+  if (!Array.isArray(days) || days.length === 0) {
+    return res.status(400).json({ error: "Itinerary has no days — nothing to save" });
+  }
+
+  let tripId = null;
   try {
     const { data: tripData, error: tripError } = await supabase
       .from("trips")
@@ -1600,7 +1617,7 @@ app.post("/api/trips", requireAuth, async (req, res) => {
       .select();
 
     if (tripError) throw tripError;
-    const tripId = tripData[0].id;
+    tripId = tripData[0].id;
 
     const { error: itineraryError } = await supabase
       .from("itineraries")
@@ -1608,7 +1625,7 @@ app.post("/api/trips", requireAuth, async (req, res) => {
         {
           trip_id: tripId,
           hotel_recommendation: itinerary.hotelRecommendation || itinerary.hotel_recommendation || null,
-          days: itinerary.days || [],
+          days,
           packing_list: itinerary.packingList || itinerary.packing_list || null,
           insights: itinerary.insights || null,
           logistics_guide: itinerary.logisticsGuide || itinerary.logistics_guide || null
@@ -1620,6 +1637,18 @@ app.post("/api/trips", requireAuth, async (req, res) => {
     return res.json({ success: true, tripId });
   } catch (e) {
     console.error("Error saving trip:", e);
+    // Roll back the trip row if the itinerary insert is what failed — a
+    // "trips" row with no matching "itineraries" row is a permanent ghost
+    // entry the traveler can never open (this is exactly the bug that
+    // produced a real trip stuck showing "No itinerary data"/"Budget data
+    // not available" with no way to recover except manual DB cleanup).
+    if (tripId) {
+      try {
+        await supabase.from("trips").delete().eq("id", tripId);
+      } catch (rollbackErr) {
+        console.error("Failed to roll back orphaned trip row:", tripId, rollbackErr);
+      }
+    }
     return res.status(500).json({ error: "Failed to save trip" });
   }
 });

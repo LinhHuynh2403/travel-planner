@@ -19,6 +19,18 @@ export function getLanguageInstruction(languageCode) {
 CRITICAL OVERRIDE: the device language above is only a guess about who they are, not a instruction to ignore what's actually happening in the conversation. The MOMENT the traveler writes you a message in a different language than the one named above, switch to and STAY in whatever language they're actually typing in for every reply afterward (including the final <<READY>> confirmation and any itinerary you generate from this chat) — never snap back to the device-language default mid-conversation just because a rule elsewhere says "the traveler's language."`;
 }
 
+// For one-shot enrichment prompts that have no chat history of their own to
+// infer language from (e.g. getFlightSuggestionPrompt) — grounding in the
+// traveler's own words is more robust than a device-locale code lookup: it
+// works for any language (not just ones in LANGUAGE_NAMES above) and can't
+// contradict what they're actually typing, which is exactly the bug that
+// caused the main chat to flip languages mid-conversation (see
+// getLanguageInstruction's CRITICAL OVERRIDE above).
+export function getLanguageMatchInstruction(sampleText) {
+  if (!sampleText || !sampleText.trim()) return "";
+  return `LANGUAGE: Write your entire output in the SAME language as this traveler message, mirroring it exactly whatever language it is (do not translate it to English, and do not guess a different language): "${sampleText.trim().slice(0, 300)}"`;
+}
+
 // ---- Shared fragments (defined once, reused everywhere) ----
 
 // Regional booking-platform examples — referenced by both BOOKING_GUIDANCE and
@@ -408,8 +420,9 @@ EVERYDAY ETIQUETTE RULE: 'insights.culturalTips' MUST also include real, specifi
 // Never let the model imply it knows anything beyond that; rule 6 below
 // exists specifically to keep it honest about the feed's limits.
 // ------------------------------------------------------------
-export function getFlightSuggestionPrompt(traveler, flightResultsJson) {
+export function getFlightSuggestionPrompt(traveler, flightResultsJson, languageInstruction) {
   return `You are JourZy's flight advisor. Below is cached fare data for this route retrieved from a real flight price API moments ago, followed by the traveler's profile. Your job is to pick the best options FROM THIS DATA ONLY and explain them like a sharp friend who flies a lot.
+${languageInstruction ? `\n${languageInstruction}\n` : ""}
 
 === FLIGHT PRICE DATA (the ONLY flights that exist for this task; "transfers" = number of stops, 0 = nonstop; "duration_to_minutes"/"duration_back_minutes" = total door-to-door minutes each way including any connections, when present) ===
 ${flightResultsJson}
@@ -422,7 +435,7 @@ Loyalty programs they collect: ${traveler.pointsPrograms || "none mentioned"}
 
 === HARD RULES ===
 1. ONLY recommend flights present in the data above. Never invent, adjust, or "estimate" a price, airline, flight number, date, or duration. If the data is empty, say so and point them to a real booking platform for this route instead.
-2. Pick up to 3, labeled by what they optimize: "Cheapest" (lowest price entry), "Best value" (your genuine read — weigh price against stops and total duration when both are known; a modest premium for fewer stops or a much shorter trip is usually worth it over the absolute cheapest), and, if a nonstop (transfers: 0) exists and isn't already picked, "Nonstop option". If fewer than 3 real entries exist, return however many exist rather than padding.
+2. Pick up to 3, labeled by what they optimize: "Cheapest" (lowest price entry), "Best value" (your genuine read — weigh price against stops and total duration when both are known; a modest premium for fewer stops or a much shorter trip is usually worth it over the absolute cheapest), and, if a nonstop (transfers: 0) exists and isn't already picked, "Nonstop option". These three labels are given in English as illustration only — write them (like everything else in this output) in the language specified above, if one is specified. If fewer than 3 real entries exist, return however many exist rather than padding.
 3. For each pick, explain in 1 sentence WHY: whether it's nonstop or has stops, its total duration if duration_to_minutes is present (convert to hours/minutes, e.g. "14h 20m"), and how its price compares to the other picks. Never claim to know layover length, arrival time, checked-bag fees, or fare class — this feed doesn't include them, and never mention duration for a pick where duration_to_minutes is absent.
 4. Freshness: this is a cached low fare, not a guaranteed live quote — the 'honestNote' MUST tell the traveler to confirm the exact price when they click through, since it can shift by the time they book.
 5. Budget awareness: state what each option leaves of their total budget after the flight. If even the cheapest option eats more than ~40% of the total budget, say so honestly.
