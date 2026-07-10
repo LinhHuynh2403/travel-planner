@@ -262,11 +262,12 @@ async function synthesizeBestSuggestion(traveler, request, candidates, currentDa
       lat: c.geometry?.location?.lat, lng: c.geometry?.location?.lng,
     })));
     const prompt = getActivitySuggestionPrompt(traveler, request, verifiedPlacesJson, currentDayPlan || "(not specified)");
-    // gemini-3-flash-preview — Pro-level reasoning at Flash latency/cost, the
-    // current default for production JSON-extraction workloads in the 3.x
-    // lineup; this task needs genuine spatial/budget reasoning over several
-    // candidates, not just fast pattern-matching.
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${geminiKey}`;
+    // gemini-3.1-flash-lite — reverted from gemini-3-flash-preview (2026-07-10):
+    // confirmed live, repeatedly, that the preview model is under heavy
+    // capacity overload (503 "high demand"), which was making every request
+    // fall through to a much slower OpenRouter fallback. flash-lite is a
+    // stable GA model with no such issue.
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${geminiKey}`;
     const resp = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -382,10 +383,9 @@ async function synthesizeFlightPicks(traveler, flightResultsJson, languageInstru
   if (!geminiKey) return null;
   try {
     const prompt = getFlightSuggestionPrompt(traveler, flightResultsJson, languageInstruction);
-    // gemini-3-flash-preview — see synthesizeBestSuggestion above for why this
-    // moved off flash-lite: ranking/explaining real fare tradeoffs benefits
-    // from the stronger reasoning, at the same Flash-tier latency/cost.
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${geminiKey}`;
+    // gemini-3.1-flash-lite — see synthesizeBestSuggestion above for why
+    // this reverted off gemini-3-flash-preview (preview-model overload).
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${geminiKey}`;
     const resp = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -670,13 +670,13 @@ Conversation:
 ${chatHistory.filter(m => m).map(m => `${(m.role || 'user').toUpperCase()}: ${m.text || ''}`).join('\n')}`;
 
   try {
-    // 1. Try Gemini — gemini-3-flash-preview, same as the deterministic generator
-    // this feeds into (a one-shot structured JSON extraction, not a live
-    // chat turn).
+    // 1. Try Gemini — gemini-3.1-flash-lite, same as the deterministic
+    // generator this feeds into (reverted off gemini-3-flash-preview, see
+    // that route for why).
     const geminiKey = process.env.GEMINI_API_KEY;
     if (geminiKey) {
       const resp = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${geminiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${geminiKey}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -844,18 +844,19 @@ app.post("/api/itinerary", expensiveLimiter, optionalAuth, async (req, res) => {
       // 2. Try Gemini API for Itinerary generation
       if (!success && process.env.GEMINI_API_KEY) {
         try {
-          // gemini-3-flash-preview is the default for this — Pro-level reasoning at
-          // Flash latency/cost, and tested to handle this structured JSON
-          // task cleanly. Escalate to gemini-3.1-pro-preview ONLY on the
-          // final retry AND only when prior attempts failed specifically on
-          // JSON parsing (lastParseError set) — i.e. Flash is producing
-          // output but failing the JSON eval — not for plain API errors,
-          // which OpenRouter below already covers within the same attempt.
-          const escalateToPro = attempt === MAX_GENERATION_ATTEMPTS && !!lastParseError;
-          const geminiModel = escalateToPro ? "gemini-3.1-pro-preview" : "gemini-3-flash-preview";
-          console.log(`Sending itinerary generation prompt to Gemini API (${geminiModel})... (attempt ${attempt}/${MAX_GENERATION_ATTEMPTS})`);
+          // gemini-3.1-flash-lite — reverted off gemini-3-flash-preview
+          // (2026-07-10): confirmed live, repeatedly (both in testing and
+          // in real user reports of slow/stuck generation), that the
+          // preview model is under heavy capacity overload (503 "high
+          // demand"). Every failed attempt was falling through to a much
+          // slower OpenRouter call, compounding across retries. flash-lite
+          // is a stable GA model with no such issue and already handled
+          // this structured JSON task cleanly before. No Pro-escalation
+          // tier either — pointless to escalate from one preview-adjacent
+          // model to another when the primary is now the reliable one.
+          console.log(`Sending itinerary generation prompt to Gemini API (gemini-3.1-flash-lite)... (attempt ${attempt}/${MAX_GENERATION_ATTEMPTS})`);
           const geminiKey = process.env.GEMINI_API_KEY;
-          const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${geminiKey}`;
+          const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${geminiKey}`;
 
           const geminiRes = await fetch(geminiUrl, {
             method: "POST",
@@ -1176,8 +1177,9 @@ Model reply:`;
         const geminiKey = process.env.GEMINI_API_KEY;
         // gemini-3.1-flash-lite for all chat turns (onboarding, in-trip
         // companion, reschedule, past-trip) — fast/cheap conversational
-        // replies, reserving gemini-3-flash-preview's heavier reasoning for the
-        // deterministic generator and suggestion-synthesis tasks instead.
+        // replies. Also now the model for the generator and suggestion-
+        // synthesis tasks (see /api/itinerary) after reverting those off
+        // the overloaded gemini-3-flash-preview.
         const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${geminiKey}`;
 
         const contents = chatHistory.filter(m => m).map(m => ({

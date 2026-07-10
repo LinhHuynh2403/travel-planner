@@ -23,10 +23,13 @@ export default function NewTripChat({ goTrips }: { goTrips: () => void }) {
   });
   const [inputValue, setInputValue] = useState("");
   const [isThinking, setIsThinking] = useState(false);
-  const [currentStep, setCurrentStep] = useState<'chatting' | 'generating'>(() => {
-    const saved = localStorage.getItem('chatStep');
-    return saved ? JSON.parse(saved) : 'chatting';
-  });
+  // NEVER restore 'generating' from a previous session — there's no fetch
+  // left to resume or abort after a reload (the request died with the old
+  // page), so doing so left the UI permanently stuck: the stop button's
+  // abortRef starts null (nothing in flight to cancel) and send() still
+  // saw 'generating' and silently refused to do anything at all. Only
+  // 'chatting' is ever a valid state to wake up into.
+  const [currentStep, setCurrentStep] = useState<'chatting' | 'generating'>('chatting');
   const [built, setBuilt] = useState(false);
   const hasBootstrapped = useRef(false);
   const endRef = useRef<HTMLDivElement>(null);
