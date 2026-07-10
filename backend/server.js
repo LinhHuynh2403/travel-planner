@@ -12,8 +12,10 @@ const app = express();
 app.set("trust proxy", 1);
 
 // ── SECURITY: CORS locked to known frontend origins ──────────────────────────
-// Set ALLOWED_ORIGINS in .env, comma-separated, e.g.:
-// ALLOWED_ORIGINS=https://travel-planner-theta-teal.vercel.app,http://localhost:5173
+// Set ALLOWED_ORIGINS in the deployment's env vars (e.g. Render dashboard),
+// comma-separated — NOT in a committed .env, since the deployed frontend
+// origin can change across redeploys. Current production frontend:
+// ALLOWED_ORIGINS=https://travel-planner-ai-five-peach.vercel.app,http://localhost:5173
 const allowedOrigins = (process.env.ALLOWED_ORIGINS ||
   "http://localhost:5173,http://localhost:4173")
   .split(",")
@@ -1243,7 +1245,7 @@ Model reply:`;
           headers: {
             "Authorization": `Bearer ${openRouterKey}`,
             "Content-Type": "application/json",
-            "HTTP-Referer": "https://jourzy-travel.vercel.app",
+            "HTTP-Referer": "https://travel-planner-ai-five-peach.vercel.app",
             "X-Title": "JourZy Travel"
           },
           body: JSON.stringify({
