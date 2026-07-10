@@ -24,6 +24,7 @@ export default function PlanView({ tripData }: { tripData: any }) {
   const [picked, setPicked] = useState(() => new Set<string>());
   const [swaps, setSwaps] = useState<Record<string, any>>({});
   const [altFor, setAltFor] = useState<string | null>(null);
+  const [showCostDetail, setShowCostDetail] = useState(false);
 
   const d = tripData?.days?.[day];
   if (!d) return <div className="p-4">No itinerary data.</div>;
@@ -173,18 +174,52 @@ export default function PlanView({ tripData }: { tripData: any }) {
           })}
 
           {dayTotal > 0 && (
-            <div className="rounded-2xl p-3.5 flex items-center justify-between gap-3" style={{ background: C.ink }}>
+            <button onClick={() => setShowCostDetail(true)} className="w-full rounded-2xl p-3.5 flex items-center justify-between gap-3" style={{ background: C.ink }}>
               <div className="flex items-center gap-2 text-xs font-medium text-white opacity-80">
                 <Wallet size={14} /> If you do everything suggested today
               </div>
               <div className="font-bold text-base font-serif text-white">${dayTotal}</div>
-            </div>
+            </button>
           )}
         </div>
       )}
       <div className="text-center text-xs mt-3 pb-1" style={{ color: C.sub }}>
         Pick what you like — it's a menu, not a schedule.
       </div>
+
+      {showCostDetail && (
+        <div className="fixed inset-0 z-30 flex flex-col justify-end" style={{ background: "rgba(20,25,40,0.45)" }} onClick={() => setShowCostDetail(false)}>
+          <div className="rounded-t-3xl p-5 pb-7" style={{ background: C.paper }} onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-1">
+              <div className="font-bold text-sm" style={{ color: C.ink }}>Cost breakdown — Day {day + 1}</div>
+              <button onClick={() => setShowCostDetail(false)}><X size={18} style={{ color: C.sub }} /></button>
+            </div>
+            <div className="text-xs mb-3" style={{ color: C.sub }}>What each suggestion costs if you do it.</div>
+            <div className="space-y-2">
+              {d.activities?.map((raw: any, idx: number) => {
+                const uid = uidFor(raw, idx);
+                const a = eff(raw, uid);
+                if (!a.cost) return null;
+                return (
+                  <div key={uid} className="flex justify-between items-center gap-3 rounded-2xl p-3.5" style={{ background: C.card, border: `1px solid ${C.line}` }}>
+                    <div className="min-w-0">
+                      <div className="font-bold text-sm" style={{ color: C.ink }}>
+                        {(a.category && CAT_ICON[a.category]) ? CAT_ICON[a.category] + " " : ""}{a.title}
+                      </div>
+                      {a.description && <div className="text-xs mt-0.5 leading-relaxed" style={{ color: C.sub }}>{a.description}</div>}
+                    </div>
+                    <div className="font-bold text-sm shrink-0" style={{ color: C.ink }}>${a.cost}</div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="flex justify-between items-center mt-3 pt-3" style={{ borderTop: `1px solid ${C.line}` }}>
+              <div className="font-bold text-sm" style={{ color: C.ink }}>Total</div>
+              <div className="font-bold text-base font-serif" style={{ color: C.ink }}>${dayTotal}</div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {altFor && swapTargetRaw && (
         <div className="fixed inset-0 z-30 flex flex-col justify-end" style={{ background: "rgba(20,25,40,0.45)" }} onClick={() => setAltFor(null)}>
