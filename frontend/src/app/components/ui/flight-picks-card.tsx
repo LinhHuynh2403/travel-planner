@@ -50,7 +50,7 @@ export function FlightPicksCard({ suggestion }: { suggestion: FlightSuggestion }
                 {p.airline} {p.flightNumber}
               </div>
               <div className="text-xs mt-0.5" style={{ color: C.sub }}>
-                {stopsLabel(p.transfers)}{duration ? ` · ${duration}` : ""} · {t("chat.flightDeparts").replace("{{date}}", formatDate(p.departureAt))}
+                {p.returnAt ? t("chat.flightRoundTrip") : t("chat.flightOneWay")} · {stopsLabel(p.transfers)}{duration ? ` · ${duration}` : ""} · {t("chat.flightDeparts").replace("{{date}}", formatDate(p.departureAt))}
                 {p.returnAt ? ` · ${t("chat.flightReturns").replace("{{date}}", formatDate(p.returnAt))}` : ""}
               </div>
 

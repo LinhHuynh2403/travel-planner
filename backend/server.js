@@ -334,6 +334,27 @@ async function resolveIataCode(cityName) {
   }
 }
 
+// Travelpayouts' fare feed only gives a 2-letter IATA airline code (e.g.
+// "VN"), not a human-readable name — resolve it via their free, unauthenticated
+// airline reference list so the traveler sees "Vietnam Airlines" instead of a
+// bare code. Fetched once per server process and cached in memory since this
+// reference data changes essentially never.
+let airlineNameCache = null;
+async function getAirlineName(code) {
+  if (!code) return code;
+  try {
+    if (!airlineNameCache) {
+      const resp = await fetch("https://api.travelpayouts.com/data/en/airlines.json");
+      const list = resp.ok ? await resp.json() : [];
+      airlineNameCache = new Map(list.map(a => [a.code, a.name]));
+    }
+    return airlineNameCache.get(code) || code;
+  } catch (e) {
+    console.warn("Airline name lookup failed:", e.message);
+    return code;
+  }
+}
+
 // Cached lowest-fare data (NOT a live bookable quote — see the NOTE above
 // getFlightSuggestionPrompt in prompts.js for exactly what fields this feed
 // does/doesn't have) from Travelpayouts' free v1/prices/cheap endpoint.
@@ -399,13 +420,34 @@ async function synthesizeFlightPicks(traveler, flightResultsJson, languageInstru
     const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
     const parsed = JSON.parse(extractJson(raw));
 
-    // Validate every pick's price/airline/flightNumber exists verbatim in
-    // the real API results before trusting it — drop any pick that doesn't
-    // match rather than render a model-drifted number.
+    // Ground every pick in a REAL entry from the API results rather than
+    // trusting the model's own echoed fields verbatim — match on
+    // transfers+price (a specific number/small enum the model can't
+    // plausibly hallucinate a false match for) and then overwrite
+    // airline/flightNumber/dates from the matched entry itself. This is
+    // deliberately more forgiving than requiring an exact string match on
+    // "airline" and "flightNumber": the model was reliably writing out a
+    // full airline name (e.g. "Vietnam Airlines") or a combined
+    // code+number (e.g. "VN1234") instead of the feed's bare code ("VN")
+    // and bare digits ("1234"), which silently failed a strict `===` check
+    // and dropped every pick, leaving the traveler with a reply that never
+    // showed any real flight details at all.
     const realEntries = Object.values(JSON.parse(flightResultsJson));
-    const picks = (parsed.picks || []).filter(p => realEntries.some(r =>
-      r.price === p.price && r.airline === p.airline && String(r.flight_number) === String(p.flightNumber)
-    ));
+    const picks = [];
+    for (const p of (parsed.picks || [])) {
+      const match = realEntries.find(r => r.transfers === p.transfers && r.price === p.price);
+      if (!match) continue;
+      picks.push({
+        ...p,
+        price: match.price,
+        transfers: match.transfers,
+        airline: await getAirlineName(match.airline),
+        flightNumber: `${match.airline}${match.flight_number}`,
+        departureAt: match.departure_at || p.departureAt,
+        returnAt: match.return_at || p.returnAt || undefined,
+        durationMinutesOut: match.duration_to_minutes ?? p.durationMinutesOut,
+      });
+    }
     if (picks.length === 0) return null;
     return { picks, honestNote: parsed.honestNote, bookVia: parsed.bookVia };
   } catch (e) {
