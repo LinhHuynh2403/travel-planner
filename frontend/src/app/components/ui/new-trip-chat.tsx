@@ -17,10 +17,15 @@ type Message = {
 
 export default function NewTripChat({ goTrips }: { goTrips: () => void }) {
   const { t } = useTranslation();
-  const [messages, setMessages] = useState<Message[]>(() => {
-    const saved = localStorage.getItem('chatMessages');
-    return saved ? JSON.parse(saved) : [];
-  });
+  // Deliberately NEVER restored from localStorage — this tab plans ONE new
+  // trip at a time, and a traveler's next trip can be a completely different
+  // persona (solo vs. with family, different transport, different vibe).
+  // Replaying a stale conversation here silently dragged the previous trip's
+  // answers into a new one and confused travelers who expected a clean
+  // slate. Long-term identity (name, loves/dislikes/notes) still carries
+  // over — see the USER MEMORY PROFILE injected server-side in
+  // getSystemChatInstruction — just not the literal transcript.
+  const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [isThinking, setIsThinking] = useState(false);
   // NEVER restore 'generating' from a previous session — there's no fetch
@@ -37,8 +42,6 @@ export default function NewTripChat({ goTrips }: { goTrips: () => void }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    localStorage.setItem('chatMessages', JSON.stringify(messages));
-    localStorage.setItem('chatStep', JSON.stringify(currentStep));
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, currentStep]);
 
@@ -174,8 +177,6 @@ export default function NewTripChat({ goTrips }: { goTrips: () => void }) {
   };
 
   const startNewPlan = () => {
-    localStorage.removeItem('chatMessages');
-    localStorage.removeItem('chatStep');
     localStorage.removeItem('chatPlan');
     setBuilt(false);
     setMessages([]);

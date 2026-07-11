@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Train, Footprints, Check, Map, Send, Star, AlertTriangle, Clock, RefreshCw, X, Wallet, ChevronRight } from "lucide-react";
+import { Train, Footprints, Check, Map, Send, Star, AlertTriangle, Clock, RefreshCw, X, Wallet, ChevronRight, Sparkles } from "lucide-react";
 import { C, display } from "./jourzy-theme";
 import { Seal } from "./jourzy-seal";
 import DayMap from "./day-map";
@@ -142,7 +142,7 @@ export default function PlanView({ tripData }: { tripData: any }) {
             const originLabel = prev ? t("plan.fromPreviousStop") : t("plan.fromHotel");
             const mode = (a.travelTimeFromPrevious || "").toLowerCase().includes("drive") ? "driving" : (a.travelTimeFromPrevious || "").toLowerCase().includes("walk") ? "walking" : "transit";
             return (
-              <div key={uid} className="rounded-2xl p-3.5 transition-all" style={{ background: C.card, border: `1px solid ${on ? C.line : "transparent"}`, opacity: on ? 0.45 : 1 }}>
+              <div key={uid} className="rounded-2xl p-3.5 transition-all" style={{ background: C.card, border: `${a.requested ? "2px" : "1px"} solid ${a.requested && !on ? C.green : (on ? C.line : "transparent")}`, opacity: on ? 0.45 : 1 }}>
                 {a.travelTimeFromPrevious && (
                   <div className="text-xs mb-2 flex items-center gap-1.5 font-medium" style={{ color: C.green }}>
                     {mode === "walking" ? <Footprints size={12} /> : <Train size={12} />} {a.travelTimeFromPrevious} {originLabel}
@@ -160,6 +160,12 @@ export default function PlanView({ tripData }: { tripData: any }) {
                       </div>
                       <Seal small show={!!a.place?.placeId} />
                     </div>
+                    {a.requested && (
+                      <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full mt-1.5"
+                        style={{ background: C.greenSoft, color: C.green }}>
+                        <Sparkles size={10} /> {t("plan.requestedBadge")}
+                      </span>
+                    )}
                     {a.gem && (
                       <span className="inline-block text-xs font-bold px-2 py-0.5 rounded-full mt-1.5"
                         style={{ background: "#FBEDEB", color: C.hanko }}>{t("plan.localGem")}</span>
