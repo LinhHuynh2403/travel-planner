@@ -580,8 +580,22 @@ async function fetchRealPlaces(plan) {
 
   const region = plan.region;
 
-  // 1. Hotel Query
-  const hotelQuery = `best hotels in ${region}`;
+  // 1. Hotel Query — was ALWAYS "best hotels in X" regardless of what the
+  // traveler actually asked for, so a traveler who explicitly said "Airbnb"
+  // still only ever got real hotel businesses as candidates (the generator
+  // is required to pick hotelRecommendation from this exact list — see
+  // "STRICT PLACE RESOLUTION" rule 4 in getDeterministicGeneratorPrompt).
+  // Google Places has no individual Airbnb.com listings to search, but it
+  // does index serviced-apartment / vacation-rental businesses in most
+  // cities, which is the closest honest equivalent — steer the search
+  // toward those instead of silently substituting a hotel.
+  const accommodationPreference = (plan.accommodationPreference || "").trim();
+  const wantsApartmentStyle = /airbnb|apartment|vacation rental|home rental|serviced apartment/i.test(accommodationPreference);
+  const hotelQuery = wantsApartmentStyle
+    ? `serviced apartments or vacation rentals in ${region}`
+    : accommodationPreference && !/hotel/i.test(accommodationPreference)
+      ? `best ${accommodationPreference} in ${region}`
+      : `best hotels in ${region}`;
 
   // 2. Restaurant Queries
   const restaurantQueries = [];
@@ -698,6 +712,7 @@ Analyze this travel planner conversation history and extract the core details:
 3. Leave Date (format YYYY-MM-DD. Default to: ${defaultLeave.toISOString().split('T')[0]}).
 4. Budget level (e.g. "budget", "moderate", "luxury"). Ask thoroughly to determine the user's budget level (e.g: under $1000, under $2000, under $3000, etc)
 5. Travel Group / Who is traveling (e.g. "solo", "couple", "group of 3").
+6. Accommodation type/style, exactly as the traveler described it (e.g. "Airbnb", "boutique hotel", "hostel", "resort", "vacation rental") — leave as "" if never mentioned. Do not default this to "hotel" just because most trips use one; only fill it in if the traveler actually said something about where they want to stay.
 
 Return ONLY a valid JSON object matching this schema. Do not enclose in markdown code blocks:
 {
@@ -705,7 +720,8 @@ Return ONLY a valid JSON object matching this schema. Do not enclose in markdown
   "arrivalDate": "",
   "leaveDate": "",
   "budget": "",
-  "whoTraveling": ""
+  "whoTraveling": "",
+  "accommodationPreference": ""
 }
 
 Conversation:
@@ -768,7 +784,8 @@ ${chatHistory.filter(m => m).map(m => `${(m.role || 'user').toUpperCase()}: ${m.
     arrivalDate: defaultArrival.toISOString().split('T')[0],
     leaveDate: defaultLeave.toISOString().split('T')[0],
     budget: "moderate",
-    whoTraveling: "solo"
+    whoTraveling: "solo",
+    accommodationPreference: ""
   };
 }
 
