@@ -4,7 +4,7 @@ import "dotenv/config";
 import rateLimit from "express-rate-limit";
 import { supabase } from "./db.js";
 import fetch from "node-fetch";
-import { getSystemChatInstruction, getDeterministicGeneratorPrompt, getItineraryChatInstruction, getPastTripChatInstruction, getRescheduleChatInstruction, getLanguageInstruction, getLanguageMatchInstruction, BOOKING_GUIDANCE, FLIGHT_GUIDANCE, getActivitySuggestionPrompt, getFlightSuggestionPrompt } from "./prompts.js";
+import { getSystemChatInstruction, getDeterministicGeneratorPrompt, getItineraryChatInstruction, getPastTripChatInstruction, getRescheduleChatInstruction, getLanguageInstruction, getLanguageMatchInstruction, getLanguageSwitchGuidance, BOOKING_GUIDANCE, FLIGHT_GUIDANCE, getActivitySuggestionPrompt, getFlightSuggestionPrompt } from "./prompts.js";
 
 const app = express();
 
@@ -1194,7 +1194,7 @@ app.post("/api/chat", expensiveLimiter, optionalAuth, async (req, res) => {
     const hasRealUserMessage = chatHistory.some(m => (m.role || "user") !== "ai" && (m.text || "").trim() && !/^\(/.test((m.text || "").trim()));
     const languageInstruction = hasRealUserMessage ? "" : getLanguageInstruction(language);
     const flightSearchEnabled = !!process.env.TRAVELPAYOUTS_API_TOKEN;
-    const systemInstruction = [baseInstruction, flightSearchEnabled ? FLIGHT_GUIDANCE : BOOKING_GUIDANCE, languageInstruction].filter(Boolean).join("\n\n");
+    const systemInstruction = [baseInstruction, flightSearchEnabled ? FLIGHT_GUIDANCE : BOOKING_GUIDANCE, languageInstruction, getLanguageSwitchGuidance(language)].filter(Boolean).join("\n\n");
 
     let replyText = "";
     let success = false;
@@ -1550,6 +1550,19 @@ Model reply:`;
       }
     }
 
+    // JourZy may propose switching the whole app's language (see
+    // getLanguageSwitchGuidance) — once the traveler confirms in their own
+    // words on a later turn, it appends <<LANGSWITCH: code>>. Validate the
+    // code is one the UI actually has translations for before trusting it;
+    // an unrecognized code is dropped rather than sent to the frontend.
+    let languageSwitch = null;
+    const langSwitchMatch = replyText.match(/<<LANGSWITCH:\s*(.+?)\s*>>/i);
+    if (langSwitchMatch) {
+      replyText = replyText.replace(langSwitchMatch[0], "").trim();
+      const code = langSwitchMatch[1].trim().toLowerCase();
+      if (["en", "vi", "es", "fr", "ja", "ko", "zh"].includes(code)) languageSwitch = code;
+    }
+
     let isReady = false;
     const readyMatch = replyText.match(/<<READY>>/i);
     if (readyMatch) {
@@ -1585,7 +1598,7 @@ Model reply:`;
       }
     }
 
-    return res.json({ text: replyText, suggestion, flightSuggestion, isReady });
+    return res.json({ text: replyText, suggestion, flightSuggestion, isReady, languageSwitch });
   } catch (e) {
     console.error("Chat route critical failure:", e);
     return res.status(500).json({ error: "Chat failed. Please try again." });

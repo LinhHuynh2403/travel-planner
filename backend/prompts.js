@@ -19,6 +19,35 @@ export function getLanguageInstruction(languageCode) {
 CRITICAL OVERRIDE: the device language above is only a guess about who they are, not a instruction to ignore what's actually happening in the conversation. The MOMENT the traveler writes you a message in a different language than the one named above, switch to and STAY in whatever language they're actually typing in for every reply afterward (including the final <<READY>> confirmation and any itinerary you generate from this chat) — never snap back to the device-language default mid-conversation just because a rule elsewhere says "the traveler's language."`;
 }
 
+// Languages the app's UI itself has real translations for (must stay in
+// sync with SUPPORTED_LANGUAGES in frontend/src/app/utils/language.ts and
+// the locale blocks in frontend/src/app/utils/translations.ts) — a strict
+// subset of everything JourZy can converse in via getLanguageInstruction
+// above. Only offer to flip the whole app's language for one of these;
+// switching to a language with no UI strings would leave every button/label
+// silently falling back to English, which is worse than not offering at all.
+const APP_UI_LANGUAGES = { en: "English", vi: "Vietnamese", es: "Spanish", fr: "French", ja: "Japanese", ko: "Korean", zh: "Chinese" };
+
+// Wired into every chat mode (onboarding, in-trip, past-trip, reschedule) —
+// most travelers have no idea Settings has a language picker at all, so
+// JourZy proactively offers to flip the WHOLE APP's language (not just this
+// reply) the moment it notices they're typing in a different one than the
+// app is currently set to. Mirrors the <<READY>>/<<SUGGEST>> tag pattern:
+// the model only proposes it in chat; the backend does the actual switch
+// once the traveler confirms, via the <<LANGSWITCH: code>> tag below.
+export function getLanguageSwitchGuidance(currentLanguageCode) {
+  const currentBase = currentLanguageCode ? String(currentLanguageCode).split("-")[0].toLowerCase() : "en";
+  const currentName = APP_UI_LANGUAGES[currentBase] || "English";
+  const otherLangs = Object.entries(APP_UI_LANGUAGES)
+    .filter(([code]) => code !== currentBase)
+    .map(([code, name]) => `${name} (${code})`)
+    .join(", ");
+  return `APP LANGUAGE SWITCH OFFER: The app's language setting is currently ${currentName}. Most travelers never discover the Settings screen has a language picker — if the traveler writes a message in a genuinely different language than ${currentName} AND that language is one of the app's actually-supported UI languages (${otherLangs} — if what they're typing is in some OTHER language not in this list, the app has no translated interface for it yet, so just keep replying in their language per the usual rule and do NOT offer a switch), then the FIRST time you notice this in the conversation, do BOTH in the same reply:
+1. Reply normally, in their language, per the language-mirroring rule.
+2. Add one short, warm, separate sentence asking if they'd like you to switch the whole app's language to match (not just this chat) — phrased naturally in the language they just used (e.g. in Vietnamese, something like "Bạn có muốn mình đổi luôn ngôn ngữ của ứng dụng sang tiếng Việt không?").
+Ask this only ONCE per conversation — whether they say yes, no, or never respond to it, never bring it up again in this same conversation. ONLY when the traveler's OWN separate, LATER message clearly confirms yes (never assume yes from silence, and never both offer and confirm in the same turn), warmly confirm it's done and append this exact tag on its own line at the very end of THAT confirmation reply: <<LANGSWITCH: {code}>> — using the matching code from the list above (e.g. <<LANGSWITCH: vi>>). Never emit this tag speculatively, never guess a code that isn't in the list above, and never emit it before they've actually agreed in their own words.`;
+}
+
 // For one-shot enrichment prompts that have no chat history of their own to
 // infer language from (e.g. getFlightSuggestionPrompt) — grounding in the
 // traveler's own words is more robust than a device-locale code lookup: it

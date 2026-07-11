@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { Send, RefreshCw, Bookmark, Sparkles, Square } from "lucide-react";
 import { C, display } from "./jourzy-theme";
 import { apiFetch, friendlyErrorMessage } from "../../utils/api";
-import { getPreferredLanguage } from "../../utils/language";
+import { getPreferredLanguage, setLanguageChoice } from "../../utils/language";
 import { useTranslation } from "../../utils/translations";
 import { generateItinerary } from "../../utils/generate-itinerary";
 import { FlightPicksCard, type FlightSuggestion } from "./flight-picks-card";
@@ -162,6 +162,10 @@ export default function NewTripChat({ goTrips }: { goTrips: () => void }) {
         const data = await response.json();
         const nextMsgs = [...updated, { id: Date.now().toString(), role: 'ai', text: data.text, flightSuggestion: data.flightSuggestion || undefined } as Message];
         setMessages(nextMsgs);
+        // JourZy asked (in a prior reply) whether to switch the app's
+        // language, and the traveler just confirmed — actually flip it here
+        // rather than just talking about it in the reply text.
+        if (data.languageSwitch) setLanguageChoice(data.languageSwitch);
         if (data.isReady) {
           await handleGenerate(nextMsgs);
         }

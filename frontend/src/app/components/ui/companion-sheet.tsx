@@ -4,7 +4,7 @@ import { C } from "./jourzy-theme";
 import { Seal } from "./jourzy-seal";
 import { apiFetch, friendlyErrorMessage } from "../../utils/api";
 import { useTranslation } from "../../utils/translations";
-import { getPreferredLanguage } from "../../utils/language";
+import { getPreferredLanguage, setLanguageChoice } from "../../utils/language";
 import { FlightPicksCard, type FlightSuggestion } from "./flight-picks-card";
 
 type PlaceSuggestion = { placeId?: string; title: string; address: string; rating?: number; mapsUrl?: string; why?: string; travelTimeFromPlan?: string };
@@ -96,6 +96,9 @@ export default function CompanionSheet({ tripId, isPast, tripData, close, onRepl
       if (resp.ok) {
         const data = await resp.json();
         setMessages([...updated, { role: 'ai', text: data.text, suggestion: data.suggestion || undefined, flightSuggestion: data.flightSuggestion || undefined }]);
+        // JourZy asked (in a prior reply) whether to switch the app's
+        // language, and the traveler just confirmed — actually flip it here.
+        if (data.languageSwitch) setLanguageChoice(data.languageSwitch);
       } else {
         const err = await friendlyErrorMessage(resp);
         setMessages([...updated, { role: 'ai', text: err }]);
