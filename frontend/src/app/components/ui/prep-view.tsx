@@ -137,6 +137,7 @@ export default function PrepView({ tripData }: { tripData: any }) {
           {logistics.gettingAround && <p><span className="font-bold" style={{ color: C.ink }}>{t("prep.gettingAroundLabel")}</span> {logistics.gettingAround}</p>}
           {logistics.luggageStorage && <p><span className="font-bold" style={{ color: C.ink }}>{t("prep.luggageLabel")}</span> {logistics.luggageStorage}</p>}
           {logistics.mobilityNotes && <p><span className="font-bold" style={{ color: C.ink }}>{t("prep.gettingAroundSafelyLabel")}</span> {logistics.mobilityNotes}</p>}
+          {logistics.rentalCarGuide && <p><span className="font-bold" style={{ color: C.ink }}>{t("prep.rentalCarLabel")}</span> {logistics.rentalCarGuide}</p>}
           {logistics.breakfastNote && <p><span className="font-bold" style={{ color: C.ink }}>{t("prep.breakfastLabel")}</span> {logistics.breakfastNote}</p>}
           {logistics.airlinePoints && <p><span className="font-bold" style={{ color: C.ink }}>{t("prep.airlinePointsLabel")}</span> {logistics.airlinePoints}</p>}
           {logistics.bookingTips && <p><span className="font-bold" style={{ color: C.ink }}>{t("prep.bookingLabel")}</span> {logistics.bookingTips}</p>}
