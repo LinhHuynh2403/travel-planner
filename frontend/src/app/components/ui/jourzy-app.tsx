@@ -12,6 +12,7 @@ export default function JourZyApp() {
   // Global state for bottom nav and current open trip
   const [tab, setTab] = useState<"chat" | "trips" | "settings">("chat");
   const [openTripId, setOpenTripId] = useState<string | null>(null);
+  const [planNotice, setPlanNotice] = useState<string | null>(null);
 
   // When a trip is opened, the bottom tab bar is hidden in the prototype
   // Wait, in prototype it shows ChevronLeft to go back to "Trips".
@@ -29,11 +30,20 @@ export default function JourZyApp() {
         {/* main screens */}
         <div className="flex-1 overflow-y-auto jz-scroll relative">
           {openTripId ? (
-            <PlanViewWrapper tripId={openTripId} goBack={() => setOpenTripId(null)} />
+            <PlanViewWrapper
+              tripId={openTripId}
+              goBack={() => { setOpenTripId(null); setPlanNotice(null); }}
+              notice={planNotice}
+              onDismissNotice={() => setPlanNotice(null)}
+            />
           ) : (
             <>
-              {tab === "chat" && <NewTripChat goTrips={() => setTab("trips")} />}
-              {tab === "trips" && <TripsList open={(id) => setOpenTripId(id)} goChat={() => setTab("chat")} />}
+              {tab === "chat" && (
+                <NewTripChat
+                  openPlan={(id, notice) => { setOpenTripId(id); setPlanNotice(notice || null); setTab("trips"); }}
+                />
+              )}
+              {tab === "trips" && <TripsList open={(id) => { setOpenTripId(id); setPlanNotice(null); }} goChat={() => setTab("chat")} />}
               {tab === "settings" && <SettingsPage />}
             </>
           )}
@@ -52,8 +62,10 @@ export default function JourZyApp() {
               <button key={k as string} onClick={() => {
                 if (k === "trips" && openTripId) {
                   setOpenTripId(null);
+                  setPlanNotice(null);
                 } else if (k === "chat" && openTripId) {
                   setOpenTripId(null);
+                  setPlanNotice(null);
                   setTab(k as any);
                 } else {
                   setTab(k as any);

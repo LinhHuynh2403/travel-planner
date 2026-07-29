@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Send, RefreshCw, Bookmark, Sparkles, Square } from "lucide-react";
+import { Send, RefreshCw, Sparkles, Square } from "lucide-react";
 import { C, display } from "./jourzy-theme";
 import { apiFetch, friendlyErrorMessage } from "../../utils/api";
 import { getPreferredLanguage, setLanguageChoice } from "../../utils/language";
@@ -15,7 +15,7 @@ type Message = {
   flightSuggestion?: FlightSuggestion;
 };
 
-export default function NewTripChat({ goTrips }: { goTrips: () => void }) {
+export default function NewTripChat({ openPlan }: { openPlan: (tripId: string, notice?: string) => void }) {
   const { t } = useTranslation();
   // Deliberately NEVER restored from localStorage — this tab plans ONE new
   // trip at a time, and a traveler's next trip can be a completely different
@@ -87,6 +87,7 @@ export default function NewTripChat({ goTrips }: { goTrips: () => void }) {
       const generated = await generateItinerary(plan, customMessages, controller.signal);
 
       let tripSaveFailed = false;
+      let isGuestUnsaved = false;
       try {
         const saveResp = await apiFetch('/api/trips', {
           method: 'POST',
@@ -102,13 +103,17 @@ export default function NewTripChat({ goTrips }: { goTrips: () => void }) {
         if (saveResp.ok) {
           const { tripId } = await saveResp.json();
           generated.tripId = tripId;
-        } else if (saveResp.status !== 401) {
-          // 401 just means a guest/logged-out session — saving to My Trips
-          // was never going to happen, that's expected, not a bug. Any other
-          // failure (validation, a 500) means the save genuinely broke, and
-          // silently swallowing it (as this used to do) is exactly what
-          // produced a real "ghost" trip stuck showing "No itinerary data"
-          // with no way for the traveler to know why — surface it instead.
+        } else if (saveResp.status === 401) {
+          // A guest/logged-out session — saving to My Trips was never going
+          // to happen. Not a bug, but the traveler still needs to be told
+          // plainly (see isGuestUnsaved below) instead of being shown a false
+          // "saved" success message that sends them to an empty trips list.
+          isGuestUnsaved = true;
+        } else {
+          // A genuine failure (validation, a 500) — silently swallowing this
+          // (as this used to do) is exactly what produced a real "ghost"
+          // trip stuck showing "No itinerary data" with no way for the
+          // traveler to know why — surface it instead.
           console.error('Trip save failed:', await saveResp.json().catch(() => ({})));
           tripSaveFailed = true;
         }
@@ -119,15 +124,28 @@ export default function NewTripChat({ goTrips }: { goTrips: () => void }) {
 
       localStorage.setItem('generatedItinerary', JSON.stringify(generated));
       localStorage.setItem('travelPlan', JSON.stringify(generated.plan));
+      // A trip fresh out of the generator is never "past" — reset this
+      // explicitly rather than inheriting whatever value a previously
+      // viewed trip (in TripsList) last left behind, which would otherwise
+      // mislabel this brand-new trip as a completed one.
+      localStorage.setItem('viewingPastTrip', 'false');
       localStorage.removeItem('itineraryChatMessages');
       if (generated.tripId) localStorage.setItem('itineraryChatTripId', String(generated.tripId));
 
       setCurrentStep('chatting');
       setBuilt(true);
-      if (tripSaveFailed) {
-        setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'ai', text: t("chat.tripSaveFailed") }]);
-      }
-      // Wait a moment then go to trips or let the user click it? The prototype has a button.
+
+      // Jump straight to the plan the traveler just asked for instead of
+      // sending them to the "My Trips" tab and making them find/click it
+      // again — that indirection is exactly what previously let a
+      // never-actually-saved (guest session) or failed-to-save trip look
+      // "done" while quietly showing nothing when opened.
+      const notice = tripSaveFailed
+        ? t("chat.tripSaveFailed")
+        : isGuestUnsaved
+          ? t("chat.tripSavedGuestNotice")
+          : undefined;
+      openPlan(generated.tripId ? String(generated.tripId) : 'local', notice);
     } catch (e) {
       setCurrentStep('chatting');
       // The traveler hit "stop" themselves (e.g. to add more detail before
@@ -229,9 +247,6 @@ export default function NewTripChat({ goTrips }: { goTrips: () => void }) {
 
         {built && (
           <div className="space-y-2 pt-4">
-            <button onClick={goTrips} className="w-full px-4 py-2.5 rounded-2xl text-sm font-medium text-white flex items-center justify-center gap-2" style={{ background: C.green }}>
-              <Bookmark size={14} /> {t("chat.tripSavedOpen")}
-            </button>
             <button onClick={startNewPlan} className="w-full px-4 py-2.5 rounded-2xl text-sm font-medium flex items-center justify-center gap-2"
               style={{ background: C.card, border: `1.5px solid ${C.green}`, color: C.green }}>
               <Sparkles size={14} /> {t("chat.planAnotherTrip")}

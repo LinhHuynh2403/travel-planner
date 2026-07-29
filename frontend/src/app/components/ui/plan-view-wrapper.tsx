@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { ChevronLeft, MessageCircle } from "lucide-react";
+import { ChevronLeft, MessageCircle, X } from "lucide-react";
 import { C } from "./jourzy-theme";
 import PlanView from "./plan-view";
 import BudgetView from "./budget-view";
@@ -7,7 +7,7 @@ import PrepView from "./prep-view";
 import CompanionSheet from "./companion-sheet";
 import { useTranslation } from "../../utils/translations";
 
-export default function PlanViewWrapper({ tripId, goBack }: { tripId: string, goBack: () => void }) {
+export default function PlanViewWrapper({ tripId, goBack, notice, onDismissNotice }: { tripId: string, goBack: () => void, notice?: string | null, onDismissNotice?: () => void }) {
   const { t } = useTranslation();
   const [sub, setSub] = useState<"plan" | "budget" | "prep">("plan");
   const [bubble, setBubble] = useState(false);
@@ -57,6 +57,15 @@ export default function PlanViewWrapper({ tripId, goBack }: { tripId: string, go
           {!isPast ? t("nav.upcoming") : t("nav.history")}
         </span>
       </div>
+
+      {notice && (
+        <div className="mx-4 mb-2 px-3 py-2.5 rounded-xl text-xs flex items-start gap-2" style={{ background: C.greenSoft, color: C.ink }}>
+          <span className="flex-1 leading-relaxed">{notice}</span>
+          <button onClick={onDismissNotice} className="shrink-0" style={{ color: C.sub }}>
+            <X size={14} />
+          </button>
+        </div>
+      )}
 
       {/* segmented control inside Upcoming Trip */}
       {!isPast && (

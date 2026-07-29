@@ -53,6 +53,7 @@ export const translations: Record<string, Record<string, string>> = {
     "chat.flightOneWay": "One way",
     "chat.flightRoundTrip": "Round trip",
     "chat.tripSaveFailed": "Heads up — I built your itinerary, but saving it to My Trips failed. You can still see it now, but it won't be there after you leave this screen. Try again in a moment.",
+    "chat.tripSavedGuestNotice": "Here's your plan! Log in to save it to My Trips so it's still here next time.",
     "chat.stopGenerating": "Stop generating",
     "chat.addMoreWhileBuilding": "Building your itinerary... type to add more before it's done",
     "nav.myPlan": "My Plan",
@@ -237,7 +238,6 @@ export const translations: Record<string, Record<string, string>> = {
     "chat.fromYourPlan": "from your plan",
     "chat.missThemAlready": "Amazing — I miss them already",
     "chat.planSimilar": "Plan me something similar!",
-    "chat.tripSavedOpen": "Trip saved — open it in My trips",
     "chat.planAnotherTrip": "Plan another trip",
   },
   vi: {
@@ -291,6 +291,7 @@ export const translations: Record<string, Record<string, string>> = {
     "chat.flightOneWay": "Một chiều",
     "chat.flightRoundTrip": "Khứ hồi",
     "chat.tripSaveFailed": "Lưu ý — mình đã tạo xong lịch trình, nhưng lưu vào Chuyến đi của tôi bị lỗi. Bạn vẫn xem được ngay bây giờ, nhưng nó sẽ không còn sau khi bạn rời khỏi màn hình này. Hãy thử lại sau một lát.",
+    "chat.tripSavedGuestNotice": "Đây là lịch trình của bạn! Hãy đăng nhập để lưu vào Chuyến đi của tôi để lần sau vẫn còn.",
     "chat.stopGenerating": "Dừng tạo lịch trình",
     "chat.addMoreWhileBuilding": "Đang xây dựng lịch trình... gõ thêm nếu bạn muốn bổ sung trước khi xong",
     "nav.myPlan": "Kế hoạch của tôi",
@@ -475,7 +476,6 @@ export const translations: Record<string, Record<string, string>> = {
     "chat.fromYourPlan": "từ kế hoạch của bạn",
     "chat.missThemAlready": "Tuyệt vời — nhớ ghê luôn",
     "chat.planSimilar": "Lên kế hoạch một chuyến tương tự!",
-    "chat.tripSavedOpen": "Đã lưu chuyến đi — mở trong Chuyến đi của tôi",
     "chat.planAnotherTrip": "Lên kế hoạch chuyến khác",
   },
   ko: {
@@ -529,6 +529,7 @@ export const translations: Record<string, Record<string, string>> = {
     "chat.flightOneWay": "편도",
     "chat.flightRoundTrip": "왕복",
     "chat.tripSaveFailed": "알려드려요 — 일정은 만들었지만 '내 여행'에 저장하는 데 실패했어요. 지금은 볼 수 있지만 이 화면을 나가면 사라져요. 잠시 후 다시 시도해 주세요.",
+    "chat.tripSavedGuestNotice": "여행 일정이 완성됐어요! 다음에도 볼 수 있도록 로그인해서 '내 여행'에 저장하세요.",
     "chat.stopGenerating": "생성 중지",
     "chat.addMoreWhileBuilding": "일정을 만드는 중... 완료되기 전에 추가할 내용을 입력하세요",
     "nav.myPlan": "내 여행 계획",
@@ -713,7 +714,6 @@ export const translations: Record<string, Record<string, string>> = {
     "chat.fromYourPlan": "계획으로부터",
     "chat.missThemAlready": "최고였어요 — 벌써 그리워요",
     "chat.planSimilar": "비슷한 여행 계획해줘!",
-    "chat.tripSavedOpen": "여행이 저장됐어요 — 내 여행에서 열기",
     "chat.planAnotherTrip": "다른 여행 계획하기",
   },
   ja: {
@@ -767,6 +767,7 @@ export const translations: Record<string, Record<string, string>> = {
     "chat.flightOneWay": "片道",
     "chat.flightRoundTrip": "往復",
     "chat.tripSaveFailed": "お知らせ — 旅程は作成できましたが、「マイ旅行」への保存に失敗しました。今はこのまま見られますが、この画面を離れると消えてしまいます。少し時間をおいてもう一度お試しください。",
+    "chat.tripSavedGuestNotice": "旅程ができました！次回も見られるように、ログインして「マイ旅行」に保存してください。",
     "chat.stopGenerating": "生成を停止",
     "chat.addMoreWhileBuilding": "旅程を作成中... 完成前に追加したい内容を入力できます",
     "nav.myPlan": "マイプラン",
@@ -951,7 +952,6 @@ export const translations: Record<string, Record<string, string>> = {
     "chat.fromYourPlan": "プランから",
     "chat.missThemAlready": "最高でした — もう恋しいです",
     "chat.planSimilar": "似たような旅行を計画して！",
-    "chat.tripSavedOpen": "旅行が保存されました — マイ旅行で開く",
     "chat.planAnotherTrip": "別の旅行を計画する",
   },
   zh: {
@@ -1005,6 +1005,7 @@ export const translations: Record<string, Record<string, string>> = {
     "chat.flightOneWay": "单程",
     "chat.flightRoundTrip": "往返",
     "chat.tripSaveFailed": "提醒一下 — 行程已经生成，但保存到「我的行程」失败了。你现在仍可以查看，但离开此页面后就会消失。请稍后再试一次。",
+    "chat.tripSavedGuestNotice": "你的行程已生成！登录后即可保存到「我的行程」，下次还能查看。",
     "chat.stopGenerating": "停止生成",
     "chat.addMoreWhileBuilding": "正在生成行程... 如果想补充内容，可以现在输入",
     "nav.myPlan": "我的计划",
@@ -1189,7 +1190,6 @@ export const translations: Record<string, Record<string, string>> = {
     "chat.fromYourPlan": "距离你的计划",
     "chat.missThemAlready": "太棒了——已经开始想念了",
     "chat.planSimilar": "帮我规划一次类似的旅行！",
-    "chat.tripSavedOpen": "行程已保存——去「我的行程」查看",
     "chat.planAnotherTrip": "规划另一次旅行",
   },
   es: {
@@ -1243,6 +1243,7 @@ export const translations: Record<string, Record<string, string>> = {
     "chat.flightOneWay": "Solo ida",
     "chat.flightRoundTrip": "Ida y vuelta",
     "chat.tripSaveFailed": "Aviso — creé tu itinerario, pero no se pudo guardar en Mis viajes. Aún puedes verlo ahora, pero desaparecerá al salir de esta pantalla. Intenta de nuevo en un momento.",
+    "chat.tripSavedGuestNotice": "¡Aquí está tu plan! Inicia sesión para guardarlo en Mis viajes y que siga disponible la próxima vez.",
     "chat.stopGenerating": "Detener generación",
     "chat.addMoreWhileBuilding": "Creando tu itinerario... escribe si quieres añadir algo antes de que termine",
     "nav.myPlan": "Mi Plan",
@@ -1427,7 +1428,6 @@ export const translations: Record<string, Record<string, string>> = {
     "chat.fromYourPlan": "desde tu plan",
     "chat.missThemAlready": "Increíble — ya los extraño",
     "chat.planSimilar": "¡Planea algo similar para mí!",
-    "chat.tripSavedOpen": "Viaje guardado — ábrelo en Mis viajes",
     "chat.planAnotherTrip": "Planear otro viaje",
   },
   fr: {
@@ -1481,6 +1481,7 @@ export const translations: Record<string, Record<string, string>> = {
     "chat.flightOneWay": "Aller simple",
     "chat.flightRoundTrip": "Aller-retour",
     "chat.tripSaveFailed": "Petite info — j'ai créé ton itinéraire, mais l'enregistrement dans Mes voyages a échoué. Tu peux encore le voir maintenant, mais il disparaîtra si tu quittes cet écran. Réessaie dans un instant.",
+    "chat.tripSavedGuestNotice": "Voici ton plan ! Connecte-toi pour l'enregistrer dans Mes voyages afin qu'il reste disponible la prochaine fois.",
     "chat.stopGenerating": "Arrêter la génération",
     "chat.addMoreWhileBuilding": "Création de ton itinéraire... tu peux taper pour ajouter quelque chose avant la fin",
     "nav.myPlan": "Mon Plan",
@@ -1665,7 +1666,6 @@ export const translations: Record<string, Record<string, string>> = {
     "chat.fromYourPlan": "depuis votre plan",
     "chat.missThemAlready": "Incroyable — ça me manque déjà",
     "chat.planSimilar": "Planifiez-moi quelque chose de similaire !",
-    "chat.tripSavedOpen": "Voyage enregistré — ouvrez-le dans Mes voyages",
     "chat.planAnotherTrip": "Planifier un autre voyage",
   }
 };
