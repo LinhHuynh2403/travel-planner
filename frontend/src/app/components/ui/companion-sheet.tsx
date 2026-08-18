@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { X, Send, Star, RefreshCw } from "lucide-react";
 import { C } from "./jourzy-theme";
-import { Seal } from "./jourzy-seal";
 import { apiFetch, friendlyErrorMessage } from "../../utils/api";
 import { useTranslation } from "../../utils/translations";
 import { getPreferredLanguage, setLanguageChoice } from "../../utils/language";
@@ -149,15 +148,12 @@ export default function CompanionSheet({ tripId, isPast, tripData, close, onRepl
                 {m.text}
                 {m.suggestion && !m.used && (
                   <div className="mt-2.5 rounded-xl p-3" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-                    <div className="flex justify-between items-start gap-2">
-                      <div className="min-w-0">
-                        <div className="font-bold text-sm truncate">{m.suggestion.title}</div>
-                        <div className="text-xs mt-0.5" style={{ color: C.sub }}>
-                          {m.suggestion.rating && <><Star size={10} className="inline mr-0.5" fill="#FFC94D" color="#FFC94D" />{m.suggestion.rating.toFixed(1)} · </>}
-                          {m.suggestion.address}
-                        </div>
+                    <div className="min-w-0">
+                      <div className="font-bold text-sm truncate">{m.suggestion.title}</div>
+                      <div className="text-xs mt-0.5" style={{ color: C.sub }}>
+                        {m.suggestion.rating && <><Star size={10} className="inline mr-0.5" fill="#FFC94D" color="#FFC94D" />{m.suggestion.rating.toFixed(1)} · </>}
+                        {m.suggestion.address}
                       </div>
-                      <Seal small show={!!m.suggestion.placeId} />
                     </div>
                     {m.suggestion.why && (
                       <div className="text-xs mt-1.5 leading-relaxed" style={{ color: C.ink }}>{m.suggestion.why}</div>

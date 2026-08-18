@@ -76,6 +76,7 @@ export interface WeatherDay {
   cloudPct?: number;
   humidityPct?: number;
   hourlyTemps?: number[]; // that day's 24 hourly readings, midnight-to-midnight
+  hourlyIcons?: string[]; // same 24-length shape, one WeatherDay["icon"] value per hour
 }
 
 export interface PackingItem {

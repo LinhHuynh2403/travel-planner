@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "./api";
+import { supabase } from "./supabaseClient";
 import { useTranslation } from "./translations";
 
 // Shared by home-view.tsx and trips-list.tsx so both screens fetch/delete/open
@@ -22,6 +23,16 @@ export function useSavedTrips(onOpened: (tripId: string) => void) {
   const isBroken = (trip: any) => !trip.itineraries || trip.itineraries.length === 0;
 
   const fetchTrips = async () => {
+    // Signed out (e.g. right after tapping "Sign out", or a guest who never
+    // signed in) is not an error — there's simply no session to fetch trips
+    // with. Only treat a failure as "your session may have expired" when a
+    // session actually existed and the call still failed.
+    const { data } = await supabase.auth.getSession();
+    if (!data.session) {
+      setSavedTrips([]);
+      setFetchError(false);
+      return;
+    }
     try {
       const resp = await apiFetch(`/api/trips`);
       if (resp.ok) {

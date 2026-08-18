@@ -1,7 +1,10 @@
 import { Trash2, Cloud, CloudRain, CloudSun, Sun, CloudSnow, CloudLightning, Camera } from "lucide-react";
 import { useLiveWeatherWeek } from "../../utils/live-weather";
+import { useDestinationPhoto } from "../../utils/destinationPhoto";
 import { formatTemp } from "../../utils/units";
 import { useTranslation } from "../../utils/translations";
+
+const API_BASE = import.meta.env.VITE_API_URL || "";
 
 const WEATHER_ICON: Record<string, any> = { sunny: Sun, partly: CloudSun, cloudy: Cloud, rainy: CloudRain, snowy: CloudSnow, stormy: CloudLightning };
 
@@ -44,6 +47,7 @@ export function TripRow({
   const { t } = useTranslation();
   const isUpcoming = new Date(trip.leave_date) >= new Date();
   const tile = tripTile(trip.region);
+  const photoRef = useDestinationPhoto(trip.region);
   const days = Math.floor((new Date(trip.leave_date).getTime() - new Date(trip.arrival_date).getTime()) / (1000 * 60 * 60 * 24)) + 1;
   const daysAway = Math.max(0, Math.ceil((new Date(trip.arrival_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
   const placeCount = trip.itineraries?.[0]?.days?.reduce((acc: number, d: any) => acc + d.activities.length, 0) || 0;
@@ -64,10 +68,19 @@ export function TripRow({
       className="w-full flex items-center gap-3 rounded-jz-card border border-jz-line bg-jz-card p-3.5 text-left"
     >
       <div
-        className="w-11 h-11 rounded-2xl shrink-0 flex items-center justify-center text-xl"
+        className="relative w-11 h-11 rounded-2xl shrink-0 flex items-center justify-center text-xl overflow-hidden"
         style={{ background: tile.background }}
       >
         {tile.emoji}
+        {photoRef && (
+          <img
+            src={`${API_BASE}/api/photo?reference=${photoRef}`}
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover"
+            loading="lazy"
+            onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+          />
+        )}
       </div>
       <div className="flex-1 min-w-0">
         <h3 className="text-jz-body-big font-bold text-jz-ink capitalize truncate">{trip.region}</h3>

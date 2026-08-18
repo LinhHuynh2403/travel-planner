@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { ChevronLeft, MessageCircle, X, CalendarDays, Map, Backpack, BookOpen, Image as ImageIcon } from "lucide-react";
+import { ChevronLeft, Plus, X, CalendarDays, Map, Backpack, BookOpen, Image as ImageIcon } from "lucide-react";
 import { C } from "./jourzy-theme";
 import PlanView from "./plan-view";
 import MapView from "./map-view";
@@ -58,7 +58,7 @@ export default function PlanViewWrapper({ tripId, goBack, notice, onDismissNotic
   return (
     <>
       {/* trip header */}
-      <div className="flex items-center gap-2 px-4 py-2 sticky top-0 z-10" style={{ background: C.paper }}>
+      <div className="flex items-center gap-2 px-4 py-2 sticky top-0 z-10" style={{ background: C.paper, transform: "translateZ(0)" }}>
         <button onClick={goBack} className="flex items-center text-xs font-bold" style={{ color: C.green }}>
           <ChevronLeft size={16} /> {t("nav.backToTrips")}
         </button>
@@ -80,8 +80,11 @@ export default function PlanViewWrapper({ tripId, goBack, notice, onDismissNotic
         </div>
       )}
 
-      {/* Sub Views */}
-      <div className="pb-24">
+      {/* Sub Views — bottom padding clears both the (now taller, thumb-
+          friendlier) tab bar AND the floating companion FAB above it (which
+          sits 108-162px above the bottom edge), so the FAB never ends up
+          hovering over real content at max scroll. */}
+      <div className="pb-48">
         {sub === "plan" && <PlanView tripData={tripData} onSaveMemory={handleSaveMemory} />}
         {sub === "map" && <MapView tripData={tripData} />}
         {sub === "packing" && <PackingView tripData={tripData} />}
@@ -89,8 +92,12 @@ export default function PlanViewWrapper({ tripId, goBack, notice, onDismissNotic
         {sub === "memories" && <MemoriesView tripData={tripData} />}
       </div>
 
-      {/* trip-level bottom tab bar — replaces the global app tab bar while a trip is open */}
-      <div className="fixed bottom-0 left-0 right-0 flex justify-around items-center py-2 px-2 pb-[env(safe-area-inset-bottom)] z-20"
+      {/* trip-level bottom tab bar — replaces the global app tab bar while a
+          trip is open. Taller than a typical web tab bar on purpose: iOS's
+          swipe-up-to-home gesture lives right along the bottom edge, so
+          targets that only clear it via safe-area padding (and are
+          otherwise thumb-sized) end up too close for a comfortable tap. */}
+      <div className="fixed bottom-0 left-0 right-0 flex justify-around items-center py-3 px-2 pb-[env(safe-area-inset-bottom)] z-20"
         style={{ background: C.card, borderTop: `1px solid ${C.line}` }}>
         {[
           ["plan", CalendarDays, t("nav.plan")],
@@ -103,10 +110,10 @@ export default function PlanViewWrapper({ tripId, goBack, notice, onDismissNotic
           const IconComp = Icon as any;
           return (
             <button key={k as string} onClick={() => setSub(k as any)}
-              className="flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-colors"
+              className="flex flex-col items-center gap-1 px-3 py-2 rounded-xl transition-colors"
               style={{ color: active ? C.green : C.sub, background: active ? C.greenSoft : "transparent" }}>
-              <IconComp size={18} strokeWidth={active ? 2.4 : 1.8} />
-              <span className="font-medium" style={{ fontSize: 9.5 }}>{lbl as string}</span>
+              <IconComp size={21} strokeWidth={active ? 2.4 : 1.8} />
+              <span className="font-medium" style={{ fontSize: 10.5 }}>{lbl as string}</span>
             </button>
           );
         })}
@@ -116,9 +123,8 @@ export default function PlanViewWrapper({ tripId, goBack, notice, onDismissNotic
       {!bubble && (
         <button onClick={() => setBubble(true)}
           className="fixed rounded-full shadow-xl flex items-center justify-center z-10"
-          style={{ right: 18, bottom: "calc(86px + env(safe-area-inset-bottom))", width: 54, height: 54, background: !isPast ? C.green : C.ink }}>
-          <MessageCircle size={24} color="#fff" />
-          <span className="absolute rounded-full" style={{ top: 4, right: 4, width: 10, height: 10, background: C.hanko, border: "2px solid #fff" }} />
+          style={{ right: 18, bottom: "calc(108px + env(safe-area-inset-bottom))", width: 54, height: 54, background: C.amber, color: "#3d2705" }}>
+          <Plus size={24} />
         </button>
       )}
 

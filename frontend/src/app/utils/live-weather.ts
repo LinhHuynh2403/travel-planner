@@ -61,6 +61,9 @@ export function useLiveWeatherWeek(region: string): WeatherDay[] | null {
           const hourlyTemps: number[] | undefined = data.hourly?.temperature_2m?.slice(hourStart, hourEnd);
           const hourlyHumidity: number[] = data.hourly?.relative_humidity_2m?.slice(hourStart, hourEnd) || [];
           const hourlyCloud: number[] = data.hourly?.cloud_cover?.slice(hourStart, hourEnd) || [];
+          const hourlyIcons: string[] | undefined = data.hourly?.weather_code
+            ?.slice(hourStart, hourEnd)
+            .map((code: number) => mapOpenMeteoCode(code));
           return {
             d: dayLabel,
             icon,
@@ -72,6 +75,7 @@ export function useLiveWeatherWeek(region: string): WeatherDay[] | null {
             cloudPct: avg(hourlyCloud) != null ? Math.round(avg(hourlyCloud)!) : undefined,
             humidityPct: avg(hourlyHumidity) != null ? Math.round(avg(hourlyHumidity)!) : undefined,
             hourlyTemps: hourlyTemps?.length ? hourlyTemps.map((v: number) => Math.round(v)) : undefined,
+            hourlyIcons,
           };
         });
 

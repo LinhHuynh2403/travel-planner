@@ -1,4 +1,4 @@
-import { AlertCircle, ShieldAlert, Wallet, Wifi, Clock, Search } from "lucide-react";
+import { AlertCircle, ShieldAlert, Wallet, Wifi, Clock, Search, Hotel, Car } from "lucide-react";
 import { C, display } from "./jourzy-theme";
 import BudgetView from "./budget-view";
 import { useTranslation } from "../../utils/translations";
@@ -14,6 +14,63 @@ function flightSearchUrl(engine: "google" | "skyscanner" | "expedia", region: st
   if (engine === "google") return `https://www.google.com/travel/flights?q=${enc(`Flights to ${region}`)}`;
   if (engine === "skyscanner") return `https://www.skyscanner.com/transport/flights-to/${q}/`;
   return `https://www.expedia.com/Flights-Search?destination=${q}${arrivalDate ? `&departing=${arrivalDate}` : ""}${leaveDate ? `&returning=${leaveDate}` : ""}`;
+}
+
+// So a traveler who doesn't love JourZy's own hotel/stay suggestion can
+// still book whatever they actually want, same "real search, not a fake
+// deep link" approach as flightSearchUrl above.
+function staySearchUrl(site: "booking" | "airbnb" | "google", region: string, arrivalDate?: string, leaveDate?: string) {
+  if (site === "booking") {
+    return `https://www.booking.com/searchresults.html?ss=${enc(region)}${arrivalDate ? `&checkin=${arrivalDate}` : ""}${leaveDate ? `&checkout=${leaveDate}` : ""}`;
+  }
+  if (site === "airbnb") {
+    return `https://www.airbnb.com/s/${enc(region)}/homes${arrivalDate ? `?checkin=${arrivalDate}&checkout=${leaveDate}` : ""}`;
+  }
+  return `https://www.google.com/travel/hotels?q=${enc(`Hotels in ${region}`)}`;
+}
+
+function googleSearchUrl(query: string) {
+  return `https://www.google.com/search?q=${enc(query)}`;
+}
+
+// Real car rental is genuinely different by country — a self-drive rental
+// app that's normal in the US is unheard of for a tourist in Vietnam, and
+// vice versa. Matched by keyword against the trip's free-text region/city
+// (diacritic-stripped so "Đà Nẵng" and "Da Nang" both match) rather than a
+// separate structured country field, which the trip data doesn't have.
+// Falls back to a plain search for anywhere not in the list below, so no
+// destination is left with zero options — just not a fabricated local brand.
+type CarOption = { name: string; icon: string; url: string };
+
+function detectCountry(region: string): "vietnam" | "japan" | "usa" | "other" {
+  const r = (region || "").toLowerCase().replace(/đ/g, "d").normalize("NFD").replace(/[̀-ͯ]/g, "");
+  if (/vietnam|ha noi|hanoi|ho chi minh|saigon|hoi an|da nang|nha trang|ha long|hue|phu quoc|da lat/.test(r)) return "vietnam";
+  if (/japan|tokyo|osaka|kyoto|hokkaido|okinawa|nagoya|yokohama|fukuoka|sapporo|hiroshima/.test(r)) return "japan";
+  if (/usa|united states|america|new york|los angeles|san francisco|chicago|hawaii|florida|texas|las vegas|seattle|boston|miami/.test(r)) return "usa";
+  return "other";
+}
+
+function carRentalOptions(region: string, t: (k: string) => string): CarOption[] {
+  const country = detectCountry(region);
+  const byCountry: Record<string, CarOption[]> = {
+    vietnam: [
+      { name: "Mioto", icon: "🚗", url: "https://mioto.vn" },
+      { name: "Grab", icon: "🛵", url: "https://www.grab.com" },
+    ],
+    japan: [
+      { name: "Toyota Rent a Car", icon: "🚗", url: "https://rent.toyota.co.jp/en/" },
+      { name: "Tabirai", icon: "🗺️", url: "https://tabirai.net/car/" },
+    ],
+    usa: [
+      { name: "Turo", icon: "🚗", url: "https://turo.com" },
+      { name: "Enterprise", icon: "🏢", url: "https://www.enterprise.com" },
+    ],
+    other: [],
+  };
+  return [
+    ...byCountry[country],
+    { name: t("guide.moreCarOptions"), icon: "🔎", url: googleSearchUrl(`car rental in ${region}`) },
+  ];
 }
 
 export default function GuideView({ tripData }: { tripData: any }) {
@@ -57,6 +114,45 @@ export default function GuideView({ tripData }: { tripData: any }) {
               </div>
               <div className="text-xs font-bold flex items-center gap-1" style={{ color: C.green }}>
                 <Search size={12} /> {t("guide.searchFlights")}
+              </div>
+            </a>
+          ))}
+        </div>
+      </div>
+
+      {/* Hotels & Stays — in case a traveler doesn't love JourZy's own pick */}
+      <div>
+        <div className="text-xs font-bold uppercase tracking-wide mb-2 px-1" style={{ color: C.sub }}>{t("guide.hotelsStays")}</div>
+        <div className="space-y-2">
+          {([["booking", "Booking.com", "🏨"], ["airbnb", "Airbnb", "🏠"], ["google", "Google Hotels", "🔎"]] as const).map(([site, name, icon]) => (
+            <a key={site} href={staySearchUrl(site, region, tripData.plan?.arrivalDate, tripData.plan?.leaveDate)} target="_blank" rel="noreferrer"
+              className="flex items-center justify-between gap-2.5 rounded-2xl p-3" style={{ background: C.card, border: `1px solid ${C.line}` }}>
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center text-base" style={{ background: C.greenSoft }}>{icon}</div>
+                <div className="font-bold text-sm" style={{ color: C.ink }}>{name}</div>
+              </div>
+              <div className="text-xs font-bold flex items-center gap-1" style={{ color: C.green }}>
+                <Hotel size={12} /> {t("guide.searchStays")}
+              </div>
+            </a>
+          ))}
+        </div>
+      </div>
+
+      {/* Rent a Car — real options vary a lot by country, so these are
+          matched to the destination rather than one generic worldwide set. */}
+      <div>
+        <div className="text-xs font-bold uppercase tracking-wide mb-2 px-1" style={{ color: C.sub }}>{t("guide.rentACar")}</div>
+        <div className="space-y-2">
+          {carRentalOptions(region, t).map((opt) => (
+            <a key={opt.name} href={opt.url} target="_blank" rel="noreferrer"
+              className="flex items-center justify-between gap-2.5 rounded-2xl p-3" style={{ background: C.card, border: `1px solid ${C.line}` }}>
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center text-base" style={{ background: C.greenSoft }}>{opt.icon}</div>
+                <div className="font-bold text-sm" style={{ color: C.ink }}>{opt.name}</div>
+              </div>
+              <div className="text-xs font-bold flex items-center gap-1" style={{ color: C.green }}>
+                <Car size={12} /> {t("guide.searchCarRentals")}
               </div>
             </a>
           ))}

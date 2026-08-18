@@ -3,6 +3,7 @@ import { Plus } from "lucide-react";
 import { C, display } from "./jourzy-theme";
 import { TripRow, tripTile } from "./trip-row";
 import { useSavedTrips } from "../../utils/useSavedTrips";
+import { useDestinationPhoto } from "../../utils/destinationPhoto";
 import { apiFetch } from "../../utils/api";
 import { supabase } from "../../utils/supabaseClient";
 import { useTranslation } from "../../utils/translations";
@@ -108,6 +109,7 @@ export default function HomeView({
 
   const isNewUser = savedTrips.length === 0;
   const upcoming = upcomingTrips[0];
+  const heroPhotoRef = useDestinationPhoto(upcoming?.region || "");
   const previewTrips = [...upcomingTrips, ...historyTrips].slice(0, 4);
   const hasMore = upcomingTrips.length + historyTrips.length > previewTrips.length;
 
@@ -163,6 +165,15 @@ export default function HomeView({
             className="relative flex min-h-[190px] w-full items-end overflow-hidden rounded-jz-card text-left shadow-lg"
             style={{ background: tripTile(upcoming.region).background }}
           >
+            {heroPhotoRef && (
+              <img
+                src={`${API_BASE}/api/photo?reference=${heroPhotoRef}`}
+                alt=""
+                className="absolute inset-0 h-full w-full object-cover"
+                loading="lazy"
+                onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+              />
+            )}
             <div className="absolute inset-0" style={{ background: "linear-gradient(195deg, rgba(20,18,15,.12) 0%, rgba(20,18,15,.85) 100%)" }} />
             <div className="relative w-full p-[18px]" style={{ color: "#FBF6EC" }}>
               <span className="mb-2 inline-block rounded-full border px-2.5 py-1 text-[11px] font-bold" style={{ borderColor: "rgba(255,255,255,.3)", background: "rgba(255,255,255,.16)" }}>

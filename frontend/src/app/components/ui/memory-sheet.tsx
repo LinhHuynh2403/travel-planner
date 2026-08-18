@@ -58,9 +58,20 @@ export default function MemorySheet({
     }
   };
 
+  // vaul portals its content straight to document.body by default, which
+  // breaks out of the phone-frame mockup on desktop web (full-viewport-width
+  // sheet instead of confined to the 390px frame). The rest of the app's
+  // sheets stay confined for free because the phone frame's CSS `transform`
+  // makes it a containing block for position:fixed descendants — but a
+  // React portal leaves that DOM subtree entirely, so it doesn't apply.
+  // Pointing the portal at the frame div directly (see its id in
+  // jourzy-app.tsx) keeps this sheet inside the same visual bounds as
+  // every other sheet in the app.
+  const frameEl = typeof document !== "undefined" ? document.getElementById("jz-phone-frame") : null;
+
   return (
     <Drawer.Root open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <Drawer.Portal>
+      <Drawer.Portal container={frameEl ?? undefined}>
         <Drawer.Overlay className="fixed inset-0 z-30 bg-black/45" />
         <Drawer.Content className="fixed bottom-0 left-0 right-0 z-40 flex max-h-[88%] flex-col rounded-t-jz-card bg-jz-bg outline-none">
           <div className="mx-auto mt-2.5 h-1 w-9 rounded-full bg-jz-line" />

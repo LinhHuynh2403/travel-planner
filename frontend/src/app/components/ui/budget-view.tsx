@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { ChevronRight, X, Star, Clock, Plane, Train, Utensils, Landmark } from "lucide-react";
 import { C, display } from "./jourzy-theme";
-import { Seal } from "./jourzy-seal";
 import { useTranslation } from "../../utils/translations";
 
 type BreakdownItem = { category: string; amount: number; savingTip?: string };
@@ -154,12 +153,9 @@ function BudgetCategorySheet({ item, kind, tripData, close }: { item: BreakdownI
 
         {kind === "hotel" && hotel && (
           <div>
-            <div className="flex justify-between items-start gap-2 mb-2">
-              <div>
-                <div className="font-bold text-base" style={{ color: C.ink }}>{hotel.name}</div>
-                {hotel.neighborhood && <div className="text-xs mt-0.5" style={{ color: C.sub }}>{hotel.neighborhood}</div>}
-              </div>
-              <Seal small show={!!hotel.place?.placeId} />
+            <div className="mb-2">
+              <div className="font-bold text-base" style={{ color: C.ink }}>{hotel.name}</div>
+              {hotel.neighborhood && <div className="text-xs mt-0.5" style={{ color: C.sub }}>{hotel.neighborhood}</div>}
             </div>
             <div className="flex items-center gap-2 text-xs mb-3" style={{ color: C.sub }}>
               {hotel.place?.rating && <span className="flex items-center gap-0.5"><Star size={11} fill="#FFC94D" color="#FFC94D" />{hotel.place.rating.toFixed(1)}</span>}

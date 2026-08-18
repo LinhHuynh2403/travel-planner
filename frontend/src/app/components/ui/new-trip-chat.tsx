@@ -220,7 +220,7 @@ export default function NewTripChat({ openPlan, goBack, seedText }: { openPlan: 
 
   return (
     <div className="flex flex-col min-h-full px-4 pt-2">
-      <div className="sticky top-0 z-10 mb-3 pt-2 pb-2" style={{ background: C.paper }}>
+      <div className="sticky top-0 z-10 mb-3 pt-2 pb-2" style={{ background: C.paper, transform: "translateZ(0)" }}>
         {goBack && (
           <button onClick={goBack} className="flex items-center gap-0.5 text-jz-label font-bold mb-1" style={{ color: C.green }}>
             <ChevronLeft size={16} /> {t("nav.home")}
@@ -296,8 +296,8 @@ export default function NewTripChat({ openPlan, goBack, seedText }: { openPlan: 
               }}
               disabled={isThinking}
               placeholder={currentStep === 'generating' ? t("chat.addMoreWhileBuilding") : t("chat.placeholder")}
-              className="w-full bg-transparent py-3 pl-4 pr-12 focus:outline-none min-h-[44px] max-h-[100px] resize-none overflow-y-auto disabled:opacity-60 placeholder:opacity-60"
-              style={{ color: C.green }}
+              className="w-full bg-transparent py-3 pl-4 pr-14 focus:outline-none min-h-[44px] max-h-[100px] resize-none overflow-y-auto disabled:opacity-60 placeholder:opacity-70"
+              style={{ color: C.ink }}
             />
             <button
               onClick={() => {
@@ -309,11 +309,11 @@ export default function NewTripChat({ openPlan, goBack, seedText }: { openPlan: 
                 if (document.querySelector('textarea')) (document.querySelector('textarea') as any).style.height = 'auto';
               }}
               disabled={currentStep !== 'generating' && (isThinking || !inputValue.trim())}
-              className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center justify-center rounded-full p-2 transition-all hover:bg-black/5 active:scale-90 disabled:opacity-50 disabled:hover:bg-transparent disabled:active:scale-100"
-              style={{ color: currentStep === 'generating' ? C.hanko : C.green }}
+              className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center justify-center rounded-full w-9 h-9 shrink-0 transition-all active:scale-90 disabled:opacity-40"
+              style={{ background: currentStep === 'generating' ? C.hanko : C.green, color: "#fff" }}
               title={currentStep === 'generating' ? t("chat.stopGenerating") : undefined}
             >
-              {currentStep === 'generating' ? <Square size={16} fill={C.hanko} /> : <Send size={18} strokeWidth={2} />}
+              {currentStep === 'generating' ? <Square size={13} fill="#fff" /> : <Send size={15} strokeWidth={2.2} />}
             </button>
           </div>
         </div>

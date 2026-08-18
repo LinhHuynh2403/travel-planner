@@ -1,13 +1,18 @@
 import { useState } from "react";
-import { Map, Star, AlertTriangle, Clock, Camera, X, Wallet, ChevronRight, Sparkles, Cloud, CloudRain, CloudSun, Sun, CloudSnow, CloudLightning } from "lucide-react";
-import { C, display } from "./jourzy-theme";
-import { Seal } from "./jourzy-seal";
+import { Map, Star, AlertTriangle, Clock, Camera, X, Wallet, ChevronRight, Sparkles, Cloud, CloudRain, CloudSun, Sun, CloudSnow, CloudLightning, Wind, Droplets, Thermometer, UtensilsCrossed, Landmark, Palette, Image as ImageIcon, Leaf, ShoppingBag, Compass, BedDouble, MapPin } from "lucide-react";
+import { C, display, font } from "./jourzy-theme";
 import MemorySheet from "./memory-sheet";
 import { useLiveWeatherWeek } from "../../utils/live-weather";
 import { formatTemp, windUnitLabel } from "../../utils/units";
 import { useTranslation } from "../../utils/translations";
 
-const CAT_ICON: Record<string, string> = { food: "🍜", culture: "⛩️", museum: "🏛️", exhibition: "🖼️", nature: "🌿", shopping: "🛍️", activity: "✨", rest: "🛌" };
+// Real line icons instead of platform emoji — the emoji set (🍜⛩️🛌 etc.)
+// rendered inconsistently across OSes and read as decorative/childish rather
+// than as a real app's category system.
+const CAT_ICON: Record<string, any> = {
+  food: UtensilsCrossed, culture: Landmark, museum: Palette, exhibition: ImageIcon,
+  nature: Leaf, shopping: ShoppingBag, activity: Compass, rest: BedDouble,
+};
 const WEATHER_ICON: Record<string, any> = { sunny: Sun, partly: CloudSun, cloudy: Cloud, rainy: CloudRain, snowy: CloudSnow, stormy: CloudLightning };
 const enc = encodeURIComponent;
 
@@ -29,6 +34,31 @@ export function addressOf(entity: any, fallback?: string): string {
 
 function directionsUrl(originAddr: string, destAddr: string, mode: "walking" | "transit" | "driving" = "walking") {
   return `https://www.google.com/maps/dir/?api=1&origin=${enc(originAddr)}&destination=${enc(destAddr)}&travelmode=${mode}`;
+}
+
+// Catmull-Rom -> cubic bezier, so the hourly trend reads as one continuous
+// curve (like iOS Weather's graph) instead of a jagged point-to-point line.
+function smoothPath(pts: { x: number; y: number }[]): string {
+  if (pts.length < 2) return "";
+  let d = `M ${pts[0].x},${pts[0].y}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] || pts[i];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[i + 2] || p2;
+    const c1x = p1.x + (p2.x - p0.x) / 6, c1y = p1.y + (p2.y - p0.y) / 6;
+    const c2x = p2.x - (p3.x - p1.x) / 6, c2y = p2.y - (p3.y - p1.y) / 6;
+    d += ` C ${c1x},${c1y} ${c2x},${c2y} ${p2.x},${p2.y}`;
+  }
+  return d;
+}
+
+const HOUR_LABEL = ["12a", "3a", "6a", "9a", "12p", "3p", "6p", "9p"];
+
+function hour12Label(h: number): string {
+  const period = h < 12 ? "AM" : "PM";
+  const hour12 = h % 12 === 0 ? 12 : h % 12;
+  return `${hour12}${period}`;
 }
 
 export default function PlanView({ tripData, onSaveMemory }: { tripData: any, onSaveMemory: (row: any) => void }) {
@@ -64,7 +94,6 @@ export default function PlanView({ tripData, onSaveMemory }: { tripData: any, on
         <button onClick={() => setShowHotelDetail(true)}
           className="w-full flex items-center gap-3 rounded-jz-card p-3.5 mb-3 text-left text-white"
           style={{ background: "#22283A" }}>
-          <Seal show={!!hotel.place?.placeId} />
           <div className="flex-1 min-w-0">
             <div className="text-[10px] opacity-70 uppercase">{t("plan.yourBase")}</div>
             <div className="text-sm font-bold truncate" style={{ ...display }}>{hotel.name}</div>
@@ -119,15 +148,12 @@ export default function PlanView({ tripData, onSaveMemory }: { tripData: any, on
               <div key={uid} className="rounded-jz-card p-3.5 transition-all cursor-pointer" onClick={() => setMemoryForIdx(idx)}
                 style={{ background: C.card, border: `${a.requested ? "2px" : "1px"} solid ${a.requested ? C.green : "transparent"}` }}>
                 <div className="flex gap-3">
-                  <div className="w-9 h-9 rounded-xl shrink-0 flex items-center justify-center text-base"
+                  <div className="w-9 h-9 rounded-xl shrink-0 flex items-center justify-center"
                     style={{ background: photoCount > 0 ? "rgba(196, 58, 47, 0.15)" : C.greenSoft }}>
-                    {CAT_ICON[a.category] || "📍"}
+                    {(() => { const CatIcon = CAT_ICON[a.category] || MapPin; return <CatIcon size={16} color={photoCount > 0 ? C.hanko : C.green} />; })()}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex justify-between items-start gap-2">
-                      <div className="font-bold text-sm" style={{ color: C.ink }}>{a.title}</div>
-                      <Seal small show={!!a.place?.placeId} />
-                    </div>
+                    <div className="font-bold text-sm" style={{ color: C.ink }}>{a.title}</div>
                     <a href={a.place?.mapsUrl || `https://www.google.com/maps/search/?api=1&query=${enc(addressOf(a))}`}
                       target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
                       className="text-xs mt-0.5 block truncate" style={{ color: C.sub }}>
@@ -183,9 +209,6 @@ export default function PlanView({ tripData, onSaveMemory }: { tripData: any, on
             </button>
           )}
         </div>
-      <div className="text-center text-xs mt-3 pb-1" style={{ color: C.sub }}>
-        {t("plan.menuNotSchedule")}
-      </div>
 
       {showHotelDetail && hotel && (
         <div className="fixed inset-0 z-30 flex flex-col justify-end" style={{ background: "rgba(20,25,40,0.45)" }} onClick={() => setShowHotelDetail(false)}>
@@ -238,8 +261,9 @@ export default function PlanView({ tripData, onSaveMemory }: { tripData: any, on
                 return (
                   <div key={uid} className="flex justify-between items-center gap-3 rounded-jz-card p-3.5" style={{ background: C.card, border: `1px solid ${C.line}` }}>
                     <div className="min-w-0">
-                      <div className="font-bold text-sm" style={{ color: C.ink }}>
-                        {(a.category && CAT_ICON[a.category]) ? CAT_ICON[a.category] + " " : ""}{a.title}
+                      <div className="flex items-center gap-1.5 font-bold text-sm" style={{ color: C.ink }}>
+                        {a.category && CAT_ICON[a.category] && (() => { const CatIcon = CAT_ICON[a.category]; return <CatIcon size={13} color={C.sub} className="shrink-0" />; })()}
+                        {a.title}
                       </div>
                       {a.description && <div className="text-xs mt-0.5 leading-relaxed" style={{ color: C.sub }}>{a.description}</div>}
                     </div>
@@ -258,48 +282,114 @@ export default function PlanView({ tripData, onSaveMemory }: { tripData: any, on
 
       {weatherDayIdx !== null && weather[weatherDayIdx] && (() => {
         const w = weather[weatherDayIdx];
+        const Icon = WEATHER_ICON[w.icon] || Cloud;
         const pts: number[] | undefined = w.hourlyTemps;
         const sample = pts && pts.length >= 24 ? [0, 3, 6, 9, 12, 15, 18, 21].map(h => pts[h]) : pts;
         const min = sample ? Math.min(...sample) : 0;
         const max = sample ? Math.max(...sample) : 1;
-        const stepX = sample && sample.length > 1 ? 320 / (sample.length - 1) : 320;
-        const norm = (v: number) => 80 - ((v - min) / Math.max(1, max - min)) * 70;
-        const line = sample?.map((v, i) => `${i * stepX},${norm(v)}`).join(" ");
+        // topPad reserves headroom for the "H 40°" label above the peak dot;
+        // bottomPad keeps the trough dot (and its own label, when the low
+        // sits near the very end of the curve) clear of the fill's flat base.
+        const chartW = 320, chartH = 60, topPad = 22, bottomPad = 10;
+        const svgH = topPad + chartH + bottomPad;
+        const stepX = sample && sample.length > 1 ? chartW / (sample.length - 1) : chartW;
+        const norm = (v: number) => topPad + chartH - ((v - min) / Math.max(1, max - min)) * chartH;
+        const linePts = sample?.map((v, i) => ({ x: i * stepX, y: norm(v) }));
+        const curve = linePts ? smoothPath(linePts) : "";
+        const fill = linePts ? `${curve} L ${linePts[linePts.length - 1].x},${topPad + chartH} L 0,${topPad + chartH} Z` : "";
+        const maxIdx = sample ? sample.indexOf(max) : -1;
+        const minIdx = sample ? sample.indexOf(min) : -1;
         return (
           <div className="fixed inset-0 z-30 flex flex-col justify-end" style={{ background: "rgba(20,25,40,0.45)" }} onClick={() => setWeatherDayIdx(null)}>
             <div className="rounded-t-jz-card p-5 pb-7" style={{ background: C.paper }} onClick={e => e.stopPropagation()}>
-              <div className="flex justify-between items-start gap-2 mb-1">
-                <div>
-                  <div className="text-lg font-bold" style={{ ...display, color: C.ink }}>{t("ui.day")} {weatherDayIdx + 1} — {formatTemp(w.hi)} / {formatTemp(w.lo)}</div>
-                  <div className="text-xs mt-0.5" style={{ color: C.sub }}>{w.note}</div>
+              <div className="flex justify-between items-start gap-3 mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0" style={{ background: C.greenSoft }}>
+                    <Icon size={26} color={C.green} />
+                  </div>
+                  <div>
+                    <div className="text-[11px] font-bold uppercase tracking-wide" style={{ color: C.sub }}>{t("ui.day")} {weatherDayIdx + 1}</div>
+                    <div className="text-sm font-bold" style={{ color: C.ink }}>{w.note}</div>
+                  </div>
                 </div>
-                <button onClick={() => setWeatherDayIdx(null)}><X size={18} style={{ color: C.sub }} /></button>
+                <button onClick={() => setWeatherDayIdx(null)} className="shrink-0 mt-0.5"><X size={18} style={{ color: C.sub }} /></button>
               </div>
 
-              {(w.feelsLike != null || w.cloudPct != null || w.windMph != null || w.humidityPct != null) && (
-                <div className="grid grid-cols-4 gap-2 mt-4">
-                  {[
-                    [t("weather.feelsLike"), w.feelsLike != null ? formatTemp(w.feelsLike) : "—"],
-                    [t("weather.cloud"), w.cloudPct != null ? `${w.cloudPct}%` : "—"],
-                    [t("weather.wind"), w.windMph != null ? `${w.windMph}${windUnitLabel()}` : "—"],
-                    [t("weather.humidity"), w.humidityPct != null ? `${w.humidityPct}%` : "—"],
-                  ].map(([label, val], i) => (
-                    <div key={i} className="rounded-xl p-2 text-center" style={{ background: C.card, border: `1px solid ${C.line}` }}>
-                      <div className="text-sm font-bold" style={{ color: C.ink }}>{val}</div>
-                      <div className="text-[9px] font-bold uppercase mt-0.5" style={{ color: C.sub }}>{label}</div>
-                    </div>
-                  ))}
+              <div className="flex items-baseline gap-2 mb-5" style={{ ...font, fontVariantNumeric: "tabular-nums" }}>
+                <span className="text-4xl font-bold" style={{ color: C.ink }}>{formatTemp(w.hi)}</span>
+                <span className="text-lg font-semibold" style={{ color: C.sub }}>{formatTemp(w.lo)}</span>
+              </div>
+
+              {/* Hour-by-hour icon + temp for this specific date, same shape
+                  as iOS Weather's hourly strip — the curve below only shows
+                  the trend, not what's actually happening each hour. */}
+              {w.hourlyTemps && w.hourlyIcons && w.hourlyTemps.length === w.hourlyIcons.length && (
+                <div className="flex gap-2 overflow-x-auto jz-scroll mb-5 pb-0.5">
+                  {w.hourlyTemps.map((temp: number, i: number) => {
+                    const HourIcon = WEATHER_ICON[w.hourlyIcons![i]] || Cloud;
+                    return (
+                      <div key={i} className="flex flex-col items-center gap-1.5 shrink-0 rounded-xl px-2.5 py-2.5"
+                        style={{ background: C.card, border: `1px solid ${C.line}`, minWidth: 46 }}>
+                        <div className="text-[10px] font-bold" style={{ color: C.sub }}>{hour12Label(i)}</div>
+                        <HourIcon size={16} color={C.green} />
+                        <div className="text-xs font-bold" style={{ ...font, fontVariantNumeric: "tabular-nums", color: C.ink }}>{formatTemp(temp)}</div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
 
-              {line && (
-                <>
-                  <div className="text-xs font-bold uppercase tracking-wide mt-4 mb-2" style={{ color: C.sub }}>{t("weather.hourlyTemp")}</div>
-                  <svg viewBox="0 0 320 90" style={{ width: "100%", height: 90 }}>
-                    <polyline points={line} fill="none" stroke={C.green} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
-                    {sample!.map((v, i) => <circle key={i} cx={i * stepX} cy={norm(v)} r={2.6} fill={C.green} />)}
+              {curve && (
+                <div className="mb-5">
+                  <svg viewBox={`0 0 ${chartW} ${svgH}`} style={{ width: "100%", height: svgH }}>
+                    <defs>
+                      <linearGradient id="jzWeatherFill" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={C.green} stopOpacity={0.35} />
+                        <stop offset="100%" stopColor={C.green} stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <path d={fill} fill="url(#jzWeatherFill)" stroke="none" />
+                    <path d={curve} fill="none" stroke={C.green} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+                    {/* Highest/lowest points on the plotted curve, called out the
+                        same way iOS Weather does — a small dot plus its actual
+                        temperature right on the graph, not just in the header. */}
+                    {[[maxIdx, "H", C.amber], [minIdx, "L", C.sub]].map(([idx, label, color]: any) =>
+                      idx >= 0 && idx !== undefined && (
+                        <g key={label}>
+                          <circle cx={linePts![idx].x} cy={linePts![idx].y} r={3.2} fill={color} stroke={C.paper} strokeWidth={1.5} />
+                          <text x={Math.min(Math.max(linePts![idx].x, 20), chartW - 20)} y={linePts![idx].y - 9}
+                            textAnchor="middle" fontSize="10" fontWeight="700" fontFamily="'DM Sans','Helvetica Neue',system-ui,sans-serif" fill={color}>
+                            {label} {formatTemp(sample![idx])}
+                          </text>
+                        </g>
+                      )
+                    )}
                   </svg>
-                </>
+                  <div className="flex justify-between mt-1.5" style={{ ...font, fontVariantNumeric: "tabular-nums" }}>
+                    {HOUR_LABEL.slice(0, sample!.length).map((h, i) => (
+                      <span key={i} className="text-[10px] font-semibold" style={{ color: C.sub }}>{h}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {(w.feelsLike != null || w.windMph != null || w.humidityPct != null || w.cloudPct != null) && (
+                <div className="grid grid-cols-2 gap-2.5">
+                  {[
+                    [Thermometer, t("weather.feelsLike"), w.feelsLike != null ? formatTemp(w.feelsLike) : "—"],
+                    [Wind, t("weather.wind"), w.windMph != null ? `${w.windMph}${windUnitLabel()}` : "—"],
+                    [Droplets, t("weather.humidity"), w.humidityPct != null ? `${w.humidityPct}%` : "—"],
+                    [Cloud, t("weather.cloud"), w.cloudPct != null ? `${w.cloudPct}%` : "—"],
+                  ].map(([DetailIcon, label, val]: any, i) => (
+                    <div key={i} className="rounded-2xl p-3" style={{ background: C.card, border: `1px solid ${C.line}` }}>
+                      <div className="flex items-center gap-1.5 mb-1.5">
+                        <DetailIcon size={13} color={C.green} />
+                        <div className="text-[9px] font-bold uppercase tracking-wide" style={{ color: C.sub }}>{label}</div>
+                      </div>
+                      <div className="text-lg font-bold" style={{ ...font, fontVariantNumeric: "tabular-nums", color: C.ink }}>{val}</div>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
           </div>

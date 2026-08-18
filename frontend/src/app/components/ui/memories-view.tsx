@@ -1,10 +1,14 @@
 import { useState } from "react";
-import { Share2, X, Image as ImageIcon } from "lucide-react";
+import { Share2, X, Image as ImageIcon, UtensilsCrossed, Landmark, Palette, Leaf, ShoppingBag, Compass, BedDouble, MapPin } from "lucide-react";
 import { C, display } from "./jourzy-theme";
 import { tripTile } from "./trip-row";
 import { useTranslation } from "../../utils/translations";
 
-const CAT_ICON: Record<string, string> = { food: "🍜", culture: "⛩️", museum: "🏛️", exhibition: "🖼️", nature: "🌿", shopping: "🛍️", activity: "✨", rest: "🛌" };
+// Same real line-icon set as plan-view.tsx's activity cards, not emoji.
+const CAT_ICON: Record<string, any> = {
+  food: UtensilsCrossed, culture: Landmark, museum: Palette, exhibition: ImageIcon,
+  nature: Leaf, shopping: ShoppingBag, activity: Compass, rest: BedDouble,
+};
 
 function dateForDay(arrivalDate: string | undefined, dayNumber: number): Date | null {
   if (!arrivalDate) return null;
@@ -13,7 +17,7 @@ function dateForDay(arrivalDate: string | undefined, dayNumber: number): Date | 
   return d;
 }
 
-type Tile = { url: string | null; caption: string; title: string; emoji: string; key: string };
+type Tile = { url: string | null; caption: string; title: string; icon: any; key: string };
 
 export default function MemoriesView({ tripData }: { tripData: any }) {
   const { t } = useTranslation();
@@ -73,13 +77,13 @@ export default function MemoriesView({ tripData }: { tripData: any }) {
         const dayMemories = touched.filter((m) => m.day_number === dayNumber);
         const date = dateForDay(tripData.plan?.arrivalDate, dayNumber);
         const tiles: Tile[] = dayMemories.flatMap((m) => {
-          const emoji = CAT_ICON[categoryFor(m.day_number, m.activity_index) || ""] || "📍";
+          const icon = CAT_ICON[categoryFor(m.day_number, m.activity_index) || ""] || MapPin;
           if ((m.photos?.length || 0) > 0) {
             return m.photos.map((p: any, i: number) => ({
-              url: p.url, caption: m.caption || "", title: m.activity_title, emoji, key: `${m.id}-${i}`,
+              url: p.url, caption: m.caption || "", title: m.activity_title, icon, key: `${m.id}-${i}`,
             }));
           }
-          return [{ url: null, caption: m.caption || t("memories.visitedNoPhoto"), title: m.activity_title, emoji, key: `${m.id}-novisit` }];
+          return [{ url: null, caption: m.caption || t("memories.visitedNoPhoto"), title: m.activity_title, icon, key: `${m.id}-novisit` }];
         });
         return (
           <div key={dayNumber} className="mb-5">
@@ -94,7 +98,7 @@ export default function MemoriesView({ tripData }: { tripData: any }) {
                   {tile.url ? (
                     <img src={tile.url} alt="" className="w-full h-full object-cover" />
                   ) : (
-                    <span className="text-2xl" style={{ filter: "drop-shadow(0 1px 3px rgba(0,0,0,.25))" }}>{tile.emoji}</span>
+                    <tile.icon size={26} color="#FBF6EC" style={{ filter: "drop-shadow(0 1px 3px rgba(0,0,0,.25))" }} />
                   )}
                 </button>
               ))}
@@ -115,7 +119,7 @@ export default function MemoriesView({ tripData }: { tripData: any }) {
               <img src={lightbox.url} alt="" className="w-full h-full object-cover" />
             ) : (
               <div className="w-full h-full flex items-center justify-center" style={{ background: tripTile(lightbox.title).background }}>
-                <span className="text-6xl" style={{ filter: "drop-shadow(0 1px 3px rgba(0,0,0,.25))" }}>{lightbox.emoji}</span>
+                <lightbox.icon size={56} color="#FBF6EC" style={{ filter: "drop-shadow(0 1px 3px rgba(0,0,0,.25))" }} />
               </div>
             )}
           </div>
