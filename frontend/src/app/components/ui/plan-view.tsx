@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Map, Star, AlertTriangle, Clock, Camera, X, Wallet, ChevronRight, Sparkles, Cloud, CloudRain, CloudSun, Sun, CloudSnow, CloudLightning, Wind, Droplets, Thermometer, UtensilsCrossed, Landmark, Palette, Image as ImageIcon, Leaf, ShoppingBag, Compass, BedDouble, MapPin } from "lucide-react";
+import { Map, Star, AlertTriangle, Clock, Camera, X, Wallet, ChevronRight, Sparkles, Cloud, CloudRain, CloudSun, Sun, CloudSnow, CloudLightning, Wind, Droplets, Thermometer, UtensilsCrossed, Landmark, Palette, Image as ImageIcon, Leaf, ShoppingBag, Compass, BedDouble, MapPin, NotebookText } from "lucide-react";
 import { C, display, font } from "./jourzy-theme";
 import MemorySheet from "./memory-sheet";
 import { useLiveWeatherWeek } from "../../utils/live-weather";
@@ -144,13 +144,17 @@ export default function PlanView({ tripData, onSaveMemory }: { tripData: any, on
             const uid = uidFor(a, idx);
             const memory = memoryFor(d.dayNumber, idx);
             const photoCount = memory?.photos?.length || 0;
+            // A caption saved with zero photos is still a real memory — it
+            // used to be visually identical to "nothing saved yet" here,
+            // which is exactly backwards from what was actually recorded.
+            const noteOnly = photoCount === 0 && !!memory?.caption?.trim();
             return (
               <div key={uid} className="rounded-jz-card p-3.5 transition-all cursor-pointer" onClick={() => setMemoryForIdx(idx)}
                 style={{ background: C.card, border: `${a.requested ? "2px" : "1px"} solid ${a.requested ? C.green : "transparent"}` }}>
                 <div className="flex gap-3">
                   <div className="w-9 h-9 rounded-xl shrink-0 flex items-center justify-center"
-                    style={{ background: photoCount > 0 ? "rgba(196, 58, 47, 0.15)" : C.greenSoft }}>
-                    {(() => { const CatIcon = CAT_ICON[a.category] || MapPin; return <CatIcon size={16} color={photoCount > 0 ? C.hanko : C.green} />; })()}
+                    style={{ background: photoCount > 0 ? "rgba(196, 58, 47, 0.15)" : noteOnly ? "var(--color-jz-goldTint)" : C.greenSoft }}>
+                    {(() => { const CatIcon = CAT_ICON[a.category] || MapPin; return <CatIcon size={16} color={photoCount > 0 ? C.hanko : noteOnly ? "var(--color-jz-goldInk)" : C.green} />; })()}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="font-bold text-sm" style={{ color: C.ink }}>{a.title}</div>
@@ -180,6 +184,12 @@ export default function PlanView({ tripData, onSaveMemory }: { tripData: any, on
                           ))}
                         </span>
                         {t("plan.photoCount").replace("{{n}}", String(photoCount))}
+                      </span>
+                    ) : noteOnly ? (
+                      <span onClick={(e) => e.stopPropagation()} className="mt-2.5 flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-jz-label font-bold max-w-full"
+                        style={{ background: "var(--color-jz-goldTint)", color: "var(--color-jz-goldInk)" }}>
+                        <NotebookText size={13} className="shrink-0" />
+                        <span className="truncate">{memory.caption}</span>
                       </span>
                     ) : (
                       <span className="mt-2.5 inline-flex items-center gap-1.5 rounded-full border border-dashed px-3 py-1.5 text-jz-label font-semibold"

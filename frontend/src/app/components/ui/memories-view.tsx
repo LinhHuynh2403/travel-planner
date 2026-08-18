@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Share2, X, Image as ImageIcon, UtensilsCrossed, Landmark, Palette, Leaf, ShoppingBag, Compass, BedDouble, MapPin, MessageCircle, MessageSquare, Link as LinkIcon, Check, MoreHorizontal, Facebook } from "lucide-react";
+import { Share2, X, Image as ImageIcon, UtensilsCrossed, Landmark, Palette, Leaf, ShoppingBag, Compass, BedDouble, MapPin, MessageCircle, MessageSquare, Link as LinkIcon, Check, MoreHorizontal, Facebook, NotebookText } from "lucide-react";
 import { C, display } from "./jourzy-theme";
 import { tripTile } from "./trip-row";
 import { shareContent, shareImage, whatsappUrl, smsUrl, twitterIntentUrl, facebookShareUrl, canUseNativeShare } from "../../utils/share";
@@ -18,7 +18,10 @@ function dateForDay(arrivalDate: string | undefined, dayNumber: number): Date | 
   return d;
 }
 
-type Tile = { url: string | null; caption: string; title: string; icon: any; key: string };
+// "empty" only ever means "marked visited, nothing else recorded" — a
+// caption saved with no photo is real content and gets its own "note" look
+// (text preview, not a bare icon), not lumped in with the truly-empty case.
+type Tile = { url: string | null; caption: string; title: string; icon: any; key: string; kind: "photo" | "note" | "empty" };
 
 type ShareTarget = { title: string; text: string; url?: string; imageUrl?: string };
 
@@ -43,16 +46,24 @@ export default function MemoriesView({ tripData }: { tripData: any }) {
     .replace("{{region}}", tripData.plan?.region || "")
     .replace("{{n}}", String(totalPhotos)).replace("{{m}}", String(placesCount));
   const appUrl = typeof window !== "undefined" ? window.location.origin : undefined;
+  // 'local' is what a guest's never-saved-to-the-backend trip gets (see
+  // new-trip-chat.tsx's handleGenerate) — there's no real row for
+  // /api/trips/:id/public to look up, so there's nothing real to link to.
+  const hasSavedTrip = !!tripData.tripId && tripData.tripId !== "local";
+  // What the link actually opens: the real trip recap (region, dates, every
+  // shared memory/photo) — not just JourZy's homepage, which is what this
+  // used to point at and the whole reason a recipient couldn't see anything.
+  const sharePageUrl = hasSavedTrip ? `${appUrl}/shared/${tripData.tripId}` : undefined;
 
   const openTripShare = () => {
     setCopied(false);
     setMoreUnavailable(false);
-    setShareTarget({ title: tripData.plan?.region || "", text: tripShareText, url: appUrl });
+    setShareTarget({ title: tripData.plan?.region || "", text: tripShareText, url: sharePageUrl });
   };
   const openMemoryShare = (tile: Tile) => {
     setCopied(false);
     setMoreUnavailable(false);
-    setShareTarget({ title: tile.title, text: tile.caption ? `${tile.title} — ${tile.caption}` : tile.title, imageUrl: tile.url || undefined });
+    setShareTarget({ title: tile.title, text: tile.caption ? `${tile.title} — ${tile.caption}` : tile.title, url: sharePageUrl, imageUrl: tile.url || undefined });
   };
 
   const shareCopyLink = async () => {
@@ -65,7 +76,7 @@ export default function MemoriesView({ tripData }: { tripData: any }) {
     if (!canUseNativeShare()) { setMoreUnavailable(true); return; }
     const target = shareTarget!;
     const ok = target.imageUrl
-      ? await shareImage({ title: target.title, text: target.text, imageUrl: target.imageUrl })
+      ? await shareImage({ title: target.title, text: target.text, imageUrl: target.imageUrl, pageUrl: target.url })
       : await shareContent({ title: target.title, text: target.text, url: target.url });
     if (ok) setShareTarget(null);
     // else: traveler dismissed the real native sheet themselves — that's a
@@ -123,10 +134,16 @@ export default function MemoriesView({ tripData }: { tripData: any }) {
           const icon = CAT_ICON[categoryFor(m.day_number, m.activity_index) || ""] || MapPin;
           if ((m.photos?.length || 0) > 0) {
             return m.photos.map((p: any, i: number) => ({
-              url: p.url, caption: m.caption || "", title: m.activity_title, icon, key: `${m.id}-${i}`,
+              url: p.url, caption: p.caption || "", title: m.activity_title, icon, key: `${m.id}-${i}`, kind: "photo" as const,
             }));
           }
-          return [{ url: null, caption: m.caption || t("memories.visitedNoPhoto"), title: m.activity_title, icon, key: `${m.id}-novisit` }];
+          const hasNote = !!m.caption?.trim();
+          return [{
+            url: null,
+            caption: hasNote ? m.caption : t("memories.visitedNoPhoto"),
+            title: m.activity_title, icon, key: `${m.id}-novisit`,
+            kind: (hasNote ? "note" : "empty") as const,
+          }];
         });
         return (
           <div key={dayNumber} className="mb-5">
@@ -137,9 +154,18 @@ export default function MemoriesView({ tripData }: { tripData: any }) {
               {tiles.map((tile) => (
                 <button key={tile.key} onClick={() => setLightbox(tile)}
                   className="rounded-2xl overflow-hidden relative aspect-square flex items-center justify-center"
-                  style={tile.url ? undefined : { background: tripTile(tile.title).background }}>
-                  {tile.url ? (
-                    <img src={tile.url} alt="" className="w-full h-full object-cover" />
+                  style={
+                    tile.kind === "photo" ? undefined
+                      : tile.kind === "note" ? { background: C.greenSoft, padding: 8 }
+                      : { background: tripTile(tile.title).background }
+                  }>
+                  {tile.kind === "photo" ? (
+                    <img src={tile.url!} alt="" className="w-full h-full object-cover" />
+                  ) : tile.kind === "note" ? (
+                    <div className="w-full h-full flex flex-col items-start justify-between">
+                      <NotebookText size={16} color={C.green} className="shrink-0" />
+                      <p className="text-[10px] leading-tight text-left line-clamp-3" style={{ color: C.ink }}>{tile.caption}</p>
+                    </div>
                   ) : (
                     <tile.icon size={26} color="#FBF6EC" style={{ filter: "drop-shadow(0 1px 3px rgba(0,0,0,.25))" }} />
                   )}
