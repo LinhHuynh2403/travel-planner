@@ -6,7 +6,7 @@ import { useTranslation } from "../../utils/translations";
 
 export default function TripsList({ open, goChat }: { open: (id: string) => void, goChat: () => void }) {
   const { t } = useTranslation();
-  const { upcomingTrips, historyTrips, loadingTripId, deletingTripId, fetchError, fetchTrips, deleteTrip, openTrip, isBroken } = useSavedTrips(open);
+  const { upcomingTrips, historyTrips, loadingTripId, deletingTripId, fetchError, loading, fetchTrips, deleteTrip, openTrip, isBroken } = useSavedTrips(open);
 
   return (
     <div className="px-4 pb-4 pt-4">
@@ -36,7 +36,10 @@ export default function TripsList({ open, goChat }: { open: (id: string) => void
             />
           ))}
         </div>
-      ) : (
+      ) : !loading && (
+        // Guarded on !loading so this doesn't flash before the (now cached,
+        // usually instant) fetch has actually confirmed there's nothing —
+        // same fix as Home's isNewUser hero.
         <div className="rounded-jz-card p-5 text-center" style={{ background: C.card, border: `1px dashed ${C.line}` }}>
           <div className="text-jz-body-big font-bold mb-1" style={{ color: C.ink }}>{t("nav.noUpcomingTrips")}</div>
           <p className="text-jz-label mb-3" style={{ color: C.sub }}>{t("nav.planInChatTab")}</p>

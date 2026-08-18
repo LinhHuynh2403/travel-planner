@@ -89,7 +89,7 @@ export default function HomeView({
   onSeeAllTrips: () => void;
 }) {
   const { t } = useTranslation();
-  const { savedTrips, upcomingTrips, historyTrips, loadingTripId, deletingTripId, fetchError, fetchTrips, deleteTrip, openTrip, isBroken } = useSavedTrips(onOpened);
+  const { savedTrips, upcomingTrips, historyTrips, loadingTripId, deletingTripId, fetchError, loading, fetchTrips, deleteTrip, openTrip, isBroken } = useSavedTrips(onOpened);
   const [userName, setUserName] = useState<string | null>(null);
 
   useEffect(() => {
@@ -107,7 +107,10 @@ export default function HomeView({
     })();
   }, []);
 
-  const isNewUser = savedTrips.length === 0;
+  // Only "new user" once we actually know that — otherwise a returning
+  // traveler with real trips flashes the empty-state hero for a moment on
+  // every cold load, before the cached/fetched trips have set in.
+  const isNewUser = !loading && savedTrips.length === 0;
   const upcoming = upcomingTrips[0];
   const heroPhotoRef = useDestinationPhoto(upcoming?.region || "");
   const previewTrips = [...upcomingTrips, ...historyTrips].slice(0, 4);

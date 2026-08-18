@@ -3,14 +3,24 @@ import { apiFetch } from "./api";
 import { supabase } from "./supabaseClient";
 import { useTranslation } from "./translations";
 
+// Module-level, not per-hook-instance: Home and Trips each mount their own
+// useSavedTrips() (they're never mounted at the same time — the tab bar
+// fully unmounts the inactive tab), and without this, every single tab
+// switch re-fetched from empty, flashing the "no trips yet" / new-user state
+// for the ~1s round trip before showing what was already known a moment
+// ago. Seeding state from this cache on mount kills that flash; fetchTrips
+// still runs in the background every mount to keep it current.
+let tripsCache: any[] | null = null;
+
 // Shared by home-view.tsx and trips-list.tsx so both screens fetch/delete/open
-// trips through one implementation instead of drifting apart. Each screen
-// still calls this independently (they're never mounted at the same time —
-// the tab bar fully unmounts the inactive tab), so there's no shared-state
-// synchronization to manage, just no duplicated logic.
+// trips through one implementation instead of drifting apart.
 export function useSavedTrips(onOpened: (tripId: string) => void) {
   const { t } = useTranslation();
-  const [savedTrips, setSavedTrips] = useState<any[]>([]);
+  const [savedTrips, setSavedTrips] = useState<any[]>(tripsCache ?? []);
+  // Only true before the very first fetch of the session has resolved
+  // (tripsCache still null) — lets a caller avoid confidently declaring
+  // "new user, no trips" before it actually knows that.
+  const [loading, setLoading] = useState(tripsCache === null);
   const [loadingTripId, setLoadingTripId] = useState<string | null>(null);
   const [deletingTripId, setDeletingTripId] = useState<string | null>(null);
   const [fetchError, setFetchError] = useState(false);
@@ -29,15 +39,19 @@ export function useSavedTrips(onOpened: (tripId: string) => void) {
     // session actually existed and the call still failed.
     const { data } = await supabase.auth.getSession();
     if (!data.session) {
+      tripsCache = [];
       setSavedTrips([]);
       setFetchError(false);
+      setLoading(false);
       return;
     }
     try {
       const resp = await apiFetch(`/api/trips`);
       if (resp.ok) {
-        const data = await resp.json();
-        setSavedTrips(data.trips || []);
+        const json = await resp.json();
+        const trips = json.trips || [];
+        tripsCache = trips;
+        setSavedTrips(trips);
         setFetchError(false);
       } else {
         // A non-401 failure here used to look identical to "you have no
@@ -49,6 +63,8 @@ export function useSavedTrips(onOpened: (tripId: string) => void) {
     } catch (e) {
       console.error(e);
       setFetchError(true);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -62,7 +78,13 @@ export function useSavedTrips(onOpened: (tripId: string) => void) {
     setDeletingTripId(trip.id);
     try {
       const resp = await apiFetch(`/api/trips/${trip.id}`, { method: "DELETE" });
-      if (resp.ok) setSavedTrips(prev => prev.filter(saved => saved.id !== trip.id));
+      if (resp.ok) {
+        setSavedTrips(prev => {
+          const next = prev.filter(saved => saved.id !== trip.id);
+          tripsCache = next;
+          return next;
+        });
+      }
     } catch (e) {
       console.error("Failed to delete trip:", e);
     } finally {
@@ -116,7 +138,7 @@ export function useSavedTrips(onOpened: (tripId: string) => void) {
 
   return {
     savedTrips, upcomingTrips, historyTrips,
-    loadingTripId, deletingTripId, fetchError,
+    loadingTripId, deletingTripId, fetchError, loading,
     fetchTrips, deleteTrip, openTrip, isBroken,
   };
 }

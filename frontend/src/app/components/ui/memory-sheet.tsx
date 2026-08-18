@@ -18,7 +18,11 @@ export default function MemorySheet({
   onClose: () => void;
 }) {
   const { t } = useTranslation();
-  const [visited, setVisited] = useState(existingMemory ? existingMemory.visited : true);
+  // Defaults off for a brand-new memory — the traveler has to actually flip
+  // this on. Defaulting it "visited: true" meant just opening the sheet to
+  // add a caption or photo (without touching the toggle) silently recorded
+  // a visit that may never have happened.
+  const [visited, setVisited] = useState(existingMemory ? existingMemory.visited : false);
   const [caption, setCaption] = useState(existingMemory?.caption || "");
   const [newFiles, setNewFiles] = useState<File[]>([]);
   const [saving, setSaving] = useState(false);
