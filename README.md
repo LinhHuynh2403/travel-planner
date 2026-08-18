@@ -43,8 +43,8 @@ What started as a tool for my parents is now used by 5+ friends and family, and 
 </td>
 <td width="33%">
 
-**Live weather + packing list**
-<img src="docs/demo-weather.png" alt="Live weather forecast and AI packing checklist" width="100%">
+**Live weather, day by day**
+<img src="docs/demo-weather.png" alt="Live weather forecast with hourly detail and high/low markers" width="100%">
 
 </td>
 </tr>
