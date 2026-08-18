@@ -1,15 +1,17 @@
 import { useState, useEffect } from "react";
-import { ChevronLeft, MessageCircle, X } from "lucide-react";
+import { ChevronLeft, MessageCircle, X, CalendarDays, Map, Backpack, BookOpen, Image as ImageIcon } from "lucide-react";
 import { C } from "./jourzy-theme";
 import PlanView from "./plan-view";
-import BudgetView from "./budget-view";
-import PrepView from "./prep-view";
+import MapView from "./map-view";
+import PackingView from "./packing-view";
+import GuideView from "./guide-view";
+import MemoriesView from "./memories-view";
 import CompanionSheet from "./companion-sheet";
 import { useTranslation } from "../../utils/translations";
 
 export default function PlanViewWrapper({ tripId, goBack, notice, onDismissNotice }: { tripId: string, goBack: () => void, notice?: string | null, onDismissNotice?: () => void }) {
   const { t } = useTranslation();
-  const [sub, setSub] = useState<"plan" | "budget" | "prep">("plan");
+  const [sub, setSub] = useState<"plan" | "map" | "packing" | "guide" | "memories">("plan");
   const [bubble, setBubble] = useState(false);
   const [isPast, setIsPast] = useState(false);
   const [tripData, setTripData] = useState<any>(null);
@@ -42,10 +44,21 @@ export default function PlanViewWrapper({ tripId, goBack, notice, onDismissNotic
     });
   };
 
+  const handleSaveMemory = (updatedRow: any) => {
+    setTripData((prev: any) => {
+      if (!prev) return prev;
+      const rest = (prev.memories || []).filter((m: any) =>
+        !(m.day_number === updatedRow.day_number && m.activity_index === updatedRow.activity_index));
+      const updated = { ...prev, memories: [...rest, updatedRow] };
+      localStorage.setItem('generatedItinerary', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
   return (
     <>
       {/* trip header */}
-      <div className="flex items-center gap-2 px-4 py-2 sticky top-0 bg-[#F5F6F2] z-10">
+      <div className="flex items-center gap-2 px-4 py-2 sticky top-0 z-10" style={{ background: C.paper }}>
         <button onClick={goBack} className="flex items-center text-xs font-bold" style={{ color: C.green }}>
           <ChevronLeft size={16} /> {t("nav.backToTrips")}
         </button>
@@ -53,7 +66,7 @@ export default function PlanViewWrapper({ tripId, goBack, notice, onDismissNotic
           {tripData.plan?.region}
         </div>
         <span className="text-xs px-2 py-0.5 rounded-full font-bold"
-          style={!isPast ? { background: C.greenSoft, color: C.green } : { background: "#EEE", color: C.sub }}>
+          style={!isPast ? { background: C.greenSoft, color: C.green } : { background: C.line, color: C.sub }}>
           {!isPast ? t("nav.upcoming") : t("nav.history")}
         </span>
       </div>
@@ -67,72 +80,43 @@ export default function PlanViewWrapper({ tripId, goBack, notice, onDismissNotic
         </div>
       )}
 
-      {/* segmented control inside Upcoming Trip */}
-      {!isPast && (
-        <div className="flex mx-4 mb-2 rounded-full p-1" style={{ background: "#E9EBE5" }}>
-          {[
-            ["plan", t("nav.myPlan")],
-            ["budget", t("ui.budget")],
-            ["prep", t("nav.prep")]
-          ].map(([k, l]) => (
-            <button key={k} onClick={() => setSub(k as any)} className="flex-1 py-1.5 rounded-full text-xs font-bold"
-              style={sub === k ? { background: C.card, color: C.ink, boxShadow: "0 1px 3px rgba(0,0,0,0.1)" } : { color: C.sub }}>
-              {l}
-            </button>
-          ))}
-        </div>
-      )}
-
       {/* Sub Views */}
       <div className="pb-24">
-        {isPast ? (
-          <div className="pt-4">
-            <div className="mx-4 mb-6 p-5 rounded-2xl" style={{ background: "#22283A", color: "#FFFFFF" }}>
-              <div className="text-[10px] font-bold tracking-wider mb-1" style={{ color: "#8E99B0", textTransform: "uppercase" }}>
-                {t("nav.completedTrip")}
-              </div>
-              <div className="text-3xl font-bold mb-2" style={{ fontFamily: "Fraunces, serif" }}>
-                {tripData.plan?.region || "Seoul"}
-              </div>
-              <div className="text-xs" style={{ color: "#8E99B0" }}>
-                {tripData.dates || "May 8–12, 2026"} · {tripData.plan?.days?.reduce((acc: number, d: any) => acc + d.activities.length, 0) || 14} verified places visited
-              </div>
-            </div>
+        {sub === "plan" && <PlanView tripData={tripData} onSaveMemory={handleSaveMemory} />}
+        {sub === "map" && <MapView tripData={tripData} />}
+        {sub === "packing" && <PackingView tripData={tripData} />}
+        {sub === "guide" && <GuideView tripData={tripData} />}
+        {sub === "memories" && <MemoriesView tripData={tripData} />}
+      </div>
 
-            <div className="mx-4 bg-white rounded-2xl p-5 shadow-sm border border-[#E4E6E0]">
-              <h3 className="font-bold text-[#1B2333] mb-4 text-base">{t("nav.yourHighlights")}</h3>
-              <div className="space-y-3">
-                {(tripData.plan?.days?.[0]?.activities?.slice(0, 3).map((a: any) => a.title) || [
-                  "Bukchon Hanok stay",
-                  "Gwangjang Market bindaetteok",
-                  "Bukhansan sunrise hike"
-                ]).map((hl: string, i: number) => (
-                  <div key={i} className="flex items-start gap-3 text-sm" style={{ color: C.sub }}>
-                    <span style={{ color: "#FBBF24" }}>★</span>
-                    <span className="leading-tight mt-0.5">{hl}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="mx-10 mt-10 text-center text-sm leading-relaxed" style={{ color: C.sub }}>
-              {t("nav.readOnlyPastTrip")}
-            </div>
-          </div>
-        ) : (
-          <>
-            {sub === "plan" && <PlanView tripData={tripData} />}
-            {sub === "budget" && <BudgetView tripData={tripData} />}
-            {sub === "prep" && <PrepView tripData={tripData} />}
-          </>
-        )}
+      {/* trip-level bottom tab bar — replaces the global app tab bar while a trip is open */}
+      <div className="fixed bottom-0 left-0 right-0 flex justify-around items-center py-2 px-2 pb-[env(safe-area-inset-bottom)] z-20"
+        style={{ background: C.card, borderTop: `1px solid ${C.line}` }}>
+        {[
+          ["plan", CalendarDays, t("nav.plan")],
+          ["map", Map, t("nav.map")],
+          ["packing", Backpack, t("nav.packing")],
+          ["guide", BookOpen, t("nav.guide")],
+          ["memories", ImageIcon, t("nav.memories")],
+        ].map(([k, Icon, lbl]) => {
+          const active = sub === k;
+          const IconComp = Icon as any;
+          return (
+            <button key={k as string} onClick={() => setSub(k as any)}
+              className="flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-colors"
+              style={{ color: active ? C.green : C.sub, background: active ? C.greenSoft : "transparent" }}>
+              <IconComp size={18} strokeWidth={active ? 2.4 : 1.8} />
+              <span className="font-medium" style={{ fontSize: 9.5 }}>{lbl as string}</span>
+            </button>
+          );
+        })}
       </div>
 
       {/* floating companion chat bubble */}
       {!bubble && (
         <button onClick={() => setBubble(true)}
           className="fixed rounded-full shadow-xl flex items-center justify-center z-10"
-          style={{ right: 18, bottom: 86, width: 54, height: 54, background: !isPast ? C.green : C.ink }}>
+          style={{ right: 18, bottom: "calc(86px + env(safe-area-inset-bottom))", width: 54, height: 54, background: !isPast ? C.green : C.ink }}>
           <MessageCircle size={24} color="#fff" />
           <span className="absolute rounded-full" style={{ top: 4, right: 4, width: 10, height: 10, background: C.hanko, border: "2px solid #fff" }} />
         </button>

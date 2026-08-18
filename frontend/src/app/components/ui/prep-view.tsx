@@ -1,6 +1,7 @@
 import { C } from "./jourzy-theme";
 import { Cloud, CloudRain, CloudSun, Sun, CloudSnow, CloudLightning, Check, AlertCircle, ShieldAlert, HeartPulse, Wallet, Wifi, Clock } from "lucide-react";
 import { useTranslation } from "../../utils/translations";
+import { useLiveWeatherWeek } from "../../utils/live-weather";
 
 const WEATHER_ICON: Record<string, any> = {
   sunny: Sun, partly: CloudSun, cloudy: Cloud, rainy: CloudRain, snowy: CloudSnow, stormy: CloudLightning,
@@ -8,7 +9,10 @@ const WEATHER_ICON: Record<string, any> = {
 
 export default function PrepView({ tripData }: { tripData: any }) {
   const { t } = useTranslation();
-  if (!tripData) return <div className="p-4 text-center text-sm text-[#6B7280]">{t("prep.notAvailable")}</div>;
+  // Called unconditionally (before the tripData guard below) so hook order
+  // never shifts if tripData arrives after the first render.
+  const liveWeather = useLiveWeatherWeek(tripData?.plan?.region || "");
+  if (!tripData) return <div className="p-4 text-center text-sm text-jz-soft">{t("prep.notAvailable")}</div>;
 
   const insights = tripData.insights || {};
   const keyPhrases = insights.keyPhrases || [];
@@ -17,7 +21,9 @@ export default function PrepView({ tripData }: { tripData: any }) {
   const customs = insights.customsRestrictions || [];
   const cultural = insights.culturalTips || [];
   const safety = insights.safetyTips || [];
-  const weather = insights.weatherWeek || [];
+  // Real forecast wins the moment it loads; the AI's seasonal-typical guess
+  // is only a placeholder until then (or if the live fetch fails).
+  const weather = (liveWeather && liveWeather.length > 0) ? liveWeather : (insights.weatherWeek || []);
   const emergency = insights.emergencyNumbers;
   const currency = insights.currency;
   const timezoneNote = insights.timezoneNote;
@@ -32,7 +38,7 @@ export default function PrepView({ tripData }: { tripData: any }) {
           {weather.map((w: any, i: number) => {
             const Icon = WEATHER_ICON[w.icon] || Cloud;
             return (
-              <div key={i} className="flex-1 min-w-[70px] flex flex-col items-center justify-center p-3 rounded-2xl"
+              <div key={i} className="flex-1 min-w-[70px] flex flex-col items-center justify-center p-3 rounded-jz-card"
                 style={{ background: C.card, border: `1px solid ${C.line}` }}>
                 <div className="text-xs font-bold mb-1.5 whitespace-nowrap" style={{ color: C.ink }}>{w.d}</div>
                 <Icon size={16} color={C.green} className="mb-1.5" />
@@ -45,7 +51,7 @@ export default function PrepView({ tripData }: { tripData: any }) {
 
       {/* Timezone + Currency */}
       {(timezoneNote || currency) && (
-        <div className="rounded-2xl p-4 space-y-3" style={{ background: C.card, border: `1px solid ${C.line}` }}>
+        <div className="rounded-jz-card p-4 space-y-3" style={{ background: C.card, border: `1px solid ${C.line}` }}>
           {timezoneNote && (
             <div className="flex items-start gap-2.5 text-xs leading-relaxed" style={{ color: C.sub }}>
               <Clock size={15} className="shrink-0 mt-0.5" style={{ color: C.green }} />
@@ -69,7 +75,7 @@ export default function PrepView({ tripData }: { tripData: any }) {
 
       {/* Packing List */}
       {packingList.length > 0 && (
-        <div className="rounded-2xl p-5" style={{ background: C.card, border: `1px solid ${C.line}` }}>
+        <div className="rounded-jz-card p-5" style={{ background: C.card, border: `1px solid ${C.line}` }}>
           <div className="font-bold text-sm mb-4" style={{ color: C.ink }}>
             <span role="img" aria-label="pack" className="mr-2">🎒</span> {t("prep.packForTrip")}
           </div>
@@ -106,7 +112,7 @@ export default function PrepView({ tripData }: { tripData: any }) {
 
       {/* If something goes wrong (safety/health) */}
       {(emergency || logistics.healthAccess) && (
-        <div className="rounded-2xl p-5" style={{ background: C.card, border: `1px solid ${C.line}` }}>
+        <div className="rounded-jz-card p-5" style={{ background: C.card, border: `1px solid ${C.line}` }}>
           <div className="font-bold text-sm mb-3 flex items-center gap-2" style={{ color: C.ink }}>
             <HeartPulse size={16} style={{ color: C.green }} /> {t("prep.ifSomethingGoesWrong")}
           </div>
@@ -124,7 +130,7 @@ export default function PrepView({ tripData }: { tripData: any }) {
       )}
 
       {/* Logistics Cheat Sheet */}
-      <div className="rounded-2xl p-5" style={{ background: C.card, border: `1px solid ${C.line}` }}>
+      <div className="rounded-jz-card p-5" style={{ background: C.card, border: `1px solid ${C.line}` }}>
         <div className="font-bold text-sm mb-3 flex items-center gap-2" style={{ color: C.ink }}>
           <AlertCircle size={16} /> {t("prep.logisticsCheatSheet")}
         </div>
@@ -146,11 +152,11 @@ export default function PrepView({ tripData }: { tripData: any }) {
 
       {/* Customs & Rules */}
       {(customs.length > 0 || safety.length > 0 || cultural.length > 0) && (
-        <div className="rounded-2xl p-5" style={{ background: "#E8F5E9", border: "1px solid #A5D6A7" }}>
+        <div className="rounded-jz-card p-5" style={{ background: C.greenSoft, border: `1px solid ${C.green}` }}>
           <div className="font-bold text-sm mb-3 flex items-center gap-2" style={{ color: C.green }}>
             <ShieldAlert size={16} /> {t("prep.customsRulesTitle")}
           </div>
-          <div className="text-xs leading-relaxed space-y-2" style={{ color: "#374151" }}>
+          <div className="text-xs leading-relaxed space-y-2" style={{ color: C.ink }}>
             {customs.map((c: string, i: number) => <p key={`c-${i}`}>• {c}</p>)}
             {cultural.map((c: string, i: number) => <p key={`t-${i}`}>• {c}</p>)}
             {safety.map((s: string, i: number) => <p key={`s-${i}`}>• {s}</p>)}
@@ -160,7 +166,7 @@ export default function PrepView({ tripData }: { tripData: any }) {
 
       {/* Key Phrases */}
       {keyPhrases.length > 0 && (
-        <div className="rounded-2xl p-4" style={{ background: C.card, border: `1px solid ${C.line}` }}>
+        <div className="rounded-jz-card p-4" style={{ background: C.card, border: `1px solid ${C.line}` }}>
           <div className="font-bold text-sm mb-3" style={{ color: C.ink }}>{t("prep.sayItLikeLocal")}</div>
           <div className="space-y-3">
             {keyPhrases.map((kp: any, idx: number) => (

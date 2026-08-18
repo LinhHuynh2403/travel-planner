@@ -2,6 +2,8 @@ import express from "express";
 import cors from "cors";
 import "dotenv/config";
 import rateLimit from "express-rate-limit";
+import multer from "multer";
+import crypto from "node:crypto";
 import { supabase } from "./db.js";
 import fetch from "node-fetch";
 import { getSystemChatInstruction, getDeterministicGeneratorPrompt, getItineraryChatInstruction, getPastTripChatInstruction, getRescheduleChatInstruction, getLanguageInstruction, getLanguageMatchInstruction, getLanguageSwitchGuidance, BOOKING_GUIDANCE, FLIGHT_GUIDANCE, getActivitySuggestionPrompt, getFlightSuggestionPrompt } from "./prompts.js";
@@ -87,6 +89,13 @@ async function optionalAuth(req, res, next) {
   req.user = await verifyToken(req);
   next();
 }
+
+// Memory-photo uploads only — kept separate from the global express.json
+// 1MB limit above, which exists for ordinary JSON bodies, not binary photos.
+const memoryUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 8 * 1024 * 1024, files: 6 },
+});
 
 // ── Input validation helpers ──────────────────────────────────────────────────
 const MAX_TRIP_DAYS = 30;
@@ -217,14 +226,38 @@ const tools = [
   },
 ];
 
+// Open-Meteo has no city-name lookup on the forecast endpoint itself, so a
+// city/country string is resolved to coordinates via its free Geocoding API
+// first. Neither call needs an API key.
+async function geocodeLocation(query) {
+  const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=1&language=en&format=json`;
+  const resp = await fetch(url);
+  const data = await resp.json();
+  const match = data.results?.[0];
+  return match ? { lat: match.latitude, lng: match.longitude } : null;
+}
+
+async function fetchOpenMeteoForecast(lat, lng, unit = "imperial") {
+  // Open-Meteo accepts the unit system directly — no backend conversion math
+  // needed. Defaults to imperial (°F/mph) to match the app's pre-Units-toggle
+  // convention, also still used by the AI-fallback weatherWeek insights,
+  // which stay imperial regardless of this preference (free-form AI text,
+  // not worth parsing/rewriting for a display-unit toggle).
+  const temperatureUnit = unit === "metric" ? "celsius" : "fahrenheit";
+  const windSpeedUnit = unit === "metric" ? "kmh" : "mph";
+  // hourly temperature/humidity/cloud + daily feels-like/wind power the
+  // per-day weather detail sheet (stat grid + hourly curve) in the frontend
+  // — same single Open-Meteo call, no extra request.
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&daily=temperature_2m_max,temperature_2m_min,weather_code,apparent_temperature_max,wind_speed_10m_max&hourly=temperature_2m,relative_humidity_2m,cloud_cover&temperature_unit=${temperatureUnit}&wind_speed_unit=${windSpeedUnit}&timezone=auto&forecast_days=7`;
+  const resp = await fetch(url);
+  return resp.json();
+}
+
 async function getWeather(city, country) {
-  const key = process.env.OPENWEATHER_API_KEY;
-  if (!key) return { error: "Weather API key missing" };
-  const url = `https://api.openweathermap.org/data/2.5/forecast?q=${encodeURIComponent(city + ',' + (country || ''))}&units=metric&appid=${key}`;
   try {
-    const resp = await fetch(url);
-    const data = await resp.json();
-    return data;
+    const coords = await geocodeLocation(country ? `${city}, ${country}` : city);
+    if (!coords) return { error: "Location not found" };
+    return await fetchOpenMeteoForecast(coords.lat, coords.lng);
   } catch (e) {
     return { error: String(e) };
   }
@@ -1631,24 +1664,18 @@ app.get("/api/chat/history", requireAuth, async (req, res) => {
 });
 
 app.get("/api/weather", async (req, res) => {
-  const { lat, lng, q } = req.query;
-  const key = process.env.OPENWEATHER_API_KEY;
-  if (!key) return res.status(503).json({ error: "Weather service not configured" });
-
-  // imperial (°F) — the frontend renders these raw with no unit conversion,
-  // matching the °F convention used by the AI-fallback weatherWeek insights.
-  let url;
-  if (lat && lng) {
-    url = `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lng}&units=imperial&appid=${key}`;
-  } else if (q) {
-    url = `https://api.openweathermap.org/data/2.5/forecast?q=${encodeURIComponent(q)}&units=imperial&appid=${key}`;
-  } else {
-    return res.status(400).json({ error: "Missing coordinates or location query" });
-  }
-
+  const { lat, lng, q, unit } = req.query;
   try {
-    const resp = await fetch(url);
-    const data = await resp.json();
+    let coords;
+    if (lat && lng) {
+      coords = { lat, lng };
+    } else if (q) {
+      coords = await geocodeLocation(q);
+      if (!coords) return res.status(404).json({ error: "Location not found" });
+    } else {
+      return res.status(400).json({ error: "Missing coordinates or location query" });
+    }
+    const data = await fetchOpenMeteoForecast(coords.lat, coords.lng, unit === "metric" ? "metric" : "imperial");
     return res.json(data);
   } catch (e) {
     console.error("Weather fetch failed:", e);
@@ -1800,6 +1827,33 @@ app.get("/api/trips", requireAuth, async (req, res) => {
       .order("created_at", { ascending: false });
 
     if (error) throw error;
+
+    // The Trips-list UI shows a real "N memories · M places" line on
+    // completed trips — same computation memories-view.tsx already does per
+    // opened trip, just aggregated here across all of them in one query
+    // instead of N+1 round trips.
+    const tripIds = data.map((t) => t.id);
+    if (tripIds.length > 0) {
+      const { data: memRows, error: memError } = await supabase
+        .from("trip_memories")
+        .select("trip_id, visited, photos")
+        .in("trip_id", tripIds);
+      if (memError) throw memError;
+
+      const countsByTrip = {};
+      for (const row of memRows || []) {
+        const bucket = (countsByTrip[row.trip_id] ||= { memoryCount: 0, placesCount: 0 });
+        const photoCount = row.photos?.length || 0;
+        bucket.memoryCount += photoCount;
+        if (row.visited || photoCount > 0) bucket.placesCount += 1;
+      }
+      for (const trip of data) {
+        const counts = countsByTrip[trip.id] || { memoryCount: 0, placesCount: 0 };
+        trip.memoryCount = counts.memoryCount;
+        trip.placesCount = counts.placesCount;
+      }
+    }
+
     return res.json({ trips: data });
   } catch (e) {
     console.error("Error fetching trips:", e);
@@ -1831,7 +1885,16 @@ app.get("/api/trips/:tripId", requireAuth, async (req, res) => {
 
     if (itineraryError && itineraryError.code !== "PGRST116") throw itineraryError;
 
-    return res.json({ trip, itinerary });
+    const { data: memories, error: memoriesError } = await supabase
+      .from("trip_memories")
+      .select("*")
+      .eq("trip_id", tripId)
+      .order("day_number", { ascending: true })
+      .order("activity_index", { ascending: true });
+
+    if (memoriesError) throw memoriesError;
+
+    return res.json({ trip, itinerary, memories: memories || [] });
   } catch (e) {
     console.error("Error fetching trip details:", e);
     return res.status(500).json({ error: "Failed to fetch trip details" });
@@ -1860,6 +1923,161 @@ app.delete("/api/trips/:tripId", requireAuth, async (req, res) => {
   } catch (e) {
     console.error("Error deleting trip:", e);
     return res.status(500).json({ error: "Failed to delete trip" });
+  }
+});
+
+// Irreversible: wipes every trace of the traveler's account. Order matters —
+// Storage objects and the auth user aren't covered by the trips→itineraries→
+// trip_memories FK cascade already in schema.sql, so those need explicit
+// cleanup; the photo `path`s are read from trip_memories BEFORE the cascade
+// deletes those rows, since they won't be readable afterward.
+app.delete("/api/account", requireAuth, async (req, res) => {
+  const userId = req.user.id;
+  try {
+    const { data: trips, error: tripsError } = await supabase
+      .from("trips")
+      .select("id")
+      .eq("user_id", userId);
+    if (tripsError) throw tripsError;
+    const tripIds = (trips || []).map((t) => t.id);
+
+    if (tripIds.length > 0) {
+      const { data: memRows, error: memError } = await supabase
+        .from("trip_memories")
+        .select("photos")
+        .in("trip_id", tripIds);
+      if (memError) throw memError;
+      const paths = (memRows || []).flatMap((row) => (row.photos || []).map((p) => p.path).filter(Boolean));
+      if (paths.length > 0) {
+        const { error: removeError } = await supabase.storage.from("trip-memories").remove(paths);
+        // Not fatal — an orphaned Storage object left behind by a failed
+        // remove is a minor cleanup gap, not a reason to abort account
+        // deletion the traveler explicitly asked for.
+        if (removeError) console.error("Failed to remove some Storage objects during account deletion:", removeError);
+      }
+    }
+
+    const { error: memoryRowError } = await supabase.from("user_memory").delete().eq("user_id", userId);
+    if (memoryRowError) throw memoryRowError;
+
+    // Cascades itineraries + trip_memories rows automatically (schema.sql).
+    const { error: tripsDeleteError } = await supabase.from("trips").delete().eq("user_id", userId);
+    if (tripsDeleteError) throw tripsDeleteError;
+
+    const { error: authError } = await supabase.auth.admin.deleteUser(userId);
+    if (authError) throw authError;
+
+    return res.json({ success: true });
+  } catch (e) {
+    console.error("Error deleting account:", e);
+    return res.status(500).json({ error: "Failed to delete account" });
+  }
+});
+
+// ─── TRIP MEMORIES: photos + "visited" per activity ──────────────────────────
+function sanitizeFilename(name) {
+  return String(name || "photo").replace(/[^a-zA-Z0-9._-]/g, "_").slice(-80);
+}
+
+app.get("/api/trips/:tripId/memories", requireAuth, async (req, res) => {
+  const { tripId } = req.params;
+  try {
+    // SECURITY: ownership check before returning anything for this trip
+    const { data: trip, error: tripError } = await supabase
+      .from("trips")
+      .select("id")
+      .eq("id", tripId)
+      .eq("user_id", req.user.id)
+      .single();
+    if (tripError || !trip) return res.status(404).json({ error: "Trip not found" });
+
+    const { data, error } = await supabase
+      .from("trip_memories")
+      .select("*")
+      .eq("trip_id", tripId)
+      .order("day_number", { ascending: true })
+      .order("activity_index", { ascending: true });
+    if (error) throw error;
+
+    return res.json({ memories: data || [] });
+  } catch (e) {
+    console.error("Error fetching trip memories:", e);
+    return res.status(500).json({ error: "Failed to fetch trip memories" });
+  }
+});
+
+app.post("/api/trips/:tripId/memories", requireAuth, memoryUpload.array("photos", 6), async (req, res) => {
+  const { tripId } = req.params;
+  const dayNumber = parseInt(req.body.dayNumber, 10);
+  const activityIndex = parseInt(req.body.activityIndex, 10);
+  const activityTitle = typeof req.body.activityTitle === "string" ? req.body.activityTitle.slice(0, 200) : null;
+  const visited = req.body.visited === "true";
+  const caption = typeof req.body.caption === "string" ? req.body.caption.trim().slice(0, 500) : null;
+
+  if (!Number.isInteger(dayNumber) || dayNumber < 1 || !Number.isInteger(activityIndex) || activityIndex < 0) {
+    return res.status(400).json({ error: "dayNumber and activityIndex are required" });
+  }
+
+  try {
+    // SECURITY: the trip must belong to the authenticated user before we
+    // touch Storage or trip_memories at all
+    const { data: trip, error: tripError } = await supabase
+      .from("trips")
+      .select("id")
+      .eq("id", tripId)
+      .eq("user_id", req.user.id)
+      .single();
+    if (tripError || !trip) return res.status(404).json({ error: "Trip not found" });
+
+    const newPhotos = [];
+    for (const file of req.files || []) {
+      const path = `${tripId}/${dayNumber}-${activityIndex}/${crypto.randomUUID()}-${sanitizeFilename(file.originalname)}`;
+      const { error: uploadError } = await supabase.storage
+        .from("trip-memories")
+        .upload(path, file.buffer, { contentType: file.mimetype, upsert: false });
+      if (uploadError) throw uploadError;
+      const { data: pub } = supabase.storage.from("trip-memories").getPublicUrl(path);
+      newPhotos.push({ url: pub.publicUrl, path, uploadedAt: new Date().toISOString() });
+    }
+
+    // Read-modify-write: supabase-js has no raw JSONB-array-append
+    // expression, so fetch whatever's already saved for this activity and
+    // concat before upserting. Narrow race if the same activity is saved
+    // from two places at once — acceptable for a single-user scrapbook.
+    const { data: existing } = await supabase
+      .from("trip_memories")
+      .select("photos")
+      .eq("trip_id", tripId)
+      .eq("day_number", dayNumber)
+      .eq("activity_index", activityIndex)
+      .single();
+
+    const photos = [...(existing?.photos || []), ...newPhotos];
+
+    const { data: saved, error: upsertError } = await supabase
+      .from("trip_memories")
+      .upsert(
+        {
+          trip_id: tripId,
+          user_id: req.user.id,
+          day_number: dayNumber,
+          activity_index: activityIndex,
+          activity_title: activityTitle,
+          visited,
+          caption,
+          photos,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "trip_id,day_number,activity_index" }
+      )
+      .select()
+      .single();
+    if (upsertError) throw upsertError;
+
+    return res.json(saved);
+  } catch (e) {
+    console.error("Error saving trip memory:", e);
+    return res.status(500).json({ error: "Failed to save memory" });
   }
 });
 

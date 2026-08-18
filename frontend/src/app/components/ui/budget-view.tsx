@@ -31,7 +31,7 @@ export default function BudgetView({ tripData }: { tripData: any }) {
   const userBudgetStr = tripData?.plan?.budget || t("nav.budgetNotSet");
   const userBudgetNum = parseFloat(String(userBudgetStr).replace(/[^0-9.]/g, '')) || 0;
 
-  if (!b) return <div className="p-4 text-center text-sm text-[#6B7280]">{t("budget.notAvailable")}</div>;
+  if (!b) return <div className="p-4 text-center text-sm text-jz-soft">{t("budget.notAvailable")}</div>;
 
   const total = b.totalEstimatedCost || 0;
   const currency = "$";
@@ -41,7 +41,7 @@ export default function BudgetView({ tripData }: { tripData: any }) {
   return (
     <div className="px-4">
       {/* Top Card */}
-      <div className="rounded-2xl p-5 mb-4 text-white" style={{ background: C.ink }}>
+      <div className="rounded-jz-card p-5 mb-4 text-white" style={{ background: "#22283A" }}>
         <div className="text-xs opacity-70 uppercase tracking-widest font-bold mb-1">
           {t("budget.liveTripTotal")}
         </div>
@@ -75,7 +75,7 @@ export default function BudgetView({ tripData }: { tripData: any }) {
           return (
             <Wrapper key={idx}
               {...(clickable ? { onClick: () => setOpenItem(item) } : {})}
-              className={`w-full text-left rounded-2xl p-3.5 ${clickable ? "active:opacity-70 transition-opacity" : ""}`}
+              className={`w-full text-left rounded-jz-card p-3.5 ${clickable ? "active:opacity-70 transition-opacity" : ""}`}
               style={{ background: C.card, border: `1px solid ${C.line}` }}>
               <div className="flex justify-between items-start mb-1.5">
                 <div className="font-bold text-sm flex items-center gap-1.5" style={{ color: C.ink }}>
@@ -121,7 +121,7 @@ function BudgetCategorySheet({ item, kind, tripData, close }: { item: BreakdownI
 
   return (
     <div className="fixed inset-0 z-40 flex flex-col justify-end" style={{ background: "rgba(20,25,40,0.45)" }} onClick={close}>
-      <div className="rounded-t-3xl p-5 pb-7 max-h-[80%] overflow-y-auto jz-scroll" style={{ background: C.paper }} onClick={e => e.stopPropagation()}>
+      <div className="rounded-t-jz-card p-5 pb-7 max-h-[80%] overflow-y-auto jz-scroll" style={{ background: C.paper }} onClick={e => e.stopPropagation()}>
         <div className="flex justify-between items-start mb-3">
           <div>
             <div style={{ ...display, fontSize: 20, color: C.ink }}>{item.category}</div>
@@ -131,7 +131,7 @@ function BudgetCategorySheet({ item, kind, tripData, close }: { item: BreakdownI
         </div>
 
         {item.savingTip && (
-          <div className="rounded-2xl p-3 mb-4 flex items-start gap-1.5 text-xs leading-relaxed" style={{ background: C.greenSoft, color: C.green }}>
+          <div className="rounded-jz-card p-3 mb-4 flex items-start gap-1.5 text-xs leading-relaxed" style={{ background: C.greenSoft, color: C.green }}>
             <span className="mt-0.5">✨</span>
             <span><span className="font-bold">{t("budget.saveLabel")}</span> {item.savingTip}</span>
           </div>

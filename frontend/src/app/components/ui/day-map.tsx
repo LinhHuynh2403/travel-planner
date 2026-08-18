@@ -19,7 +19,7 @@ function addressOf(entity: any, fallback?: string): string {
 export default function DayMap({ stops, hotelName, hotelAddr }: { stops: any[]; hotelName: string; hotelAddr: string }) {
   const { t } = useTranslation();
   if (!stops.length) return (
-    <div className="rounded-2xl p-6 text-center text-xs mb-3" style={{ background: C.card, border: `1px solid ${C.line}`, color: C.sub }}>
+    <div className="rounded-jz-card p-6 text-center text-xs mb-3" style={{ background: C.card, border: `1px solid ${C.line}`, color: C.sub }}>
       {t("plan.nothingPicked")}
     </div>
   );
@@ -38,7 +38,7 @@ export default function DayMap({ stops, hotelName, hotelAddr }: { stops: any[]; 
     }&travelmode=walking`;
 
   return (
-    <div className="rounded-2xl p-3 mb-3" style={{ background: C.card, border: `1px solid ${C.line}` }}>
+    <div className="rounded-jz-card p-3 mb-3" style={{ background: `linear-gradient(160deg, ${C.greenSoft} 0%, ${C.paper} 55%, var(--color-jz-goldTint) 100%)`, border: `1px solid ${C.line}` }}>
       <div className="text-xs font-bold mb-1 px-1" style={{ color: C.ink }}>{t("plan.routeTitle")}</div>
       <svg viewBox={`0 0 330 ${H}`} width="100%" style={{ display: "block" }}>
         <path d={path} fill="none" stroke={C.green} strokeWidth="2.5" strokeDasharray="1 7" strokeLinecap="round" />
@@ -60,7 +60,7 @@ export default function DayMap({ stops, hotelName, hotelAddr }: { stops: any[]; 
         ))}
       </svg>
       <a href={routeUrl} target="_blank" rel="noreferrer"
-        className="mt-2 w-full py-2.5 rounded-xl text-xs font-bold text-white flex items-center justify-center gap-1.5"
+        className="mt-2 w-full py-2.5 rounded-jz-btn text-xs font-bold text-white flex items-center justify-center gap-1.5"
         style={{ background: C.green }}>
         <Map size={13} /> {t("plan.openFullRoute")}
       </a>

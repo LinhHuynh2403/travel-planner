@@ -23,6 +23,20 @@ export async function apiFetch(path: string, options: RequestInit = {}): Promise
     });
 }
 
+// For multipart uploads (real photo files) — deliberately doesn't set
+// Content-Type like apiFetch does, since the browser needs to generate its
+// own multipart boundary string; setting it manually would break the upload.
+export async function apiFetchForm(path: string, formData: FormData): Promise<Response> {
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+
+    return fetch(`${API_BASE}${path}`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: formData,
+    });
+}
+
 // Every rate limiter on the backend already sends a specific, user-readable
 // message in its JSON body (e.g. "Rate limit reached for AI features. Try
 // again in a bit.") — surface that instead of a generic "couldn't connect"

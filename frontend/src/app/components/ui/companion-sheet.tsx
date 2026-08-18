@@ -128,7 +128,7 @@ export default function CompanionSheet({ tripId, isPast, tripData, close, onRepl
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col justify-end" style={{ background: "rgba(20,25,40,0.45)" }} onClick={close}>
-      <div className="rounded-t-3xl flex flex-col" style={{ background: C.paper, height: "72%" }} onClick={e => e.stopPropagation()}>
+      <div className="rounded-t-jz-card flex flex-col" style={{ background: C.paper, height: "72%" }} onClick={e => e.stopPropagation()}>
         <div className="flex justify-between items-center px-5 pt-4 pb-2">
           <div>
             <div className="font-bold text-sm" style={{ color: C.ink }}>{isPast ? t("chat.lookingBackTitle") : t("chat.tripCompanionTitle")}</div>
@@ -187,17 +187,17 @@ export default function CompanionSheet({ tripId, isPast, tripData, close, onRepl
         </div>
 
         {isPast && messages.length === 1 && !isThinking ? (
-          <div className="p-4 space-y-2 pb-6" style={{ background: "#FFFFFF", borderTop: `1px solid ${C.line}` }}>
-            <button onClick={() => send(t("chat.missThemAlready"))} className="w-full text-left px-4 py-3 rounded-2xl text-sm font-medium flex justify-between items-center transition-colors" style={{ border: `1.5px solid ${C.ink}`, color: C.ink }}>
+          <div className="p-4 space-y-2 pb-6" style={{ background: C.card, borderTop: `1px solid ${C.line}` }}>
+            <button onClick={() => send(t("chat.missThemAlready"))} className="w-full text-left px-4 py-3 rounded-jz-card text-sm font-medium flex justify-between items-center transition-colors" style={{ border: `1.5px solid ${C.ink}`, color: C.ink }}>
               {t("chat.missThemAlready")} <Send size={16} />
             </button>
-            <button onClick={() => send(t("chat.planSimilar"))} className="w-full text-left px-4 py-3 rounded-2xl text-sm font-medium flex justify-between items-center transition-colors" style={{ border: `1.5px solid ${C.ink}`, color: C.ink }}>
+            <button onClick={() => send(t("chat.planSimilar"))} className="w-full text-left px-4 py-3 rounded-jz-card text-sm font-medium flex justify-between items-center transition-colors" style={{ border: `1.5px solid ${C.ink}`, color: C.ink }}>
               {t("chat.planSimilar")} <Send size={16} />
             </button>
           </div>
         ) : (
-          <div className="p-3 pb-6" style={{ background: "#FFFFFF", borderTop: `1px solid ${C.line}` }}>
-            <div className="relative flex items-end shadow-sm rounded-2xl border border-[#E4E6E0] bg-white focus-within:border-[#0E7A5F] transition-colors">
+          <div className="p-3 pb-6" style={{ background: C.card, borderTop: `1px solid ${C.line}` }}>
+            <div className="relative flex items-end shadow-sm rounded-jz-card border border-jz-line bg-jz-card focus-within:border-jz-teal transition-colors">
               <textarea
                 ref={textareaRef}
                 rows={1}
@@ -216,7 +216,7 @@ export default function CompanionSheet({ tripId, isPast, tripData, close, onRepl
                 }}
                 disabled={isThinking}
                 placeholder={t("chat.placeholder")}
-                className="w-full bg-transparent py-3 pl-4 pr-12 text-sm text-[#1B2333] placeholder-[#6B7280] focus:outline-none min-h-[44px] max-h-[100px] resize-none overflow-y-auto disabled:opacity-60 companion-textarea"
+                className="w-full bg-transparent py-3 pl-4 pr-12 text-sm text-jz-ink placeholder-jz-soft focus:outline-none min-h-[44px] max-h-[100px] resize-none overflow-y-auto disabled:opacity-60 companion-textarea"
               />
               <button
                 onClick={() => {
@@ -237,7 +237,7 @@ export default function CompanionSheet({ tripId, isPast, tripData, close, onRepl
 
       {picker && (
         <div className="fixed inset-0 z-[60] flex items-end" style={{ background: "rgba(20,25,40,0.5)" }} onClick={() => setPicker(null)}>
-          <div className="w-full bg-white rounded-t-3xl p-4 max-h-[70%] overflow-y-auto jz-scroll" onClick={e => e.stopPropagation()}>
+          <div className="w-full bg-jz-card rounded-t-jz-card p-4 max-h-[70%] overflow-y-auto jz-scroll" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-3">
               <p className="text-sm font-bold" style={{ color: C.ink }}>{t("chat.whichStopReplace")}</p>
               <button onClick={() => setPicker(null)}><X size={18} style={{ color: C.sub }} /></button>
@@ -248,7 +248,7 @@ export default function CompanionSheet({ tripId, isPast, tripData, close, onRepl
                 <div className="space-y-2">
                   {day.activities.map((act: any, idx: number) => (
                     <button key={idx} onClick={() => confirmSwap(day.dayNumber, idx)}
-                      className="w-full text-left rounded-2xl p-3 transition-all"
+                      className="w-full text-left rounded-jz-card p-3 transition-all"
                       style={{ background: C.paper, border: `1px solid ${C.line}` }}>
                       <span className="text-xs font-extrabold uppercase" style={{ color: C.amber }}>{act.category}</span>
                       <p className="text-sm font-bold" style={{ color: C.ink }}>{act.title}</p>

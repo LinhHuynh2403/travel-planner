@@ -68,6 +68,14 @@ export interface WeatherDay {
   hi: number;
   lo: number;
   note: string;
+  // Only populated for the live Open-Meteo forecast (never the AI-guessed
+  // fallback) — the weather detail sheet hides its stat grid/curve when these
+  // are absent rather than showing zeros.
+  feelsLike?: number;
+  windMph?: number;
+  cloudPct?: number;
+  humidityPct?: number;
+  hourlyTemps?: number[]; // that day's 24 hourly readings, midnight-to-midnight
 }
 
 export interface PackingItem {

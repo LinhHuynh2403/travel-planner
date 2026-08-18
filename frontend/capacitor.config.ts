@@ -7,6 +7,11 @@ const config: CapacitorConfig = {
     server: {
         androidScheme: 'https',
     },
+    plugins: {
+        Keyboard: {
+            resize: 'body',
+        },
+    },
 };
 
 export default config;

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Send, RefreshCw, Sparkles, Square } from "lucide-react";
+import { Send, RefreshCw, Sparkles, Square, ChevronLeft } from "lucide-react";
 import { C, display } from "./jourzy-theme";
 import { apiFetch, friendlyErrorMessage } from "../../utils/api";
 import { getPreferredLanguage, setLanguageChoice } from "../../utils/language";
@@ -15,7 +15,7 @@ type Message = {
   flightSuggestion?: FlightSuggestion;
 };
 
-export default function NewTripChat({ openPlan }: { openPlan: (tripId: string, notice?: string) => void }) {
+export default function NewTripChat({ openPlan, goBack, seedText }: { openPlan: (tripId: string, notice?: string) => void; goBack?: () => void; seedText?: string }) {
   const { t } = useTranslation();
   // Deliberately NEVER restored from localStorage — this tab plans ONE new
   // trip at a time, and a traveler's next trip can be a completely different
@@ -57,6 +57,17 @@ export default function NewTripChat({ openPlan }: { openPlan: (tripId: string, n
   useEffect(() => {
     if (messages.length > 0 || hasBootstrapped.current) return;
     hasBootstrapped.current = true;
+    // A destination tap/vibe chip on Home already told JourZy where the
+    // traveler wants to go — sending it as the traveler's own first message
+    // (instead of fetching the generic "where are you headed?" opener) lets
+    // the system prompt's own rule 4 (react to a known destination with real
+    // attractions) kick in immediately, instead of asking a question that's
+    // already been answered. The bare FAB path (no seedText) keeps the
+    // original blank-opener behavior below.
+    if (seedText) {
+      send(seedText);
+      return;
+    }
     (async () => {
       setIsThinking(true);
       try {
@@ -209,9 +220,16 @@ export default function NewTripChat({ openPlan }: { openPlan: (tripId: string, n
 
   return (
     <div className="flex flex-col min-h-full px-4 pt-2">
-      <div className="sticky top-0 z-10 text-center mb-3 pt-2 pb-2" style={{ background: C.paper }}>
-        <div style={{ ...display, fontSize: 26, color: C.ink }}>JourZy</div>
-        <div className="text-xs" style={{ color: C.sub }}>{t("brand.companion")}</div>
+      <div className="sticky top-0 z-10 mb-3 pt-2 pb-2" style={{ background: C.paper }}>
+        {goBack && (
+          <button onClick={goBack} className="flex items-center gap-0.5 text-jz-label font-bold mb-1" style={{ color: C.green }}>
+            <ChevronLeft size={16} /> {t("nav.home")}
+          </button>
+        )}
+        <div className="text-center">
+          <div style={{ ...display, fontSize: 26, color: C.ink }}>JourZy</div>
+          <div className="text-xs" style={{ color: C.sub }}>{t("brand.companion")}</div>
+        </div>
       </div>
 
       <div className="flex-1 space-y-3 pb-28">
@@ -257,9 +275,9 @@ export default function NewTripChat({ openPlan }: { openPlan: (tripId: string, n
       </div>
 
       {!built && (
-        <div className="sticky bottom-0 w-full pt-10 pb-4 z-10" style={{ background: "linear-gradient(to top, #F5F6F2 80%, transparent)" }}>
+        <div className="sticky bottom-0 w-full pt-10 pb-4 z-10" style={{ background: "linear-gradient(to top, var(--color-jz-bg) 80%, transparent)" }}>
           <div className="relative flex items-center w-full text-left rounded-2xl text-sm font-medium transition-colors"
-            style={{ background: "#FFFFFF", border: `1.5px solid ${C.green}`, color: C.green }}>
+            style={{ background: C.card, border: `1.5px solid ${C.green}`, color: C.green }}>
             <textarea
               ref={textareaRef}
               rows={1}

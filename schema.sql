@@ -75,3 +75,41 @@ CREATE INDEX IF NOT EXISTS idx_itineraries_trip
     ON public.itineraries (trip_id);
 CREATE INDEX IF NOT EXISTS idx_chat_histories_session
     ON public.chat_histories (session_id, user_id, created_at);
+
+-- 7. Trip Memories Table (scrapbook: visited flag + photos + caption per
+-- activity). One row per (trip, day, activity) — activities have no id of
+-- their own, they live inside itineraries.days JSONB, so day_number +
+-- activity_index is the same day-idx/activity-idx addressing scheme the
+-- frontend's uidFor() already uses. activity_title is a denormalized
+-- snapshot so the scrapbook still reads correctly even if the itinerary
+-- JSONB is ever regenerated later. "Visited, no photo yet" is just
+-- photos = '[]' with visited = true.
+CREATE TABLE IF NOT EXISTS public.trip_memories (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    trip_id UUID NOT NULL REFERENCES public.trips(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL,
+    day_number INTEGER NOT NULL,
+    activity_index INTEGER NOT NULL,
+    activity_title TEXT,
+    visited BOOLEAN NOT NULL DEFAULT true,
+    caption TEXT,
+    -- Array of { url, path, uploadedAt }
+    photos JSONB NOT NULL DEFAULT '[]'::jsonb,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    UNIQUE (trip_id, day_number, activity_index)
+);
+ALTER TABLE public.trip_memories ENABLE ROW LEVEL SECURITY;
+-- The UNIQUE constraint above already indexes (trip_id, day_number,
+-- activity_index), which covers the trip_id-leading lookup GET
+-- /api/trips/:tripId/memories runs — no separate index needed.
+
+-- 8. Storage bucket for memory photos. Public bucket + UUID-based object
+-- paths: sharing a trip needs a plain fetchable URL for people who aren't
+-- logged into the app, and paths are unguessable in practice. Writes still
+-- only ever happen server-side via the service-role key (see server.js),
+-- so this doesn't reopen the direct-anon-access issue the RLS section above
+-- describes — only reads bypass the backend once a URL exists.
+insert into storage.buckets (id, name, public)
+values ('trip-memories', 'trip-memories', true)
+on conflict (id) do nothing;
