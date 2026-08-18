@@ -1926,6 +1926,46 @@ app.get("/api/trips/:tripId", requireAuth, async (req, res) => {
   }
 });
 
+// Deliberately unauthenticated — this is what "Share trip" links to, so
+// whoever the traveler sends the link to (who has no JourZy account of
+// their own) can actually open it. Security relies on the trip id being a
+// real Supabase UUID (practically unguessable), same "anyone with the link"
+// model Google Docs/Notion share links use, not on a login check. Only
+// returns the fields a public recap actually needs — no hotel address,
+// budget breakdown, or logistics guide, which stay behind requireAuth above.
+app.get("/api/trips/:tripId/public", async (req, res) => {
+  const { tripId } = req.params;
+  try {
+    const { data: trip, error: tripError } = await supabase
+      .from("trips")
+      .select("region, arrival_date, leave_date, who_traveling")
+      .eq("id", tripId)
+      .single();
+
+    if (tripError || !trip) return res.status(404).json({ error: "Trip not found" });
+
+    const { data: itinerary, error: itineraryError } = await supabase
+      .from("itineraries")
+      .select("days")
+      .eq("trip_id", tripId)
+      .single();
+    if (itineraryError && itineraryError.code !== "PGRST116") throw itineraryError;
+
+    const { data: memories, error: memoriesError } = await supabase
+      .from("trip_memories")
+      .select("day_number, activity_index, activity_title, caption, visited, photos")
+      .eq("trip_id", tripId)
+      .order("day_number", { ascending: true })
+      .order("activity_index", { ascending: true });
+    if (memoriesError) throw memoriesError;
+
+    return res.json({ trip, days: itinerary?.days || [], memories: memories || [] });
+  } catch (e) {
+    console.error("Error fetching public trip:", e);
+    return res.status(500).json({ error: "Failed to fetch trip" });
+  }
+});
+
 app.delete("/api/trips/:tripId", requireAuth, async (req, res) => {
   const { tripId } = req.params;
 
@@ -2037,7 +2077,22 @@ app.post("/api/trips/:tripId/memories", requireAuth, memoryUpload.array("photos"
   const activityIndex = parseInt(req.body.activityIndex, 10);
   const activityTitle = typeof req.body.activityTitle === "string" ? req.body.activityTitle.slice(0, 200) : null;
   const visited = req.body.visited === "true";
+  // Row-level caption now only means anything for a "visited, no photo"
+  // memory (see the photos.length===0 branch below) — once there's at least
+  // one photo, each photo carries its own caption instead, so multiple
+  // photos on the same activity don't all show the same text.
   const caption = typeof req.body.caption === "string" ? req.body.caption.trim().slice(0, 500) : null;
+  const parseCaptions = (raw, expectedLen) => {
+    try {
+      const arr = JSON.parse(raw || "[]");
+      if (!Array.isArray(arr)) return new Array(expectedLen).fill("");
+      return arr.map((c) => (typeof c === "string" ? c.trim().slice(0, 500) : ""));
+    } catch {
+      return new Array(expectedLen).fill("");
+    }
+  };
+  const existingPhotoCaptions = parseCaptions(req.body.existingPhotoCaptions, 0);
+  const newPhotoCaptions = parseCaptions(req.body.newPhotoCaptions, (req.files || []).length);
 
   if (!Number.isInteger(dayNumber) || dayNumber < 1 || !Number.isInteger(activityIndex) || activityIndex < 0) {
     return res.status(400).json({ error: "dayNumber and activityIndex are required" });
@@ -2055,14 +2110,14 @@ app.post("/api/trips/:tripId/memories", requireAuth, memoryUpload.array("photos"
     if (tripError || !trip) return res.status(404).json({ error: "Trip not found" });
 
     const newPhotos = [];
-    for (const file of req.files || []) {
+    for (const [i, file] of (req.files || []).entries()) {
       const path = `${tripId}/${dayNumber}-${activityIndex}/${crypto.randomUUID()}-${sanitizeFilename(file.originalname)}`;
       const { error: uploadError } = await supabase.storage
         .from("trip-memories")
         .upload(path, file.buffer, { contentType: file.mimetype, upsert: false });
       if (uploadError) throw uploadError;
       const { data: pub } = supabase.storage.from("trip-memories").getPublicUrl(path);
-      newPhotos.push({ url: pub.publicUrl, path, uploadedAt: new Date().toISOString() });
+      newPhotos.push({ url: pub.publicUrl, path, uploadedAt: new Date().toISOString(), caption: newPhotoCaptions[i] || "" });
     }
 
     // Read-modify-write: supabase-js has no raw JSONB-array-append
@@ -2077,7 +2132,14 @@ app.post("/api/trips/:tripId/memories", requireAuth, memoryUpload.array("photos"
       .eq("activity_index", activityIndex)
       .single();
 
-    const photos = [...(existing?.photos || []), ...newPhotos];
+    // existingPhotoCaptions arrives in the same order the client rendered
+    // existing.photos in, so it lines up index-for-index — the traveler may
+    // have edited any of these captions without touching the photo itself.
+    const updatedExisting = (existing?.photos || []).map((p, i) => ({
+      ...p,
+      caption: existingPhotoCaptions[i] !== undefined ? existingPhotoCaptions[i] : (p.caption || ""),
+    }));
+    const photos = [...updatedExisting, ...newPhotos];
 
     const { data: saved, error: upsertError } = await supabase
       .from("trip_memories")
