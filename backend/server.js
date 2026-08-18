@@ -249,10 +249,10 @@ async function fetchOpenMeteoForecast(lat, lng, unit = "imperial") {
   // not worth parsing/rewriting for a display-unit toggle).
   const temperatureUnit = unit === "metric" ? "celsius" : "fahrenheit";
   const windSpeedUnit = unit === "metric" ? "kmh" : "mph";
-  // hourly temperature/humidity/cloud + daily feels-like/wind power the
-  // per-day weather detail sheet (stat grid + hourly curve) in the frontend
-  // — same single Open-Meteo call, no extra request.
-  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&daily=temperature_2m_max,temperature_2m_min,weather_code,apparent_temperature_max,wind_speed_10m_max&hourly=temperature_2m,relative_humidity_2m,cloud_cover&temperature_unit=${temperatureUnit}&wind_speed_unit=${windSpeedUnit}&timezone=auto&forecast_days=7`;
+  // hourly temperature/humidity/cloud/weather_code + daily feels-like/wind
+  // power the per-day weather detail sheet (stat grid + hourly curve + hourly
+  // icon strip) in the frontend — same single Open-Meteo call, no extra request.
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&daily=temperature_2m_max,temperature_2m_min,weather_code,apparent_temperature_max,wind_speed_10m_max&hourly=temperature_2m,relative_humidity_2m,cloud_cover,weather_code&temperature_unit=${temperatureUnit}&wind_speed_unit=${windSpeedUnit}&timezone=auto&forecast_days=7`;
   const resp = await fetch(url);
   return resp.json();
 }
@@ -1713,6 +1713,27 @@ app.get("/api/nearby", async (req, res) => {
   } catch (e) {
     console.error("Nearby search failed:", e);
     return res.status(500).json({ error: "Failed to fetch nearby places" });
+  }
+});
+
+// Text-search -> first result's photo, so a user's own trip (any real place,
+// not just the curated Home destination pool, which has hand-picked photoRefs
+// baked in) can show a real photo of where it actually goes instead of a
+// generic gradient tile. Cached client-side per region string since the
+// result never changes for a given place name.
+app.get("/api/destination-photo", async (req, res) => {
+  const { region } = req.query;
+  const key = process.env.GOOGLE_MAPS_KEY;
+  if (!key || !region) return res.status(400).json({ error: "Missing parameters" });
+  try {
+    const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(region)}&key=${key}`;
+    const resp = await fetch(url);
+    const data = await resp.json();
+    const photoRef = data.results?.[0]?.photos?.[0]?.photo_reference || null;
+    return res.json({ photoRef });
+  } catch (e) {
+    console.error("Destination photo lookup failed:", e);
+    return res.status(500).json({ error: "Failed to fetch destination photo" });
   }
 });
 
