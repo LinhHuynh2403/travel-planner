@@ -51,9 +51,13 @@ const globalLimiter = rateLimit({
 app.use(globalLimiter);
 
 // Strict limiter for endpoints that trigger paid LLM / Places calls.
+// NOTE: 20/hour/IP is the right ceiling once this is live for real
+// travelers (caps worst-case paid-API cost from abuse) — bumped way up
+// for now since it's just solo dev testing hitting the same local IP
+// over and over. Tighten this back down before any real deploy.
 const expensiveLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
-  max: 20,                  // 20 generations or chats / hour / IP
+  max: 300,                 // 300 generations or chats / hour / IP (dev testing)
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Rate limit reached for AI features. Try again in a bit." },
