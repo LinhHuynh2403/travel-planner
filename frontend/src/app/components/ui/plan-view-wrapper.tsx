@@ -57,34 +57,44 @@ export default function PlanViewWrapper({ tripId, goBack, notice, onDismissNotic
 
   return (
     <>
-      {/* trip header */}
-      <div className="flex items-center gap-2 px-4 py-2 sticky top-0 z-10" style={{ background: C.paper, transform: "translateZ(0)" }}>
-        <button onClick={goBack} className="flex items-center text-xs font-bold" style={{ color: C.green }}>
-          <ChevronLeft size={16} /> {t("nav.backToTrips")}
+      {/* trip header — truly fixed (not sticky) so it can never show scroll
+          bleed-through behind it, the same class of WebKit rendering glitch
+          `translateZ(0)` alone didn't fully stop. Sized to match the bottom
+          tab bar's now-taller, thumb-friendlier footprint (see below) rather
+          than the old cramped py-2 bar. */}
+      <div className="fixed top-0 left-0 right-0 z-20 flex items-center gap-2 px-4 pb-3.5"
+        style={{ background: C.paper, borderBottom: `1px solid ${C.line}`, paddingTop: "calc(14px + env(safe-area-inset-top))" }}>
+        <button onClick={goBack} className="flex items-center text-sm font-bold shrink-0" style={{ color: C.green }}>
+          <ChevronLeft size={20} /> {t("nav.backToTrips")}
         </button>
-        <div className="flex-1 text-center text-sm font-bold capitalize" style={{ color: C.ink }}>
+        <div className="flex-1 text-center text-base font-bold capitalize truncate px-1" style={{ color: C.ink }}>
           {tripData.plan?.region}
         </div>
-        <span className="text-xs px-2 py-0.5 rounded-full font-bold"
+        <span className="text-xs px-2 py-1 rounded-full font-bold shrink-0"
           style={!isPast ? { background: C.greenSoft, color: C.green } : { background: C.line, color: C.sub }}>
           {!isPast ? t("nav.upcoming") : t("nav.history")}
         </span>
       </div>
 
-      {notice && (
-        <div className="mx-4 mb-2 px-3 py-2.5 rounded-xl text-xs flex items-start gap-2" style={{ background: C.greenSoft, color: C.ink }}>
-          <span className="flex-1 leading-relaxed">{notice}</span>
-          <button onClick={onDismissNotice} className="shrink-0" style={{ color: C.sub }}>
-            <X size={14} />
-          </button>
-        </div>
-      )}
-
-      {/* Sub Views — bottom padding clears both the (now taller, thumb-
-          friendlier) tab bar AND the floating companion FAB above it (which
-          sits 108-162px above the bottom edge), so the FAB never ends up
-          hovering over real content at max scroll. */}
-      <div className="pb-48">
+      {/* Sub Views — top padding clears the now-fixed header above. Only the
+          header's own ~56px (padding + content), not another
+          env(safe-area-inset-top) on top of it — the scrollable container
+          this renders inside (see jourzy-app.tsx) already applies that once
+          via its own pt-[env(safe-area-inset-top)]; adding it here too would
+          double the gap under the notch/Dynamic Island. Bottom padding
+          clears both the (now taller, thumb-friendlier) tab bar AND the
+          floating companion FAB above it (which sits 108-162px above the
+          bottom edge), so the FAB never ends up hovering over real content
+          at max scroll. */}
+      <div className="pt-14 pb-48">
+        {notice && (
+          <div className="mx-4 mb-2 px-3 py-2.5 rounded-xl text-xs flex items-start gap-2" style={{ background: C.greenSoft, color: C.ink }}>
+            <span className="flex-1 leading-relaxed">{notice}</span>
+            <button onClick={onDismissNotice} className="shrink-0" style={{ color: C.sub }}>
+              <X size={14} />
+            </button>
+          </div>
+        )}
         {sub === "plan" && <PlanView tripData={tripData} onSaveMemory={handleSaveMemory} />}
         {sub === "map" && <MapView tripData={tripData} />}
         {sub === "packing" && <PackingView tripData={tripData} />}
