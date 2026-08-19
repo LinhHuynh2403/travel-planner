@@ -94,16 +94,26 @@ export default function JourZyApp() {
       <div id="jz-phone-frame" className="relative flex flex-col overflow-hidden w-full h-[100dvh] sm:h-[780px] sm:w-[390px] sm:rounded-[40px] sm:border-[10px] sm:shadow-2xl"
         style={{ background: C.paper, borderColor: "#0d1120", transform: "translateZ(0)" }}>
 
+        {/* A trip's own header/scroll-area/tab-bar are a fully separate,
+            self-contained flex column (see plan-view-wrapper.tsx) — NOT
+            rendered inside the .jz-scroll div below. iOS Safari has a real,
+            reproducible bug where position:fixed elements nested inside a
+            scrolling ancestor can drift/jump during momentum scroll, even
+            with the transform-on-#jz-phone-frame containing-block trick;
+            the Home/Trips/Profile tab bar right below never had this
+            problem for exactly the opposite reason — it's a plain flex
+            sibling of .jz-scroll, never nested inside anything that scrolls. */}
+        {openTripId && (
+          <PlanViewWrapper
+            tripId={openTripId}
+            goBack={() => { setOpenTripId(null); setPlanNotice(null); }}
+            notice={planNotice}
+            onDismissNotice={() => setPlanNotice(null)}
+          />
+        )}
+
         {/* main screens */}
-        <div className="flex-1 overflow-y-auto jz-scroll relative pt-[env(safe-area-inset-top)]">
-          {openTripId && (
-            <PlanViewWrapper
-              tripId={openTripId}
-              goBack={() => { setOpenTripId(null); setPlanNotice(null); }}
-              notice={planNotice}
-              onDismissNotice={() => setPlanNotice(null)}
-            />
-          )}
+        <div className="flex-1 overflow-y-auto jz-scroll relative pt-[env(safe-area-inset-top)]" style={{ display: openTripId ? "none" : "block" }}>
           {!openTripId && hasStartedPlanning && (
             <div style={{ display: planningOpen ? "block" : "none" }}>
               <NewTripChat

@@ -210,7 +210,12 @@ export default function MemoriesView({ tripData, onSaveMemory }: { tripData: any
 
       {lightbox && (
         <div className="fixed inset-0 z-40 flex flex-col" style={{ background: "#0e0d0b" }} onClick={() => setLightbox(null)}>
-          <div className="flex justify-end gap-2 p-4">
+          {/* This is a real full-screen overlay (not a bottom sheet, which
+              never reaches the true top edge) — px-4 pb-4 handle the sides
+              and bottom, but the top needs env(safe-area-inset-top) added on
+              top of the visual padding, or these buttons render underneath
+              the status bar / notch on any phone that has one. */}
+          <div className="flex justify-end gap-2 px-4 pb-4" style={{ paddingTop: "calc(16px + env(safe-area-inset-top))" }}>
             {lightbox.kind === "photo" && onSaveMemory && (
               <button onClick={(e) => { e.stopPropagation(); deletePhoto(lightbox); }} disabled={deleting}
                 className="w-8 h-8 rounded-full flex items-center justify-center disabled:opacity-50" style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)" }}>

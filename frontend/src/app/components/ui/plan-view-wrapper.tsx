@@ -56,13 +56,16 @@ export default function PlanViewWrapper({ tripId, goBack, notice, onDismissNotic
   };
 
   return (
-    <>
-      {/* trip header — truly fixed (not sticky) so it can never show scroll
-          bleed-through behind it, the same class of WebKit rendering glitch
-          `translateZ(0)` alone didn't fully stop. Sized to match the bottom
-          tab bar's now-taller, thumb-friendlier footprint (see below) rather
-          than the old cramped py-2 bar. */}
-      <div className="fixed top-0 left-0 right-0 z-20 flex items-center gap-2 px-4 pb-3.5"
+    // Self-contained flex column, entirely separate from the app's other
+    // .jz-scroll area (see jourzy-app.tsx) — header and tab bar below are
+    // deliberately normal flex-flow siblings of the scrolling content, NOT
+    // position:fixed nested inside a scroller. iOS Safari has a real,
+    // reproducible bug where a fixed element nested inside a scrolling
+    // ancestor can drift/jump mid-scroll even with a transform-based
+    // containing-block trick; plain flexbox layout has no such quirk.
+    <div className="flex-1 flex flex-col relative overflow-hidden">
+      {/* trip header — sized to match the tab bar's thumb-friendly footprint below */}
+      <div className="shrink-0 flex items-center gap-2 px-4 pb-3.5"
         style={{ background: C.paper, borderBottom: `1px solid ${C.line}`, paddingTop: "calc(14px + env(safe-area-inset-top))" }}>
         <button onClick={goBack} className="flex items-center text-sm font-bold shrink-0" style={{ color: C.green }}>
           <ChevronLeft size={20} /> {t("nav.backToTrips")}
@@ -76,30 +79,52 @@ export default function PlanViewWrapper({ tripId, goBack, notice, onDismissNotic
         </span>
       </div>
 
-      {/* Sub Views — top padding clears the now-fixed header above. Only the
-          header's own ~56px (padding + content), not another
-          env(safe-area-inset-top) on top of it — the scrollable container
-          this renders inside (see jourzy-app.tsx) already applies that once
-          via its own pt-[env(safe-area-inset-top)]; adding it here too would
-          double the gap under the notch/Dynamic Island. Bottom padding
-          clears both the (now taller, thumb-friendlier) tab bar AND the
-          floating companion FAB above it (which sits 108-162px above the
-          bottom edge), so the FAB never ends up hovering over real content
-          at max scroll. */}
-      <div className="pt-14 pb-48">
-        {notice && (
-          <div className="mx-4 mb-2 px-3 py-2.5 rounded-xl text-xs flex items-start gap-2" style={{ background: C.greenSoft, color: C.ink }}>
-            <span className="flex-1 leading-relaxed">{notice}</span>
-            <button onClick={onDismissNotice} className="shrink-0" style={{ color: C.sub }}>
-              <X size={14} />
-            </button>
+      {/* Scrollable content + floating FAB share this relative wrapper, so
+          the FAB's `bottom` offset is relative to the content area itself
+          (which already excludes the tab bar below) — no safe-area math
+          needed for it at all, unlike when it was position:fixed relative
+          to the whole phone frame. */}
+      <div className="flex-1 relative overflow-hidden">
+        <div className="h-full overflow-y-auto jz-scroll">
+          {notice && (
+            <div className="mx-4 mt-3 mb-2 px-3 py-2.5 rounded-xl text-xs flex items-start gap-2" style={{ background: C.greenSoft, color: C.ink }}>
+              <span className="flex-1 leading-relaxed">{notice}</span>
+              <button onClick={onDismissNotice} className="shrink-0" style={{ color: C.sub }}>
+                <X size={14} />
+              </button>
+            </div>
+          )}
+          {/* pb-24 clears the floating FAB's footprint (54px tall, sitting
+              18px off the bottom of this same scroll area) so it never ends
+              up hovering over the last real activity card at max scroll. */}
+          <div className="pt-3 pb-24">
+            {sub === "plan" && <PlanView tripData={tripData} onSaveMemory={handleSaveMemory} />}
+            {sub === "map" && <MapView tripData={tripData} />}
+            {sub === "packing" && <PackingView tripData={tripData} />}
+            {sub === "guide" && <GuideView tripData={tripData} />}
+            {sub === "memories" && <MemoriesView tripData={tripData} onSaveMemory={handleSaveMemory} />}
           </div>
+        </div>
+
+        {/* floating companion chat bubble */}
+        {!bubble && (
+          <button onClick={() => setBubble(true)}
+            className="absolute rounded-full shadow-xl flex items-center justify-center"
+            style={{ right: 18, bottom: 18, width: 54, height: 54, background: C.amber, color: "#3d2705" }}>
+            <Plus size={24} />
+          </button>
         )}
-        {sub === "plan" && <PlanView tripData={tripData} onSaveMemory={handleSaveMemory} />}
-        {sub === "map" && <MapView tripData={tripData} />}
-        {sub === "packing" && <PackingView tripData={tripData} />}
-        {sub === "guide" && <GuideView tripData={tripData} />}
-        {sub === "memories" && <MemoriesView tripData={tripData} onSaveMemory={handleSaveMemory} />}
+
+        {/* companion chat sheet */}
+        {bubble && (
+          <CompanionSheet
+            tripId={tripId}
+            isPast={isPast}
+            tripData={tripData}
+            close={() => setBubble(false)}
+            onReplaceActivity={handleReplaceActivity}
+          />
+        )}
       </div>
 
       {/* trip-level bottom tab bar — replaces the global app tab bar while a
@@ -107,7 +132,7 @@ export default function PlanViewWrapper({ tripId, goBack, notice, onDismissNotic
           swipe-up-to-home gesture lives right along the bottom edge, so
           targets that only clear it via safe-area padding (and are
           otherwise thumb-sized) end up too close for a comfortable tap. */}
-      <div className="fixed bottom-0 left-0 right-0 flex justify-around items-center py-3 px-2 pb-[env(safe-area-inset-bottom)] z-20"
+      <div className="shrink-0 flex justify-around items-center py-3 px-2 pb-[env(safe-area-inset-bottom)]"
         style={{ background: C.card, borderTop: `1px solid ${C.line}` }}>
         {[
           ["plan", CalendarDays, t("nav.plan")],
@@ -128,26 +153,6 @@ export default function PlanViewWrapper({ tripId, goBack, notice, onDismissNotic
           );
         })}
       </div>
-
-      {/* floating companion chat bubble */}
-      {!bubble && (
-        <button onClick={() => setBubble(true)}
-          className="fixed rounded-full shadow-xl flex items-center justify-center z-10"
-          style={{ right: 18, bottom: "calc(108px + env(safe-area-inset-bottom))", width: 54, height: 54, background: C.amber, color: "#3d2705" }}>
-          <Plus size={24} />
-        </button>
-      )}
-
-      {/* companion chat sheet */}
-      {bubble && (
-        <CompanionSheet
-          tripId={tripId}
-          isPast={isPast}
-          tripData={tripData}
-          close={() => setBubble(false)}
-          onReplaceActivity={handleReplaceActivity}
-        />
-      )}
-    </>
+    </div>
   );
 }

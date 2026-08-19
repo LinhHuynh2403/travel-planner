@@ -156,7 +156,12 @@ export default function SharedTripView() {
 
       {lightbox && (
         <div className="fixed inset-0 z-40 flex flex-col" style={{ background: "#0e0d0b" }} onClick={() => setLightbox(null)}>
-          <div className="flex justify-end p-4">
+          {/* Real full-screen overlay, not a bottom sheet — needs the notch/
+              status-bar safe area added on top of the visual padding. This
+              page has no phone-frame ancestor with a transform (it's the
+              public share page, opened directly), so this is the true
+              device viewport, not a scaled-down mockup. */}
+          <div className="flex justify-end px-4 pb-4" style={{ paddingTop: "calc(16px + env(safe-area-inset-top))" }}>
             <button onClick={() => setLightbox(null)} className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)" }}>
               <X size={15} color="#fff" />
             </button>
