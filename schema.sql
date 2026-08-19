@@ -104,6 +104,23 @@ ALTER TABLE public.trip_memories ENABLE ROW LEVEL SECURITY;
 -- activity_index), which covers the trip_id-leading lookup GET
 -- /api/trips/:tripId/memories runs — no separate index needed.
 
+-- 7b. Trending places: extend trip_memories with real, denormalized place
+-- identity + a "shared_publicly" flag. A place only ever counts toward
+-- trending once a traveler actually shared that memory via a real social
+-- channel (see POST /api/trips/:tripId/memories/mark-shared) — never just
+-- from saving a private memory. place_id/lat/lng mirror the same Google
+-- Places identity already carried on the activity itself (see
+-- backend/prompts.js's 'place' object), copied here at share time so
+-- trending queries never need to re-parse itineraries.days JSONB.
+-- For an EXISTING database, CREATE TABLE IF NOT EXISTS above is a no-op —
+-- run this block once against your existing database:
+ALTER TABLE public.trip_memories ADD COLUMN IF NOT EXISTS place_id TEXT;
+ALTER TABLE public.trip_memories ADD COLUMN IF NOT EXISTS lat DOUBLE PRECISION;
+ALTER TABLE public.trip_memories ADD COLUMN IF NOT EXISTS lng DOUBLE PRECISION;
+ALTER TABLE public.trip_memories ADD COLUMN IF NOT EXISTS shared_publicly BOOLEAN NOT NULL DEFAULT false;
+CREATE INDEX IF NOT EXISTS idx_trip_memories_shared_place
+    ON public.trip_memories (place_id) WHERE shared_publicly = true;
+
 -- 8. Storage bucket for memory photos. Public bucket + UUID-based object
 -- paths: sharing a trip needs a plain fetchable URL for people who aren't
 -- logged into the app, and paths are unguessable in practice. Writes still
