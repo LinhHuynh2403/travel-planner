@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { Share2, X, Image as ImageIcon, UtensilsCrossed, Landmark, Palette, Leaf, ShoppingBag, Compass, BedDouble, MapPin, MessageCircle, MessageSquare, Link as LinkIcon, Check, MoreHorizontal, Facebook, NotebookText } from "lucide-react";
+import { Share2, X, Image as ImageIcon, UtensilsCrossed, Landmark, Palette, Leaf, ShoppingBag, Compass, BedDouble, MapPin, MessageCircle, MessageSquare, Link as LinkIcon, Check, MoreHorizontal, Facebook, NotebookText, Trash2 } from "lucide-react";
 import { C, display } from "./jourzy-theme";
 import { tripTile } from "./trip-row";
 import { shareContent, shareImage, whatsappUrl, smsUrl, twitterIntentUrl, facebookShareUrl, canUseNativeShare } from "../../utils/share";
+import { apiFetch } from "../../utils/api";
 import { useTranslation } from "../../utils/translations";
 
 // Same real line-icon set as plan-view.tsx's activity cards, not emoji.
@@ -21,12 +22,18 @@ function dateForDay(arrivalDate: string | undefined, dayNumber: number): Date | 
 // "empty" only ever means "marked visited, nothing else recorded" — a
 // caption saved with no photo is real content and gets its own "note" look
 // (text preview, not a bare icon), not lumped in with the truly-empty case.
-type Tile = { url: string | null; caption: string; title: string; icon: any; key: string; kind: "photo" | "note" | "empty" };
+// dayNumber/activityIndex/path only exist on a real photo tile — they're
+// exactly what the delete-photo endpoint needs to identify it.
+type Tile = {
+  url: string | null; caption: string; title: string; icon: any; key: string; kind: "photo" | "note" | "empty";
+  dayNumber: number; activityIndex: number; path?: string;
+};
 
 type ShareTarget = { title: string; text: string; url?: string; imageUrl?: string };
 
-export default function MemoriesView({ tripData }: { tripData: any }) {
+export default function MemoriesView({ tripData, onSaveMemory }: { tripData: any; onSaveMemory?: (row: any) => void }) {
   const { t } = useTranslation();
+  const [deleting, setDeleting] = useState(false);
   const [shareTarget, setShareTarget] = useState<ShareTarget | null>(null);
   const [copied, setCopied] = useState(false);
   // "More" hands off to the real OS share sheet (Instagram/Messenger live
@@ -83,6 +90,29 @@ export default function MemoriesView({ tripData }: { tripData: any }) {
     // deliberate cancel, not a failure, so no message here.
   };
 
+  // Immediate, not deferred like the Plan tab's edit sheet — there's no
+  // "Save" step in this view, so the confirm dialog IS the commit point.
+  const deletePhoto = async (tile: Tile) => {
+    if (!tile.path || deleting) return;
+    if (!window.confirm(t("memories.deletePhotoConfirm"))) return;
+    setDeleting(true);
+    try {
+      const resp = await apiFetch(`/api/trips/${tripData.tripId}/memories/photo`, {
+        method: "DELETE",
+        body: JSON.stringify({ dayNumber: tile.dayNumber, activityIndex: tile.activityIndex, path: tile.path }),
+      });
+      if (resp.ok) {
+        const row = await resp.json();
+        onSaveMemory?.(row);
+        setLightbox(null);
+      }
+    } catch (e) {
+      console.error("Failed to delete memory photo:", e);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const dayNumbers = Array.from(new Set(touched.map((m) => m.day_number))).sort((a, b) => a - b);
 
   const categoryFor = (dayNumber: number, activityIndex: number): string | undefined =>
@@ -135,6 +165,7 @@ export default function MemoriesView({ tripData }: { tripData: any }) {
           if ((m.photos?.length || 0) > 0) {
             return m.photos.map((p: any, i: number) => ({
               url: p.url, caption: p.caption || "", title: m.activity_title, icon, key: `${m.id}-${i}`, kind: "photo" as const,
+              dayNumber: m.day_number, activityIndex: m.activity_index, path: p.path,
             }));
           }
           const hasNote = !!m.caption?.trim();
@@ -143,6 +174,7 @@ export default function MemoriesView({ tripData }: { tripData: any }) {
             caption: hasNote ? m.caption : t("memories.visitedNoPhoto"),
             title: m.activity_title, icon, key: `${m.id}-novisit`,
             kind: (hasNote ? "note" : "empty") as const,
+            dayNumber: m.day_number, activityIndex: m.activity_index,
           }];
         });
         return (
@@ -179,6 +211,12 @@ export default function MemoriesView({ tripData }: { tripData: any }) {
       {lightbox && (
         <div className="fixed inset-0 z-40 flex flex-col" style={{ background: "#0e0d0b" }} onClick={() => setLightbox(null)}>
           <div className="flex justify-end gap-2 p-4">
+            {lightbox.kind === "photo" && onSaveMemory && (
+              <button onClick={(e) => { e.stopPropagation(); deletePhoto(lightbox); }} disabled={deleting}
+                className="w-8 h-8 rounded-full flex items-center justify-center disabled:opacity-50" style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)" }}>
+                <Trash2 size={13} color="#fff" />
+              </button>
+            )}
             <button onClick={(e) => { e.stopPropagation(); openMemoryShare(lightbox); }} className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)" }}>
               <Share2 size={13} color="#fff" />
             </button>

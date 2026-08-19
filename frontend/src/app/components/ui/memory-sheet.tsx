@@ -6,6 +6,8 @@ import { addressOf } from "./plan-view";
 import { apiFetchForm, friendlyErrorMessage } from "../../utils/api";
 import { useTranslation } from "../../utils/translations";
 
+type ExistingPhoto = { url: string; path: string; caption: string };
+
 export default function MemorySheet({
   activity, dayNumber, activityIndex, tripId, existingMemory, onSave, onClose,
 }: {
@@ -23,11 +25,12 @@ export default function MemorySheet({
   // add a caption or photo (without touching the toggle) silently recorded
   // a visit that may never have happened.
   const [visited, setVisited] = useState(existingMemory ? existingMemory.visited : false);
-  const existingPhotos: { url: string; caption?: string }[] = existingMemory?.photos || [];
-  // Each photo gets its own caption now, not one caption shared across every
-  // photo on the activity — these two arrays track edits in the same order
-  // the photos render in, kept in sync with existingPhotos/newFiles by index.
-  const [existingCaptions, setExistingCaptions] = useState<string[]>(existingPhotos.map((p) => p.caption || ""));
+  // Live, removable copy of the already-saved photos — deleting one here
+  // doesn't hit the server until Save, same as editing a caption doesn't;
+  // it's reversible right up until the traveler commits.
+  const [keptExisting, setKeptExisting] = useState<ExistingPhoto[]>(
+    (existingMemory?.photos || []).map((p: any) => ({ url: p.url, path: p.path, caption: p.caption || "" }))
+  );
   const [newFiles, setNewFiles] = useState<File[]>([]);
   const [newCaptions, setNewCaptions] = useState<string[]>([]);
   // Only meaningful when there's no photo at all to attach a caption to —
@@ -36,7 +39,7 @@ export default function MemorySheet({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const totalPhotoCount = existingPhotos.length + newFiles.length;
+  const totalPhotoCount = keptExisting.length + newFiles.length;
 
   const handlePick = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -50,6 +53,12 @@ export default function MemorySheet({
     setNewFiles((prev) => prev.filter((_, i) => i !== idx));
     setNewCaptions((prev) => prev.filter((_, i) => i !== idx));
   };
+  const removeExisting = (idx: number) => {
+    setKeptExisting((prev) => prev.filter((_, i) => i !== idx));
+  };
+  const updateExistingCaption = (idx: number, caption: string) => {
+    setKeptExisting((prev) => prev.map((p, i) => (i === idx ? { ...p, caption } : p)));
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -61,7 +70,12 @@ export default function MemorySheet({
       form.append("activityTitle", activity.title || "");
       form.append("visited", String(visited));
       form.append("caption", totalPhotoCount === 0 ? noPhotoNote : "");
-      form.append("existingPhotoCaptions", JSON.stringify(existingCaptions));
+      // Tells the backend the exact final set of pre-existing photos to
+      // keep — anything from the saved row that's missing here (because the
+      // traveler tapped the remove button) gets actually deleted, storage
+      // object included, not just dropped from what this request happens to
+      // send back.
+      form.append("existingPhotos", JSON.stringify(keptExisting.map((p) => ({ path: p.path, caption: p.caption }))));
       form.append("newPhotoCaptions", JSON.stringify(newCaptions));
       newFiles.forEach((f) => form.append("photos", f));
 
@@ -120,19 +134,22 @@ export default function MemorySheet({
 
             <div className="text-jz-label font-bold uppercase tracking-wide mb-2" style={{ color: C.sub }}>{t("plan.photosLabel")}</div>
             <div className="space-y-2 mb-3">
-              {existingPhotos.map((p, i) => (
-                <div key={`existing-${i}`} className="flex items-center gap-2.5">
+              {keptExisting.map((p, i) => (
+                <div key={p.path || i} className="flex items-center gap-2.5">
                   <div className="w-[52px] h-[52px] rounded-xl overflow-hidden shrink-0">
                     <img src={p.url} alt="" className="w-full h-full object-cover" />
                   </div>
                   <input
-                    value={existingCaptions[i] ?? ""}
-                    onChange={(e) => setExistingCaptions((prev) => prev.map((c, idx) => (idx === i ? e.target.value : c)))}
+                    value={p.caption}
+                    onChange={(e) => updateExistingCaption(i, e.target.value)}
                     placeholder={t("plan.captionPlaceholder")}
                     maxLength={500}
                     className="flex-1 min-w-0 rounded-xl px-3 py-2.5 text-jz-body focus:outline-none"
                     style={{ background: C.card, border: `1px solid ${C.line}`, color: C.ink }}
                   />
+                  <button onClick={() => removeExisting(i)} className="shrink-0 p-1.5 rounded-full" style={{ color: C.hanko }} aria-label={t("plan.deletePhoto")}>
+                    <X size={14} />
+                  </button>
                 </div>
               ))}
               {newFiles.map((f, i) => (
@@ -149,7 +166,7 @@ export default function MemorySheet({
                     className="flex-1 min-w-0 rounded-xl px-3 py-2.5 text-jz-body focus:outline-none"
                     style={{ background: C.card, border: `1px solid ${C.line}`, color: C.ink }}
                   />
-                  <button onClick={() => removeNewFile(i)} className="shrink-0 p-1.5 rounded-full" style={{ color: C.sub }} aria-label="Remove photo">
+                  <button onClick={() => removeNewFile(i)} className="shrink-0 p-1.5 rounded-full" style={{ color: C.sub }} aria-label={t("plan.deletePhoto")}>
                     <X size={14} />
                   </button>
                 </div>

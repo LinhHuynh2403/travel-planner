@@ -89,7 +89,7 @@ export default function PlanViewWrapper({ tripId, goBack, notice, onDismissNotic
         {sub === "map" && <MapView tripData={tripData} />}
         {sub === "packing" && <PackingView tripData={tripData} />}
         {sub === "guide" && <GuideView tripData={tripData} />}
-        {sub === "memories" && <MemoriesView tripData={tripData} />}
+        {sub === "memories" && <MemoriesView tripData={tripData} onSaveMemory={handleSaveMemory} />}
       </div>
 
       {/* trip-level bottom tab bar — replaces the global app tab bar while a
