@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { Map, Star, AlertTriangle, Clock, Camera, X, Wallet, ChevronRight, Sparkles, Cloud, CloudRain, CloudSun, Sun, CloudSnow, CloudLightning, Wind, Droplets, Thermometer, UtensilsCrossed, Landmark, Palette, Image as ImageIcon, Leaf, ShoppingBag, Compass, BedDouble, MapPin, NotebookText } from "lucide-react";
+import { Map, Star, AlertTriangle, Clock, Camera, X, Wallet, ChevronRight, Sparkles, Cloud, CloudRain, CloudSun, Sun, CloudSnow, CloudLightning, Wind, Droplets, Thermometer, UtensilsCrossed, Landmark, Palette, Image as ImageIcon, Leaf, ShoppingBag, Compass, BedDouble, MapPin, NotebookText, Flame } from "lucide-react";
 import { C, display, font } from "./jourzy-theme";
 import MemorySheet from "./memory-sheet";
 import { useLiveWeatherWeek } from "../../utils/live-weather";
+import { useTrendingPlaces } from "../../utils/trending";
 import { formatTemp, windUnitLabel } from "../../utils/units";
 import { useTranslation } from "../../utils/translations";
 
@@ -74,6 +75,7 @@ export default function PlanView({ tripData, onSaveMemory }: { tripData: any, on
   // prep-view.tsx, which this weather strip replaces.
   const liveWeather = useLiveWeatherWeek(tripData?.plan?.region || "");
   const weather = (liveWeather && liveWeather.length > 0) ? liveWeather : (tripData?.insights?.weatherWeek || []);
+  const trendingPlaces = useTrendingPlaces(tripData?.plan?.region || "");
 
   const d = tripData?.days?.[day];
   if (!d) return <div className="p-4">{t("plan.noItineraryData")}</div>;
@@ -119,6 +121,30 @@ export default function PlanView({ tripData, onSaveMemory }: { tripData: any, on
               </button>
             );
           })}
+        </div>
+      )}
+
+      {trendingPlaces.length > 0 && (
+        <div className="mb-3">
+          <div className="flex items-center gap-1.5 mb-1.5 text-jz-label font-bold uppercase tracking-wider" style={{ color: C.hanko }}>
+            <Flame size={13} /> {t("plan.trendingHere").replace("{{region}}", tripData.plan?.region || "")}
+          </div>
+          <div className="flex gap-2 overflow-x-auto jz-scroll pb-0.5">
+            {trendingPlaces.slice(0, 3).map((p) => (
+              <a key={p.placeId} href={p.mapsUrl} target="_blank" rel="noreferrer"
+                className="relative flex-none w-28 h-24 rounded-2xl overflow-hidden flex items-end"
+                style={{ background: "rgba(196, 58, 47, 0.15)" }}>
+                {p.photo && (
+                  <img src={p.photo} alt="" className="absolute inset-0 w-full h-full object-cover" loading="lazy" />
+                )}
+                <div className="absolute inset-0" style={{ background: "linear-gradient(200deg, rgba(20,18,15,.05) 30%, rgba(20,18,15,.85) 100%)" }} />
+                <div className="relative p-2 text-white">
+                  <div className="text-[11px] font-bold leading-tight truncate">{p.title}</div>
+                  <div className="text-[10px] opacity-90">{t("plan.trendingVisitorCount").replace("{{n}}", String(p.visitorCount))}</div>
+                </div>
+              </a>
+            ))}
+          </div>
         </div>
       )}
 

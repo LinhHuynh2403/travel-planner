@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { Plus } from "lucide-react";
+import { Plus, Flame } from "lucide-react";
 import { C, display } from "./jourzy-theme";
 import { TripRow, tripTile } from "./trip-row";
 import { useSavedTrips } from "../../utils/useSavedTrips";
 import { useDestinationPhoto } from "../../utils/destinationPhoto";
+import { useTrendingDestinations } from "../../utils/trending";
 import { apiFetch } from "../../utils/api";
 import { supabase } from "../../utils/supabaseClient";
 import { useTranslation } from "../../utils/translations";
@@ -72,6 +73,37 @@ function tasteTagOrder(savedTrips: any[]): string[] {
   }
   return Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([tag]) => tag);
 }
+// One card per trending region — useDestinationPhoto is a hook, so it needs
+// its own component instance per region rather than being called in a loop.
+// Real Google Places photo (same live lookup a traveler's own trip hero
+// image already uses), real visitor count — nothing fabricated.
+function TrendingDestinationCard({ region, count, onClick }: { region: string; count: number; onClick: () => void }) {
+  const { t } = useTranslation();
+  const photoRef = useDestinationPhoto(region);
+  return (
+    <button onClick={onClick}
+      className="relative flex min-h-[150px] items-end overflow-hidden rounded-2xl text-left shadow"
+      style={{ background: tripTile(region).background }}>
+      {photoRef && (
+        <img
+          src={`${API_BASE}/api/photo?reference=${photoRef}`}
+          alt=""
+          className="absolute inset-0 h-full w-full object-cover"
+          loading="lazy"
+          onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+        />
+      )}
+      <div className="absolute inset-0" style={{ background: "linear-gradient(200deg, rgba(20,18,15,.05) 30%, rgba(20,18,15,.85) 100%)" }} />
+      <div className="relative p-2.5" style={{ color: "#FBF6EC" }}>
+        <span className="mb-5 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: "rgba(255,255,255,.16)", border: "1px solid rgba(255,255,255,.3)" }}>
+          <Flame size={10} /> {t("home.trendingCount").replace("{{n}}", String(count))}
+        </span>
+        <div className="text-[15px] font-semibold leading-tight capitalize" style={{ ...display }}>{region}</div>
+      </div>
+    </button>
+  );
+}
+
 const VIBES = [
   { label: "Beach", emoji: "🏖️" },
   { label: "Culture", emoji: "🏛️" },
@@ -111,6 +143,13 @@ export default function HomeView({
   // traveler with real trips flashes the empty-state hero for a moment on
   // every cold load, before the cached/fetched trips have set in.
   const isNewUser = !loading && savedTrips.length === 0;
+  // Real destinations other travelers are actually planning trips to right
+  // now (see /api/trending-destinations), blended with the traveler's own
+  // location once geolocation resolves — replaces the static curated pool
+  // for a brand-new traveler with no taste signal of their own yet. Falls
+  // back to today's curated list below whenever there isn't enough real
+  // data yet (cold start), so this never breaks the empty case.
+  const trendingDestinations = useTrendingDestinations(isNewUser);
   const upcoming = upcomingTrips[0];
   const heroPhotoRef = useDestinationPhoto(upcoming?.region || "");
   const previewTrips = [...upcomingTrips, ...historyTrips].slice(0, 4);
@@ -240,7 +279,16 @@ export default function HomeView({
       )}
 
       <div className={isNewUser ? "grid grid-cols-2 gap-2.5" : "flex gap-2.5 overflow-x-auto pb-1.5 jz-scroll"}>
-        {shownDestinations.map((d) => (
+        {isNewUser && trendingDestinations.length > 0 ? (
+          trendingDestinations.map((td) => (
+            <TrendingDestinationCard
+              key={td.region}
+              region={td.region}
+              count={td.count}
+              onClick={() => onSeedPlanning(`I want to plan a trip to ${td.region}`)}
+            />
+          ))
+        ) : shownDestinations.map((d) => (
           <button
             key={d.name}
             onClick={() => onSeedPlanning(`I want to plan a trip to ${d.name}`)}

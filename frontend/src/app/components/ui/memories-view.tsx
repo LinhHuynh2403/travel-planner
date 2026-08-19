@@ -29,7 +29,9 @@ type Tile = {
   dayNumber: number; activityIndex: number; path?: string;
 };
 
-type ShareTarget = { title: string; text: string; url?: string; imageUrl?: string };
+// tile is only set for a single-place share (openMemoryShare) — a whole-trip
+// share (openTripShare) has no one place to attribute a "shared" signal to.
+type ShareTarget = { title: string; text: string; url?: string; imageUrl?: string; tile?: Tile };
 
 export default function MemoriesView({ tripData, onSaveMemory }: { tripData: any; onSaveMemory?: (row: any) => void }) {
   const { t } = useTranslation();
@@ -70,7 +72,28 @@ export default function MemoriesView({ tripData, onSaveMemory }: { tripData: any
   const openMemoryShare = (tile: Tile) => {
     setCopied(false);
     setMoreUnavailable(false);
-    setShareTarget({ title: tile.title, text: tile.caption ? `${tile.title} — ${tile.caption}` : tile.title, url: sharePageUrl, imageUrl: tile.url || undefined });
+    setShareTarget({ title: tile.title, text: tile.caption ? `${tile.title} — ${tile.caption}` : tile.title, url: sharePageUrl, imageUrl: tile.url || undefined, tile });
+  };
+
+  // Only fires from a real social-channel tap (WhatsApp/Facebook/SMS/X/native
+  // share), never from "Copy Link" — copying a link isn't a public post, so
+  // it shouldn't seed trending. Best-effort: the share itself already
+  // happened (the platform link/sheet is already open by the time this
+  // runs), so a failure here is logged and otherwise invisible to the
+  // traveler. Looks up the activity's real Google Places identity the same
+  // way shared-trip-view.tsx's categoryFor already does.
+  const markShared = (tile?: Tile) => {
+    if (!tile || !tripData.tripId || tripData.tripId === "local") return;
+    const activity = tripData.days?.find((d: any) => d.dayNumber === tile.dayNumber)?.activities?.[tile.activityIndex];
+    const placeId = activity?.place?.placeId;
+    if (!placeId) return;
+    apiFetch(`/api/trips/${tripData.tripId}/memories/mark-shared`, {
+      method: "POST",
+      body: JSON.stringify({
+        dayNumber: tile.dayNumber, activityIndex: tile.activityIndex, placeId,
+        lat: activity.place.lat ?? null, lng: activity.place.lng ?? null,
+      }),
+    }).catch((e) => console.error("Failed to record share:", e));
   };
 
   const shareCopyLink = async () => {
@@ -85,7 +108,10 @@ export default function MemoriesView({ tripData, onSaveMemory }: { tripData: any
     const ok = target.imageUrl
       ? await shareImage({ title: target.title, text: target.text, imageUrl: target.imageUrl, pageUrl: target.url })
       : await shareContent({ title: target.title, text: target.text, url: target.url });
-    if (ok) setShareTarget(null);
+    if (ok) {
+      markShared(target.tile);
+      setShareTarget(null);
+    }
     // else: traveler dismissed the real native sheet themselves — that's a
     // deliberate cancel, not a failure, so no message here.
   };
@@ -262,6 +288,7 @@ export default function MemoriesView({ tripData, onSaveMemory }: { tripData: any
                 those — same mechanism Apple's/Google's own Share button uses. */}
             <div className="flex gap-3 overflow-x-auto jz-scroll pb-1 -mx-1 px-1">
               <a href={whatsappUrl(shareTarget.text, shareTarget.url)} target="_blank" rel="noreferrer"
+                onClick={() => markShared(shareTarget.tile)}
                 className="flex flex-col items-center gap-1.5 shrink-0" style={{ width: 64 }}>
                 <span className="w-14 h-14 rounded-full flex items-center justify-center" style={{ background: "#25D366" }}>
                   <MessageCircle size={24} color="#fff" />
@@ -269,6 +296,7 @@ export default function MemoriesView({ tripData, onSaveMemory }: { tripData: any
                 <span className="text-[10.5px] font-semibold text-center leading-tight" style={{ color: C.ink }}>{t("memories.shareWhatsapp")}</span>
               </a>
               <a href={facebookShareUrl(shareTarget.url || appUrl || "")} target="_blank" rel="noreferrer"
+                onClick={() => markShared(shareTarget.tile)}
                 className="flex flex-col items-center gap-1.5 shrink-0" style={{ width: 64 }}>
                 <span className="w-14 h-14 rounded-full flex items-center justify-center" style={{ background: "#1877F2" }}>
                   <Facebook size={22} color="#fff" fill="#fff" />
@@ -276,6 +304,7 @@ export default function MemoriesView({ tripData, onSaveMemory }: { tripData: any
                 <span className="text-[10.5px] font-semibold text-center leading-tight" style={{ color: C.ink }}>Facebook</span>
               </a>
               <a href={smsUrl(shareTarget.text)}
+                onClick={() => markShared(shareTarget.tile)}
                 className="flex flex-col items-center gap-1.5 shrink-0" style={{ width: 64 }}>
                 <span className="w-14 h-14 rounded-full flex items-center justify-center" style={{ background: "#0B93F6" }}>
                   <MessageSquare size={22} color="#fff" />
@@ -283,6 +312,7 @@ export default function MemoriesView({ tripData, onSaveMemory }: { tripData: any
                 <span className="text-[10.5px] font-semibold text-center leading-tight" style={{ color: C.ink }}>{t("memories.shareMessages")}</span>
               </a>
               <a href={twitterIntentUrl(shareTarget.text)} target="_blank" rel="noreferrer"
+                onClick={() => markShared(shareTarget.tile)}
                 className="flex flex-col items-center gap-1.5 shrink-0" style={{ width: 64 }}>
                 <span className="w-14 h-14 rounded-full flex items-center justify-center bg-black">
                   <X size={22} color="#fff" />

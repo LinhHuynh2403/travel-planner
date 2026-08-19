@@ -2242,6 +2242,182 @@ app.delete("/api/trips/:tripId/memories/photo", requireAuth, async (req, res) =>
   }
 });
 
+// ─── TRENDING PLACES ───────────────────────────────────────────────────────
+// A place only ever counts toward trending once a traveler actually shared
+// that memory via a real social channel — never just from saving a private
+// memory (see memories-view.tsx's markShared, fired from the WhatsApp/
+// Facebook/SMS/X share actions, not from "Copy Link"). Fire-and-forget from
+// the frontend, so failures here are logged, never surfaced to the traveler.
+app.post("/api/trips/:tripId/memories/mark-shared", requireAuth, async (req, res) => {
+  const { tripId } = req.params;
+  const dayNumber = parseInt(req.body.dayNumber, 10);
+  const activityIndex = parseInt(req.body.activityIndex, 10);
+  const placeId = typeof req.body.placeId === "string" && req.body.placeId ? req.body.placeId : null;
+  const lat = typeof req.body.lat === "number" ? req.body.lat : null;
+  const lng = typeof req.body.lng === "number" ? req.body.lng : null;
+
+  if (!Number.isInteger(dayNumber) || !Number.isInteger(activityIndex) || !placeId) {
+    return res.status(400).json({ error: "dayNumber, activityIndex, and placeId are required" });
+  }
+
+  try {
+    const { data: trip, error: tripError } = await supabase
+      .from("trips")
+      .select("id")
+      .eq("id", tripId)
+      .eq("user_id", req.user.id)
+      .single();
+    if (tripError || !trip) return res.status(404).json({ error: "Trip not found" });
+
+    const { data: existing, error: fetchError } = await supabase
+      .from("trip_memories")
+      .select("photos")
+      .eq("trip_id", tripId)
+      .eq("day_number", dayNumber)
+      .eq("activity_index", activityIndex)
+      .single();
+    if (fetchError || !existing) return res.status(404).json({ error: "Memory not found" });
+    // Nothing to trend without a real photo behind it.
+    if (!existing.photos || existing.photos.length === 0) return res.json({ ok: true, skipped: true });
+
+    const { error: updateError } = await supabase
+      .from("trip_memories")
+      .update({ shared_publicly: true, place_id: placeId, lat, lng, updated_at: new Date().toISOString() })
+      .eq("trip_id", tripId)
+      .eq("day_number", dayNumber)
+      .eq("activity_index", activityIndex);
+    if (updateError) throw updateError;
+
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error("Error marking memory as shared:", e);
+    return res.status(500).json({ error: "Failed to record share" });
+  }
+});
+
+// Real, specific-place trending within one destination — e.g. the matcha
+// shop a previous traveler shared. No auth: this feeds the "Trending in
+// {region}" section on an open trip, which should work the same for a
+// traveler regardless of whether the memory that seeded it is theirs.
+app.get("/api/trending-places", async (req, res) => {
+  const region = typeof req.query.region === "string" ? req.query.region.trim() : "";
+  if (!region) return res.status(400).json({ error: "region is required" });
+
+  try {
+    const { data: rows, error } = await supabase
+      .from("trip_memories")
+      .select("place_id, activity_title, photos, user_id, updated_at, trips!inner(region)")
+      .eq("shared_publicly", true)
+      .not("place_id", "is", null)
+      .ilike("trips.region", region);
+    if (error) throw error;
+
+    const byPlace = new Map();
+    for (const row of rows || []) {
+      if (!row.photos || row.photos.length === 0) continue;
+      const bucket = byPlace.get(row.place_id) || {
+        placeId: row.place_id, title: row.activity_title, visitors: new Set(), photo: null, latest: null,
+      };
+      bucket.visitors.add(row.user_id);
+      if (!bucket.latest || row.updated_at > bucket.latest) {
+        bucket.latest = row.updated_at;
+        bucket.photo = row.photos[0]?.url || bucket.photo;
+      }
+      byPlace.set(row.place_id, bucket);
+    }
+
+    const places = [...byPlace.values()]
+      .map((p) => ({
+        placeId: p.placeId,
+        title: p.title,
+        photo: p.photo,
+        visitorCount: p.visitors.size,
+        mapsUrl: `https://www.google.com/maps/place/?q=place_id:${p.placeId}`,
+      }))
+      .sort((a, b) => b.visitorCount - a.visitorCount)
+      .slice(0, 10);
+
+    return res.json({ places });
+  } catch (e) {
+    console.error("Error fetching trending places:", e);
+    return res.status(500).json({ error: "Failed to fetch trending places" });
+  }
+});
+
+// Small in-memory cache — geocoding the same handful of trending regions on
+// every Home load would otherwise re-hit the free Open-Meteo geocoder for
+// every visitor. Not persisted; a cold restart just re-populates it.
+const trendingGeocodeCache = new Map();
+async function geocodeCached(region) {
+  if (trendingGeocodeCache.has(region)) return trendingGeocodeCache.get(region);
+  const coords = await geocodeLocation(region).catch(() => null);
+  trendingGeocodeCache.set(region, coords);
+  return coords;
+}
+function haversineKm(a, b) {
+  const R = 6371;
+  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+  const dLng = ((b.lng - a.lng) * Math.PI) / 180;
+  const s = Math.sin(dLat / 2) ** 2 + Math.cos((a.lat * Math.PI) / 180) * Math.cos((b.lat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s));
+}
+
+// Destination-level trending for the Home dashboard's new-user branch — real
+// regions other travelers are actually planning trips to right now, not a
+// fabricated "trending on social media" list. No auth: this is the first
+// thing a brand-new/logged-out visitor sees.
+app.get("/api/trending-destinations", async (req, res) => {
+  const lat = req.query.lat !== undefined ? parseFloat(req.query.lat) : null;
+  const lng = req.query.lng !== undefined ? parseFloat(req.query.lng) : null;
+  const hasLocation = Number.isFinite(lat) && Number.isFinite(lng);
+
+  try {
+    const sinceIso = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString();
+    const { data: trips, error } = await supabase
+      .from("trips")
+      .select("region, user_id, created_at")
+      .gte("created_at", sinceIso);
+    if (error) throw error;
+
+    const byRegion = new Map();
+    for (const trip of trips || []) {
+      const key = (trip.region || "").trim().toLowerCase();
+      if (!key) continue;
+      const bucket = byRegion.get(key) || { display: trip.region.trim(), visitors: new Set() };
+      bucket.visitors.add(trip.user_id);
+      byRegion.set(key, bucket);
+    }
+
+    // A real signal, not one lonely trip looking artificially significant —
+    // note for later: raise this minimum (e.g. 3+) as the user base grows.
+    let candidates = [...byRegion.values()]
+      .map((b) => ({ region: b.display, count: b.visitors.size }))
+      .filter((c) => c.count >= 1)
+      .sort((a, b) => b.count - a.count);
+
+    if (candidates.length < 2) return res.json({ destinations: [] });
+
+    if (hasLocation) {
+      const top = candidates.slice(0, 15);
+      const withCoords = await Promise.all(
+        top.map(async (c) => ({ ...c, coords: await geocodeCached(c.region) }))
+      );
+      withCoords.sort((a, b) => {
+        if (!a.coords && !b.coords) return b.count - a.count;
+        if (!a.coords) return 1;
+        if (!b.coords) return -1;
+        return haversineKm({ lat, lng }, a.coords) - haversineKm({ lat, lng }, b.coords);
+      });
+      candidates = withCoords.map(({ coords, ...c }) => c);
+    }
+
+    return res.json({ destinations: candidates.slice(0, 6) });
+  } catch (e) {
+    console.error("Error fetching trending destinations:", e);
+    return res.status(500).json({ error: "Failed to fetch trending destinations" });
+  }
+});
+
 // ─── MILESTONE 7: EVENT DISCOVERY ─────────────────────────────────────────────
 app.get("/api/events", async (req, res) => {
   const { region, arrivalDate, leaveDate } = req.query;
