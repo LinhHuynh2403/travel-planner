@@ -2091,8 +2091,20 @@ app.post("/api/trips/:tripId/memories", requireAuth, memoryUpload.array("photos"
       return new Array(expectedLen).fill("");
     }
   };
-  const existingPhotoCaptions = parseCaptions(req.body.existingPhotoCaptions, 0);
   const newPhotoCaptions = parseCaptions(req.body.newPhotoCaptions, (req.files || []).length);
+  // The exact final list of PRE-EXISTING photos to keep (path + possibly-
+  // edited caption) — the client already removed whichever ones the
+  // traveler deleted before hitting Save, so anything from the current DB
+  // row NOT present here gets deleted below, not just left alone.
+  let keepExisting = [];
+  try {
+    const arr = JSON.parse(req.body.existingPhotos || "[]");
+    if (Array.isArray(arr)) {
+      keepExisting = arr
+        .filter((p) => p && typeof p.path === "string")
+        .map((p) => ({ path: p.path, caption: typeof p.caption === "string" ? p.caption.trim().slice(0, 500) : "" }));
+    }
+  } catch { /* keepExisting stays [] — treated as "remove everything existing" */ }
 
   if (!Number.isInteger(dayNumber) || dayNumber < 1 || !Number.isInteger(activityIndex) || activityIndex < 0) {
     return res.status(400).json({ error: "dayNumber and activityIndex are required" });
@@ -2122,8 +2134,9 @@ app.post("/api/trips/:tripId/memories", requireAuth, memoryUpload.array("photos"
 
     // Read-modify-write: supabase-js has no raw JSONB-array-append
     // expression, so fetch whatever's already saved for this activity and
-    // concat before upserting. Narrow race if the same activity is saved
-    // from two places at once — acceptable for a single-user scrapbook.
+    // reconcile against keepExisting before upserting. Narrow race if the
+    // same activity is saved from two places at once — acceptable for a
+    // single-user scrapbook.
     const { data: existing } = await supabase
       .from("trip_memories")
       .select("photos")
@@ -2132,13 +2145,21 @@ app.post("/api/trips/:tripId/memories", requireAuth, memoryUpload.array("photos"
       .eq("activity_index", activityIndex)
       .single();
 
-    // existingPhotoCaptions arrives in the same order the client rendered
-    // existing.photos in, so it lines up index-for-index — the traveler may
-    // have edited any of these captions without touching the photo itself.
-    const updatedExisting = (existing?.photos || []).map((p, i) => ({
-      ...p,
-      caption: existingPhotoCaptions[i] !== undefined ? existingPhotoCaptions[i] : (p.caption || ""),
-    }));
+    const priorPhotos = existing?.photos || [];
+    const keepPaths = new Set(keepExisting.map((k) => k.path));
+    // Any previously-saved photo the traveler removed in the sheet before
+    // hitting Save — delete its real Storage object too, not just drop it
+    // from the array, so a deleted photo doesn't keep quietly costing storage.
+    const removedPaths = priorPhotos.filter((p) => !keepPaths.has(p.path)).map((p) => p.path).filter(Boolean);
+    if (removedPaths.length > 0) {
+      const { error: removeError } = await supabase.storage.from("trip-memories").remove(removedPaths);
+      if (removeError) console.error("Failed to delete removed memory photos from storage:", removeError);
+    }
+
+    const updatedExisting = keepExisting.map((k) => {
+      const orig = priorPhotos.find((p) => p.path === k.path);
+      return orig ? { ...orig, caption: k.caption } : null;
+    }).filter(Boolean);
     const photos = [...updatedExisting, ...newPhotos];
 
     const { data: saved, error: upsertError } = await supabase
@@ -2165,6 +2186,59 @@ app.post("/api/trips/:tripId/memories", requireAuth, memoryUpload.array("photos"
   } catch (e) {
     console.error("Error saving trip memory:", e);
     return res.status(500).json({ error: "Failed to save memory" });
+  }
+});
+
+// Deletes exactly one photo immediately — the direct "delete" action from
+// the Memories tab's full-screen photo view, as opposed to the edit sheet
+// above (Plan tab), where a removed photo isn't actually deleted until the
+// traveler hits Save. Both end up calling the same real Storage cleanup.
+app.delete("/api/trips/:tripId/memories/photo", requireAuth, async (req, res) => {
+  const { tripId } = req.params;
+  const dayNumber = parseInt(req.body.dayNumber, 10);
+  const activityIndex = parseInt(req.body.activityIndex, 10);
+  const path = typeof req.body.path === "string" ? req.body.path : null;
+
+  if (!Number.isInteger(dayNumber) || !Number.isInteger(activityIndex) || !path) {
+    return res.status(400).json({ error: "dayNumber, activityIndex, and path are required" });
+  }
+
+  try {
+    const { data: trip, error: tripError } = await supabase
+      .from("trips")
+      .select("id")
+      .eq("id", tripId)
+      .eq("user_id", req.user.id)
+      .single();
+    if (tripError || !trip) return res.status(404).json({ error: "Trip not found" });
+
+    const { data: existing, error: fetchError } = await supabase
+      .from("trip_memories")
+      .select("photos")
+      .eq("trip_id", tripId)
+      .eq("day_number", dayNumber)
+      .eq("activity_index", activityIndex)
+      .single();
+    if (fetchError || !existing) return res.status(404).json({ error: "Memory not found" });
+
+    const photos = (existing.photos || []).filter((p) => p.path !== path);
+    const { error: removeError } = await supabase.storage.from("trip-memories").remove([path]);
+    if (removeError) console.error("Failed to delete memory photo from storage:", removeError);
+
+    const { data: saved, error: updateError } = await supabase
+      .from("trip_memories")
+      .update({ photos, updated_at: new Date().toISOString() })
+      .eq("trip_id", tripId)
+      .eq("day_number", dayNumber)
+      .eq("activity_index", activityIndex)
+      .select()
+      .single();
+    if (updateError) throw updateError;
+
+    return res.json(saved);
+  } catch (e) {
+    console.error("Error deleting memory photo:", e);
+    return res.status(500).json({ error: "Failed to delete photo" });
   }
 });
 
