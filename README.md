@@ -8,6 +8,7 @@
   <img alt="Node.js" src="https://img.shields.io/badge/Node.js-Express-339933?logo=node.js&logoColor=white">
   <img alt="Gemini" src="https://img.shields.io/badge/LLM-Gemini%202.5%20Flash-8E75B2?logo=google&logoColor=white">
   <img alt="Ollama" src="https://img.shields.io/badge/Local%20Fallback-Ollama%20gemma3-000000?logo=ollama&logoColor=white">
+  <img alt="Supabase" src="https://img.shields.io/badge/Database-Supabase-3ECF8E?logo=supabase&logoColor=white">
   <img alt="Deploy" src="https://img.shields.io/badge/Deployed-Vercel-000000?logo=vercel&logoColor=white">
 </p>
 
@@ -75,6 +76,17 @@ User chat ──▶ Conversational onboarding (LLM)
 
 ---
 
+## 🗄️ Database & auth (Supabase)
+
+JourZy uses **Supabase** as its backend-as-a-service: Postgres, auth, and file storage in one, with a schema defined in [`schema.sql`](schema.sql).
+
+- **Postgres + Row Level Security** — `trips`, `itineraries`, `user_memory`, `chat_histories`, and `trip_memories` (the trip scrapbook: visited flags, photos, captions) tables, each with **RLS enabled**. The Express backend authenticates with the **service role key** (which bypasses RLS) and enforces per-user ownership on every endpoint by verifying the caller's JWT — so the RLS layer is the last line of defense if the public anon key is ever queried directly against Supabase's REST API, not the primary access control.
+- **Supabase Auth** — email/password sign-up, sign-in, and session management on the frontend (`supabase.auth.signUp`/`signInWithPassword`/`getSession`), with the resulting JWT sent to the backend on every request and verified server-side (`supabase.auth.getUser(token)`) before touching any user data.
+- **Supabase Storage** — a public `trip-memories` bucket holds scrapbook photos; uploads happen server-side only (service role key), while unguessable UUID-based object paths let shared-trip links serve photos without requiring the viewer to be logged in.
+- **Two clients, two trust levels** — the frontend (`frontend/src/app/utils/supabaseClient.ts`) uses the public anon key purely for auth; the backend (`backend/db.js`) uses the service role key and is the only thing that ever reads or writes trip data.
+
+---
+
 ## 🔧 Engineering highlights
 
 The interesting problems in this project weren't the UI — they were making an LLM **reliable enough to build a product on top of**:
@@ -103,6 +115,7 @@ The interesting problems in this project weren't the UI — they were making an 
 |---|---|
 | Frontend | React (Vite), TypeScript |
 | Backend | Node.js, Express |
+| Database & auth | Supabase (Postgres, Row Level Security, Auth, Storage) |
 | LLM | Gemini 2.5 Flash (primary), Ollama `gemma3` (local fallback) |
 | Data APIs | Google Places, Google Maps, OpenWeather |
 | Deployment | Vercel |
@@ -115,12 +128,21 @@ The interesting problems in this project weren't the UI — they were making an 
 
 - **Node.js** v18+
 - **npm** or **yarn**
+- A [Supabase](https://supabase.com/) project — Postgres database, auth, and storage
 - API keys:
   - [Google Gemini API key](https://ai.google.dev/) — AI generation & conversational chat
   - [Google Maps API key](https://console.cloud.google.com/) — geocoding, place details, maps embed
   - [OpenWeather API key](https://openweathermap.org/api) — live 5-day weather
 
-### 1. Backend
+### 1. Supabase
+
+Create a project at [supabase.com](https://supabase.com/), then run [`schema.sql`](schema.sql) in the Supabase SQL Editor to create the tables (with RLS enabled) and the `trip-memories` storage bucket. From Settings → API, grab:
+
+- the **Project URL**
+- the **anon/public key** (frontend)
+- the **service_role key** (backend — never expose this client-side)
+
+### 2. Backend
 
 ```bash
 cd backend
@@ -134,6 +156,8 @@ PORT=8888
 GEMINI_API_KEY=your_gemini_api_key
 GOOGLE_MAPS_KEY=your_google_maps_key
 OPENWEATHER_API_KEY=your_openweather_api_key
+SUPABASE_URL=your_supabase_project_url
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 ```
 
 Start the API server:
@@ -143,7 +167,14 @@ node server.js
 # runs at http://localhost:8888
 ```
 
-### 2. Frontend
+### 3. Frontend
+
+Create a `.env` file inside `/frontend`:
+
+```env
+VITE_SUPABASE_URL=your_supabase_project_url
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+```
 
 ```bash
 cd frontend
