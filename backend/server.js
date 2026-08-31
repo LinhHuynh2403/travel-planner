@@ -7,6 +7,13 @@ import crypto from "node:crypto";
 import { supabase } from "./db.js";
 import fetch from "node-fetch";
 import { getSystemChatInstruction, getDeterministicGeneratorPrompt, getItineraryChatInstruction, getPastTripChatInstruction, getRescheduleChatInstruction, getLanguageInstruction, getLanguageMatchInstruction, getLanguageSwitchGuidance, BOOKING_GUIDANCE, FLIGHT_GUIDANCE, getActivitySuggestionPrompt, getFlightSuggestionPrompt } from "./prompts.js";
+import {
+  placesTextSearchResponseSchema,
+  placeDetailsResponseSchema,
+  openMeteoGeocodeResponseSchema,
+  openMeteoForecastResponseSchema,
+  itinerarySchema,
+} from "./schemas.js";
 
 const app = express();
 
@@ -236,8 +243,13 @@ const tools = [
 async function geocodeLocation(query) {
   const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=1&language=en&format=json`;
   const resp = await fetch(url);
-  const data = await resp.json();
-  const match = data.results?.[0];
+  const raw = await resp.json();
+  const parsed = openMeteoGeocodeResponseSchema.safeParse(raw);
+  if (!parsed.success) {
+    console.warn("Open-Meteo geocoding response failed validation:", parsed.error.message);
+    return null;
+  }
+  const match = parsed.data.results?.[0];
   return match ? { lat: match.latitude, lng: match.longitude } : null;
 }
 
@@ -254,7 +266,16 @@ async function fetchOpenMeteoForecast(lat, lng, unit = "imperial") {
   // icon strip) in the frontend — same single Open-Meteo call, no extra request.
   const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&daily=temperature_2m_max,temperature_2m_min,weather_code,apparent_temperature_max,wind_speed_10m_max&hourly=temperature_2m,relative_humidity_2m,cloud_cover,weather_code&temperature_unit=${temperatureUnit}&wind_speed_unit=${windSpeedUnit}&timezone=auto&forecast_days=7`;
   const resp = await fetch(url);
-  return resp.json();
+  const raw = await resp.json();
+  const parsed = openMeteoForecastResponseSchema.safeParse(raw);
+  if (!parsed.success) {
+    console.warn("Open-Meteo forecast response failed validation:", parsed.error.message);
+    return { error: "Weather data malformed" };
+  }
+  // Return the raw payload (not parsed.data) — passthrough already lets every
+  // field through, and this keeps behavior identical for callers that stash
+  // the whole object (e.g. the AI-fallback weatherWeek insights).
+  return raw;
 }
 
 async function getWeather(city, country) {
@@ -273,12 +294,17 @@ async function searchPlaces(query, city) {
   const searchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query + " " + city)}&key=${key}`;
   try {
     const resp = await fetch(searchUrl);
-    const data = await resp.json();
+    const raw = await resp.json();
+    const parsed = placesTextSearchResponseSchema.safeParse(raw);
+    if (!parsed.success) {
+      console.warn("Places text search response failed validation:", parsed.error.message);
+      return { error: "Places data malformed" };
+    }
     // Slightly more than the "top pick" ever needs — the itinerary chat's
     // <<SUGGEST>> resolution reasons over a few real candidates (spatial fit,
     // budget) rather than blindly trusting whichever result Google ranked
     // first; see getActivitySuggestionPrompt in prompts.js.
-    return data.results ? data.results.slice(0, 6) : data;
+    return parsed.data.results ? parsed.data.results.slice(0, 6) : parsed.data;
   } catch (e) {
     return { error: String(e) };
   }
@@ -499,8 +525,13 @@ async function getPlaceDetails(place_id) {
   const detailsUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${place_id}&fields=name,formatted_address,geometry,opening_hours,rating,price_level&key=${key}`;
   try {
     const resp = await fetch(detailsUrl);
-    const data = await resp.json();
-    return data.result || data;
+    const raw = await resp.json();
+    const parsed = placeDetailsResponseSchema.safeParse(raw);
+    if (!parsed.success) {
+      console.warn("Place details response failed validation:", parsed.error.message);
+      return { error: "Place details data malformed" };
+    }
+    return parsed.data.result || parsed.data;
   } catch (e) {
     return { error: String(e) };
   }
@@ -682,7 +713,13 @@ async function fetchRealPlaces(plan) {
     const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query)}&key=${key}`;
     try {
       const resp = await fetch(url);
-      const data = await resp.json();
+      const raw = await resp.json();
+      const parsed = placesTextSearchResponseSchema.safeParse(raw);
+      if (!parsed.success) {
+        console.warn(`Places text search response failed validation for "${query}":`, parsed.error.message);
+        return [];
+      }
+      const data = parsed.data;
       if (!data.results) return [];
       return data.results.slice(0, 12).map(p => ({
         placeId: p.place_id,
@@ -1048,7 +1085,18 @@ app.post("/api/itinerary", expensiveLimiter, optionalAuth, async (req, res) => {
       if (success && raw) {
         try {
           const jsonText = extractJson(raw);
-          itinerary = JSON.parse(jsonText);
+          const candidate = JSON.parse(jsonText);
+          // The model's JSON can parse cleanly and still be the wrong shape
+          // (missing "days", a day with no "activities" array, etc.) — that
+          // breaks normalizeItineraryDates()/enrichItineraryPlaces() just as
+          // badly as a syntax error, so treat a schema failure the same way
+          // as a parse failure: fall through to the existing retry loop
+          // instead of handing the frontend a half-formed itinerary.
+          const validated = itinerarySchema.safeParse(candidate);
+          if (!validated.success) {
+            throw new Error(`Itinerary shape validation failed: ${validated.error.message}`);
+          }
+          itinerary = validated.data;
         } catch (parseErr) {
           lastParseError = parseErr;
           // parseErr alone ("Unexpected token X in JSON at position N") isn't
@@ -2683,9 +2731,14 @@ async function lookupPlace(query, regionHint) {
     `&key=${key}`;
 
   const searchResp = await fetch(searchUrl);
-  const searchData = await searchResp.json();
+  const rawSearch = await searchResp.json();
+  const parsedSearch = placesTextSearchResponseSchema.safeParse(rawSearch);
+  if (!parsedSearch.success) {
+    console.warn("Places text search response failed validation:", parsedSearch.error.message);
+    return null;
+  }
 
-  const top = searchData.results?.[0];
+  const top = parsedSearch.data.results?.[0];
   if (!top) return null;
 
   const placeId = top.place_id;
@@ -2696,8 +2749,13 @@ async function lookupPlace(query, regionHint) {
     `?place_id=${placeId}&fields=name,formatted_address,geometry,opening_hours,rating&key=${key}`;
 
   const detailsResp = await fetch(detailsUrl);
-  const detailsData = await detailsResp.json();
-  const details = detailsData.result || {};
+  const rawDetails = await detailsResp.json();
+  const parsedDetails = placeDetailsResponseSchema.safeParse(rawDetails);
+  if (!parsedDetails.success) {
+    console.warn("Place details response failed validation:", parsedDetails.error.message);
+    return null;
+  }
+  const details = parsedDetails.data.result || {};
 
   const address = details.formatted_address || top.formatted_address;
   const lat = details.geometry?.location?.lat || top.geometry?.location?.lat;
