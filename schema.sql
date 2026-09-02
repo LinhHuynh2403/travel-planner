@@ -121,6 +121,21 @@ ALTER TABLE public.trip_memories ADD COLUMN IF NOT EXISTS shared_publicly BOOLEA
 CREATE INDEX IF NOT EXISTS idx_trip_memories_shared_place
     ON public.trip_memories (place_id) WHERE shared_publicly = true;
 
+-- 7c. Destination photo cache: GET /api/destination-photo used to call
+-- Google's (billed) Places Text Search fresh every single time any traveler
+-- opened the app, for the same handful of regions over and over -- that's
+-- what actually drove the Google Cloud billing charge. A given region's top
+-- place result barely ever changes, so resolve it once, globally, and reuse
+-- forever. region_key is the lowercased/trimmed region string; photo_ref can
+-- be legitimately NULL (Google had nothing for that region) -- caching that
+-- miss too avoids re-querying a dead-end region on every load.
+CREATE TABLE IF NOT EXISTS public.destination_photos (
+    region_key TEXT PRIMARY KEY,
+    photo_ref TEXT,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+ALTER TABLE public.destination_photos ENABLE ROW LEVEL SECURITY;
+
 -- 8. Storage bucket for memory photos. Public bucket + UUID-based object
 -- paths: sharing a trip needs a plain fetchable URL for people who aren't
 -- logged into the app, and paths are unguessable in practice. Writes still

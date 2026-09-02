@@ -1773,11 +1773,35 @@ app.get("/api/destination-photo", async (req, res) => {
   const { region } = req.query;
   const key = process.env.GOOGLE_MAPS_KEY;
   if (!key || !region) return res.status(400).json({ error: "Missing parameters" });
+
+  // A region's top Places result is effectively permanent, and this same
+  // handful of regions gets requested by every traveler on every page load
+  // -- caching per-browser-session (the frontend's in-memory Map) wasn't
+  // enough since a reload wipes it. This is the shared, durable cache: once
+  // any traveler resolves "Paris", nobody -- including a future page load by
+  // the same traveler -- pays for that Places Text Search call again.
+  const regionKey = region.trim().toLowerCase();
+  const { data: cached } = await supabase
+    .from("destination_photos")
+    .select("photo_ref")
+    .eq("region_key", regionKey)
+    .maybeSingle();
+  if (cached) return res.json({ photoRef: cached.photo_ref });
+
   try {
     const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(region)}&key=${key}`;
     const resp = await fetch(url);
     const data = await resp.json();
+    const isRealResult = data.status === "OK" || data.status === "ZERO_RESULTS";
+    if (!isRealResult) {
+      console.error(`Places textsearch for "${region}" returned ${data.status}: ${data.error_message || "(no message)"}`);
+    }
     const photoRef = data.results?.[0]?.photos?.[0]?.photo_reference || null;
+    // Only cache a genuine answer from Google (including a legitimate "no
+    // results"). Caching a denial/quota error would otherwise wedge every
+    // region at photoRef=null forever, even after the underlying API issue
+    // (e.g. billing) gets fixed -- worse than just not caching it.
+    if (isRealResult) await supabase.from("destination_photos").upsert({ region_key: regionKey, photo_ref: photoRef });
     return res.json({ photoRef });
   } catch (e) {
     console.error("Destination photo lookup failed:", e);
@@ -1797,6 +1821,11 @@ app.get("/api/photo", async (req, res) => {
 
     const contentType = resp.headers.get("content-type");
     if (contentType) res.setHeader("Content-Type", contentType);
+    // A given photoreference always resolves to the same image -- with no
+    // cache header here, browsers were re-requesting (and this proxy was
+    // re-billing Google for) the identical photo on every page load/reload.
+    // Long-lived + immutable since the reference itself is the versioning.
+    res.setHeader("Cache-Control", "public, max-age=2592000, immutable");
     const buffer = await resp.arrayBuffer();
     return res.send(Buffer.from(buffer));
   } catch (e) {
