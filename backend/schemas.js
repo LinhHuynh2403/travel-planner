@@ -142,11 +142,25 @@ const hotelRecommendationSchema = z.object({
   alternatives: z.array(hotelAlternativeSchema).optional(),
 }).passthrough();
 
+// culturalTips/safetyTips/customsRestrictions are rendered as plain text
+// directly in the Guide tab (see guide-view.tsx) -- the model has, on
+// occasion, emitted these as objects (e.g. {item, restriction}) instead of
+// strings, which parses as valid JSON and passed the old fully-loose
+// insights schema, but crashes React when rendered as a child. Pinning
+// these three to string[] rejects that shape here and triggers the existing
+// retry loop, instead of saving a trip that permanently crashes its own
+// Guide tab. Everything else in insights stays loose/passthrough.
+const insightsSchema = z.object({
+  culturalTips: z.array(z.string()).optional(),
+  safetyTips: z.array(z.string()).optional(),
+  customsRestrictions: z.array(z.string()).optional(),
+}).passthrough();
+
 export const itinerarySchema = z.object({
   hotelRecommendation: hotelRecommendationSchema.optional(),
   plan: z.record(z.string(), z.unknown()).optional(),
   days: z.array(daySchema).min(1),
   packingList: z.array(z.unknown()).optional(),
-  insights: z.record(z.string(), z.unknown()).optional(),
+  insights: insightsSchema.optional(),
   logisticsGuide: z.record(z.string(), z.unknown()).optional(),
 }).passthrough();

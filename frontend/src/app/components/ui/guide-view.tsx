@@ -9,6 +9,21 @@ const enc = encodeURIComponent;
 // carries no per-tip icon of its own.
 const TIP_EMOJI = ["🤝", "💡", "🧕", "📌", "🗣️"];
 
+// Tips are meant to be plain strings, but a trip saved before the backend's
+// insights schema pinned that shape (or a rare model slip that predates the
+// schema) can have one saved as an object instead (e.g. {item, restriction})
+// — rendering an object directly as a React child is a hard crash (minified
+// error #31), not a blank tip, so this can't be skipped even defensively.
+function tipText(tip: unknown): string {
+  if (typeof tip === "string") return tip;
+  if (tip && typeof tip === "object") {
+    const obj = tip as Record<string, unknown>;
+    const parts = Object.values(obj).filter((v): v is string => typeof v === "string");
+    if (parts.length > 0) return parts.join(" — ");
+  }
+  return String(tip ?? "");
+}
+
 function flightSearchUrl(engine: "google" | "skyscanner" | "expedia", region: string, arrivalDate?: string, leaveDate?: string) {
   const q = enc(region || "");
   if (engine === "google") return `https://www.google.com/travel/flights?q=${enc(`Flights to ${region}`)}`;
@@ -191,13 +206,13 @@ export default function GuideView({ tripData }: { tripData: any }) {
             {safety.map((s: string, i: number) => (
               <div key={`s-${i}`} className="flex items-start gap-2.5 rounded-2xl p-3" style={{ background: "rgba(196, 58, 47, 0.12)" }}>
                 <ShieldAlert size={15} className="shrink-0 mt-0.5" color={C.hanko} />
-                <span className="text-xs leading-relaxed font-medium" style={{ color: C.hanko }}>{s}</span>
+                <span className="text-xs leading-relaxed font-medium" style={{ color: C.hanko }}>{tipText(s)}</span>
               </div>
             ))}
             {localTips.map((tip: string, i: number) => (
               <div key={`t-${i}`} className="flex items-start gap-2.5 rounded-2xl p-3" style={{ background: C.card, border: `1px solid ${C.line}` }}>
                 <span className="text-base shrink-0">{TIP_EMOJI[i % TIP_EMOJI.length]}</span>
-                <span className="text-xs leading-relaxed" style={{ color: C.ink }}>{tip}</span>
+                <span className="text-xs leading-relaxed" style={{ color: C.ink }}>{tipText(tip)}</span>
               </div>
             ))}
           </div>

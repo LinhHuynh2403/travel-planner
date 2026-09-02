@@ -390,9 +390,9 @@ CRITICAL: Return ONLY valid, clean JSON matching this exact structural skeleton.
     "weatherWeek": [
       { "d": "Mon 12", "icon": "sunny", "hi": 68, "lo": 52, "note": "Sunny" }
     ], 
-    "culturalTips": [], 
-    "safetyTips": [], 
-    "customsRestrictions": [],
+    "culturalTips": ["<a single plain string per tip, never an object>"],
+    "safetyTips": ["<a single plain string per tip, never an object>"],
+    "customsRestrictions": ["<a single plain string per restriction, e.g. 'Chewing gum import is banned, fines up to S$500 (~US$370)' — never an object with separate fields>"],
     "budgetSummary": {
       "totalEstimatedCost": 1250,
       "breakdown": [
