@@ -16,6 +16,10 @@ const placesGeometrySchema = z.object({
   location: latLngSchema,
 }).passthrough();
 
+const placePhotoSchema = z.object({
+  photo_reference: z.string(),
+}).passthrough();
+
 export const placesResultItemSchema = z.object({
   place_id: z.string(),
   name: z.string(),
@@ -24,6 +28,7 @@ export const placesResultItemSchema = z.object({
   user_ratings_total: z.number().optional(),
   price_level: z.number().optional(),
   geometry: placesGeometrySchema.optional(),
+  photos: z.array(placePhotoSchema).optional(),
 }).passthrough();
 
 export const placesTextSearchResponseSchema = z.object({
@@ -37,7 +42,9 @@ export const placeDetailsResultSchema = z.object({
   geometry: placesGeometrySchema.optional(),
   opening_hours: z.record(z.string(), z.unknown()).optional(),
   rating: z.number().optional(),
+  user_ratings_total: z.number().optional(),
   price_level: z.number().optional(),
+  photos: z.array(placePhotoSchema).optional(),
 }).passthrough();
 
 export const placeDetailsResponseSchema = z.object({
@@ -88,6 +95,10 @@ const placeRefSchema = z.object({
   lat: z.number().optional(),
   lng: z.number().optional(),
   mapsUrl: z.string().optional(),
+  rating: z.number().optional(),
+  userRatingsTotal: z.number().optional(),
+  priceLevel: z.number().optional(),
+  photoReference: z.string().optional(),
 }).passthrough();
 
 const alternativeActivitySchema = z.object({

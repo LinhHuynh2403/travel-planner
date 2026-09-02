@@ -728,6 +728,7 @@ async function fetchRealPlaces(plan) {
         rating: p.rating || 0,
         userRatingsTotal: p.user_ratings_total || 0,
         priceLevel: p.price_level !== undefined ? p.price_level : -1,
+        photoReference: p.photos?.[0]?.photo_reference || null,
         lat: p.geometry?.location?.lat,
         lng: p.geometry?.location?.lng,
       }));
@@ -2640,6 +2641,10 @@ async function enrichItineraryPlaces(itinerary, realPlaces) {
         address: hotelMatch.address,
         lat: hotelMatch.lat,
         lng: hotelMatch.lng,
+        rating: hotelMatch.rating || undefined,
+        userRatingsTotal: hotelMatch.userRatingsTotal || undefined,
+        priceLevel: hotelMatch.priceLevel >= 0 ? hotelMatch.priceLevel : undefined,
+        photoReference: hotelMatch.photoReference || undefined,
         mapsUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(hotelMatch.name + " " + hotelMatch.address)}&query_place_id=${hotelMatch.placeId}`
       };
     } else if (key) {
@@ -2677,6 +2682,9 @@ async function enrichItineraryPlaces(itinerary, realPlaces) {
             lat: match.lat,
             lng: match.lng,
             rating: match.rating || undefined,
+            userRatingsTotal: match.userRatingsTotal || undefined,
+            priceLevel: match.priceLevel >= 0 ? match.priceLevel : undefined,
+            photoReference: match.photoReference || undefined,
             mapsUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(match.name + " " + match.address)}&query_place_id=${match.placeId}`
           };
           act.title = match.name;
@@ -2716,6 +2724,9 @@ async function enrichItineraryPlaces(itinerary, realPlaces) {
               lat: altMatch.lat,
               lng: altMatch.lng,
               rating: altMatch.rating || undefined,
+              userRatingsTotal: altMatch.userRatingsTotal || undefined,
+              priceLevel: altMatch.priceLevel >= 0 ? altMatch.priceLevel : undefined,
+              photoReference: altMatch.photoReference || undefined,
               mapsUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(altMatch.name + " " + altMatch.address)}&query_place_id=${altMatch.placeId}`
             };
             alt.title = altMatch.name;
@@ -2775,7 +2786,7 @@ async function lookupPlace(query, regionHint) {
   // 2. Place Details to get Real-Time Opening Hours
   const detailsUrl =
     "https://maps.googleapis.com/maps/api/place/details/json" +
-    `?place_id=${placeId}&fields=name,formatted_address,geometry,opening_hours,rating&key=${key}`;
+    `?place_id=${placeId}&fields=name,formatted_address,geometry,opening_hours,rating,user_ratings_total,price_level,photos&key=${key}`;
 
   const detailsResp = await fetch(detailsUrl);
   const rawDetails = await detailsResp.json();
@@ -2790,6 +2801,9 @@ async function lookupPlace(query, regionHint) {
   const lat = details.geometry?.location?.lat || top.geometry?.location?.lat;
   const lng = details.geometry?.location?.lng || top.geometry?.location?.lng;
   const rating = details.rating || top.rating || undefined;
+  const userRatingsTotal = details.user_ratings_total || top.user_ratings_total || undefined;
+  const priceLevel = details.price_level ?? top.price_level ?? undefined;
+  const photoReference = details.photos?.[0]?.photo_reference || top.photos?.[0]?.photo_reference || undefined;
 
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
     query + " " + address
@@ -2801,6 +2815,9 @@ async function lookupPlace(query, regionHint) {
     lat,
     lng,
     rating,
+    userRatingsTotal,
+    priceLevel,
+    photoReference,
     mapsUrl,
     isOpenNow: details.opening_hours?.open_now,
     weekdayText: details.opening_hours?.weekday_text
