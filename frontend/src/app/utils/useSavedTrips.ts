@@ -133,8 +133,17 @@ export function useSavedTrips(onOpened: (tripId: string) => void) {
   };
 
   const today = new Date();
-  const upcomingTrips = savedTrips.filter(t => new Date(t.leave_date) >= today);
-  const historyTrips = savedTrips.filter(t => new Date(t.leave_date) < today);
+  // The backend returns trips ordered by created_at (see idx_trips_user_created
+  // in schema.sql), which is when a trip was PLANNED, not when it's actually
+  // happening — a trip generated last week for next month showed above one
+  // generated yesterday for tomorrow. Travelers care about departure order,
+  // not planning order: soonest-upcoming first, most-recently-completed first.
+  const upcomingTrips = savedTrips
+    .filter(t => new Date(t.leave_date) >= today)
+    .sort((a, b) => new Date(a.arrival_date).getTime() - new Date(b.arrival_date).getTime());
+  const historyTrips = savedTrips
+    .filter(t => new Date(t.leave_date) < today)
+    .sort((a, b) => new Date(b.leave_date).getTime() - new Date(a.leave_date).getTime());
 
   return {
     savedTrips, upcomingTrips, historyTrips,
